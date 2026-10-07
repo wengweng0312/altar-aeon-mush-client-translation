@@ -23,13 +23,15 @@
 - GGUF 模型、llama.cpp runtime 及產生的完整安裝包
 - 臨時檔、備份檔與 Python cache
 
-## 預定更新方式
+## 下載與更新
 
 Mush-Z 本體由使用者自行下載與安裝。本專案的 **Full** 僅代表「完整翻譯套件」：包含翻譯 plugin、模型、必要 runtime、NVDA 附加元件、空白設定範本與 updater，不包含 Mush-Z 本體。
 
-正式版本將透過 GitHub Releases 發布版本資訊、Only Patch、SHA-256 檢查碼與更新說明。第一次安裝下載 Full；後續 updater 只下載 Only Patch。更新器必須先下載與驗證，再備份和替換；任何失敗都不能破壞既有可運作版本。
+[點此下載 Full 版](https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/download/v0.1.1/Mush-Z_Translation_Mode_Full_v0.1.1.zip)，供第一次安裝使用。已經安裝翻譯模式的玩家不需要重複下載 Full。
 
-目前 repository 尚在安全整理階段，尚未提供自動更新。
+Mush-Z 啟動時會自動檢查翻譯套件的新版本，並詢問玩家是否更新。玩家同意後，更新器會關閉 MUSHclient、下載 Only Patch、驗證 SHA-256、備份並安裝更新，接著開啟 NVDA 附加元件安裝檔。玩家拒絕時不會下載或修改任何檔案；更新失敗時也不得破壞既有可運作版本。
+
+所有正式版本、Only Patch、檢查碼與更新說明都在 [GitHub Releases](https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases)。
 
 ## 原始碼配置
 
