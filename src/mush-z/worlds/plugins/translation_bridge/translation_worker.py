@@ -41,6 +41,7 @@ DETERMINISTIC_FIELD_GLOSSARY = None
 PORT = 18082
 CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
 CPU_AUTOTUNE_VERSION = 1
+STRUCTURED_FIELD_CACHE_VERSION = 1
 CPU_AUTOTUNE_MIN_GAIN = 1.05
 CLOUD_FAILURE_LIMIT = 3
 CLOUD_COOLDOWN_SECONDS = 300
@@ -201,6 +202,59 @@ GIVE_ITEM_LINE = re.compile(r"^(\s*)You give (.+) to (.+)\.(\s*)$", re.IGNORECAS
 BUY_ITEM_LINE = re.compile(
     r"^(\s*)You buy (.+) from (.+) for (\d[\d,]*) gold coins\.(\s*)$",
     re.IGNORECASE,
+)
+SEMANTIC_EVENT_PATTERNS = (
+    ("blade_spin", re.compile(r"^(\s*)You start swinging and spinning the blade, '([^']+)'\.\.\.(\s*)$", re.I)),
+    ("blade_flick_hit", re.compile(r"^(\s*)You flick the blade, '([^']+)' at (.+?), and score a quick hit!(\s*)$", re.I)),
+    ("blade_flick_miss", re.compile(r"^(\s*)You flick the blade, '([^']+)', but (.+?) avoids your attack\.(\s*)$", re.I)),
+    ("blade_reaction", re.compile(r"^(\s*)(.+?) (looks mildly annoyed|makes a strange noise) as you place the blade, '([^']+)' in (?:his|her|its) back\.(\s*)$", re.I)),
+    ("damage_other", re.compile(
+        r"^(\s*)(?:kxft)?\s*(.+?)'s (.+?) "
+        r"(heals|annoys|scratches|hits|injures|wounds|mauls|decimates|devastates|maims|"
+        r"MUTILATES|DISMEMBERS|DISEMBOWELS|MASSACRES|\*\*\* MASSACRES \*\*\*|"
+        r"\*\*\* DEVASTATES \*\*\*|\*\*\* OBLITERATES \*\*\*|"
+        r"\*\*\* DEMOLISHES \*\*\*|\*\*\* DESTROYS \*\*\*|"
+        r"\*\*\* ANNIHILATES \*\*\*) (.+?)([.!])(\s*)$", re.I)),
+    ("aura_fades", re.compile(r"^(\s*)The (white|black) aura (?:around|about) (.+?) fades\.(\s*)$", re.I)),
+    ("actor_white_aura", re.compile(r"^(\s*)(.+?) is surrounded by a white aura\.(\s*)$", re.I)),
+    ("restored_health", re.compile(r"^(\s*)(.+?) restored you to full health!(\s*)$", re.I)),
+    ("get_gold", re.compile(r"^(\s*)You get (\d[\d,]*) gold coins?\.(\s*)$", re.I)),
+    ("get_gold_from", re.compile(r"^(\s*)You get (\d[\d,]*) gold coins? from (.+)\.(\s*)$", re.I)),
+    ("drop_gold", re.compile(r"^(\s*)You drop (\d[\d,]*) gold coins?\.(\s*)$", re.I)),
+    ("gives_you", re.compile(r"^(\s*)(.+?) gives you (.+)\.(\s*)$", re.I)),
+    ("item_compare", re.compile(r"^(\s*)(.+?) (worse|a bit better|looks better) than (.+?)\.(\s*)$", re.I)),
+    ("starts_following_you", re.compile(r"^(\s*)(.+?) starts following you\.(\s*)$", re.I)),
+    ("stops_following_you", re.compile(r"^(\s*)(.+?) stops following you\.(\s*)$", re.I)),
+    ("you_follow", re.compile(r"^(\s*)You (start|stop) following (.+?)\.(\s*)$", re.I)),
+    ("group_add", re.compile(r"^(\s*)You add (.+?) to your group\.(\s*)$", re.I)),
+    ("group_member", re.compile(r"^(\s*)(.+?) has become a member of the group\.(\s*)$", re.I)),
+    ("teleport_vanish", re.compile(r"^(\s*)(.+?) vanishes into a flickering red glow\.(\s*)$", re.I)),
+    ("teleport_appear", re.compile(r"^(\s*)(.+?) (?:appears out of a flickering blue glow|appears in the middle of the room)\.(\s*)$", re.I)),
+    ("unique_item", re.compile(r"^(\s*)(.+?) \(unique\)(\s*)$", re.I)),
+    ("actor_puts", re.compile(r"^(\s*)(.+?) puts (.+?) in (.+)\.(\s*)$", re.I)),
+    ("equipment", re.compile(r"^(\s*)You are (wearing|holding|wielding|carrying) (.+)\.(\s*)$", re.I)),
+    ("door_action", re.compile(r"^(\s*)You (open|close|lock|unlock) (.+)\.(\s*)$", re.I)),
+    ("door_closed", re.compile(r"^(\s*)The (.+) is closed\.(\s*)$", re.I)),
+    ("sacrifice_gold", re.compile(r"^(\s*)You receive (\d[\d,]*) gold coins? for your sacrifice of (.+)\.(\s*)$", re.I)),
+    ("condition", re.compile(r"^(\s*)You have (a few scratches|some small wounds and bruises|quite a few wounds|big nasty wounds and scratches)\.(\s*)$", re.I)),
+    ("physical_reserve", re.compile(r"^(\s*)The physical reserve deep within you feels replenished\.(\s*)$", re.I)),
+    ("sense_life", re.compile(r"^(\s*)You sense a hidden life form in the room\.(\s*)$", re.I)),
+    ("pray_transport", re.compile(r"^(\s*)You pray to (.+) for transportation\.\.\.(\s*)$", re.I)),
+    ("directional_departure", re.compile(r"^(\s*)(.+?) (leaves|flies|walks|runs|departs) (north|south|east|west|northeast|northwest|southeast|southwest|up|down)\.(\s*)$", re.I)),
+    ("get_item", re.compile(r"^(\s*)You get (.+)\.(\s*)$", re.I)),
+    ("drop_item", re.compile(r"^(\s*)You drop (.+)\.(\s*)$", re.I)),
+    ("stop_using", re.compile(r"^(\s*)You stop using (.+)\.(\s*)$", re.I)),
+    ("cast_spell", re.compile(r"^(\s*)(.+?) casts '([^']+)'(\s*)$", re.I)),
+    ("actor_here", re.compile(r"^(\s*)(.+?) is here\.(\s*)$", re.I)),
+    ("actor_darkened", re.compile(r"^(\s*)(.+?) is darkened\.(\s*)$", re.I)),
+    ("receive_xp", re.compile(r"^(\s*)You receive (\d[\d,]*(?:\.\d+)?[kKmMbB]?) experience\.(\s*)$", re.I)),
+    ("limited_xp", re.compile(r"^(\s*)You (?:don't learn much from this battle, but still|learn very little from this battle\.\s+You|are too high level, but still) receive (\d[\d,]*(?:\.\d+)?[kKmMbB]?) experience\.(\s*)$", re.I)),
+    ("gain_favor", re.compile(r"^(\s*)You gain favor in the eyes of (.+)!(\s*)$", re.I)),
+    ("achievement", re.compile(r"^(\s*)You have completed the achievement:\s*(.+?)(\s*)$", re.I)),
+    ("sacrifice", re.compile(r"^(\s*)(.+?) appreciates your sacrifice of (.+)\.(\s*)$", re.I)),
+    ("miss", re.compile(r"^(\s*)(.+?) misses (.+)\.(\s*)$", re.I)),
+    ("dodge", re.compile(r"^(\s*)(.+?) dodges (.+?)'s attack\.(\s*)$", re.I)),
+    ("mortally_wounded", re.compile(r"^(\s*)(.+?) is mortally wounded, and will die soon if not aided\.(\s*)$", re.I)),
 )
 COMBAT_TARGET_PATTERNS = (
     ("stomp_crunch", re.compile(r"^(\s*)You stomp on (.+) and hear something crunch!(\s*)$", re.I)),
@@ -506,6 +560,36 @@ def deterministic_translate(text):
     source = str(text)
     if "\n" in source or "\r" in source:
         return None
+    fixed_events = {
+        # Mush-Z emits these compact health-condition labels from the prompt.
+        # They are status values, not ordinary adjective fragments.
+        "excellent": "狀態極佳",
+        "scratches": "輕微擦傷",
+        "small wounds": "一些小傷口",
+        "quite a few": "傷勢不少",
+        "big nasty": "嚴重傷勢",
+        "pretty hurt": "傷得很重",
+        "awful": "傷勢危急",
+        "You receive an explorer point!": "你獲得 1 點探索點數！",
+        "You receive a combat point!": "你獲得 1 點戰鬥點數！",
+        "You receive a profession point!": "你獲得 1 點職業點數！",
+        "You have become more renowned!": "你的聲望提高了！",
+        "The white aura around your body fades.": "你身旁的白色光環消退了。",
+        "The black aura about your body fades.": "你身旁的黑色光環消退了。",
+        "Your ice shield fades and is gone.": "你的冰盾消退並消失了。",
+        "The magical flames protecting you flicker and go out.": "保護你的魔法火焰閃爍後熄滅了。",
+        "Your coat of crystal scales suddenly shatters in a chain reaction!": "你的水晶鱗片外衣突然產生連鎖反應並碎裂！",
+        "Your displaced image rejoins your body.": "偏移的影像重新與你的身體重合。",
+        "You feel your invisible mana shield flicker and go out.": "你感覺隱形的法力護盾閃爍後消失了。",
+        "You feel a slight tingle and you feel somehow abandoned.": "你感到一陣輕微刺麻，彷彿失去了庇護。",
+        "You no longer feel sharp and at your best.": "你不再感到敏銳且處於最佳狀態。",
+        "You slowly fade into existence.": "你的身影緩緩顯現。",
+        "You slowly float down as your fly spell wears off.": "飛行法術消退，你緩緩飄落地面。",
+        "You feel less aware of your surroundings.": "你對周遭環境的感知變弱了。",
+        "Your body is still too exhausted from last time.": "你的身體仍未從上一次的消耗中恢復。",
+    }
+    if source.strip() in fixed_events:
+        return fixed_events[source.strip()]
     combo = translate_combo_line(source)
     if combo is not None:
         return combo
@@ -1277,6 +1361,126 @@ def semantic_sentence_chunks(text):
     return chunks
 
 
+def room_semantic_chunks(text):
+    """Keep the room title separate, then return complete prose sentences."""
+    rows = [
+        line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if line.strip()
+    ]
+    if not rows:
+        return []
+    title = rows[0]
+    if len(rows) < 2 or re.search(r"[.!?。！？]$", title):
+        return semantic_sentence_chunks(text)
+    body = semantic_sentence_chunks(" ".join(rows[1:]))
+    return [title] + body if body else [title]
+
+
+ROOM_UNIT_MARKER = re.compile(r"(?:\[\[ROOM_(\d+)\]\]|【房[间間]\s*(\d+)】)")
+ROOM_UNIT_END_MARKER = re.compile(r"(?:\[\[ROOM_END\]\]|【房[间間](?:结束|結束)】)\s*$")
+FIELD_UNIT_MARKER = re.compile(r"\[\[FIELD_(\d+)\]\]")
+FIELD_UNIT_END_MARKER = re.compile(r"\[\[FIELD_END\]\]\s*$")
+
+
+def parse_numbered_room_translation(text, expected_count):
+    """Extract marker-delimited translations without trusting model line breaks."""
+    value = str(text).strip()
+    matches = list(ROOM_UNIT_MARKER.finditer(value))
+    if len(matches) != expected_count:
+        return None
+    output = [None] * expected_count
+    for position, match in enumerate(matches):
+        index = int(match.group(1) or match.group(2))
+        if index < 0 or index >= expected_count or output[index] is not None:
+            return None
+        end = matches[position + 1].start() if position + 1 < len(matches) else len(value)
+        translated = value[match.end():end].strip(" \t\r\n:-")
+        translated = ROOM_UNIT_END_MARKER.sub("", translated).strip()
+        if not translated:
+            return None
+        output[index] = " ".join(translated.splitlines()).strip()
+    return output if all(output) else None
+
+
+def translate_room_units_once(chunks, c):
+    """Translate uncached room units in one request and verify every boundary."""
+    marked = "\n".join("[[ROOM_%d]] %s" % (index, chunk) for index, chunk in enumerate(chunks))
+    prompt = (
+        "Translate every numbered English segment into Chinese. Preserve every "
+        "[[ROOM_n]] marker exactly, preserve order, and output [[ROOM_END]] after "
+        "the final translation. Do not omit, summarize, repeat, or explain.\n"
+        "English:\n%s\n[[ROOM_END]]\nChinese:" % marked
+    )
+    mark_translation_engine("lmt_q4")
+    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
+    response = http_post("/v1/chat/completions", {
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 512,
+        "temperature": 0.0,
+        "repeat_penalty": 1.1,
+        "stream": False,
+    }, timeout)
+    choices = response.get("choices") or []
+    if not choices:
+        raise RuntimeError("ROOM_UNIT_NO_CHOICES")
+    translated = ((choices[0].get("message") or {}).get("content") or "").strip()
+    parsed = parse_numbered_room_translation(translated, len(chunks))
+    if parsed is None:
+        raise RuntimeError("ROOM_UNIT_MARKERS_MISSING")
+    for source, result in zip(chunks, parsed):
+        ok, reason = translation_sanity_ok(source, result)
+        if not ok:
+            raise RuntimeError("ROOM_UNIT_SANITY_" + reason)
+        if not any("\u3400" <= char <= "\u9fff" for char in result):
+            raise RuntimeError("ROOM_UNIT_UNTRANSLATED")
+    return parsed
+
+
+def translate_numbered_fields_once(fields, c):
+    """Translate multiple semantic fields in one local-model request."""
+    marked = "\n".join("[[FIELD_%d]] %s" % (index, value) for index, value in enumerate(fields))
+    prompt = (
+        "Translate every numbered English name or phrase into Chinese. Preserve every "
+        "[[FIELD_n]] marker exactly and output [[FIELD_END]] after the final translation. "
+        "Preserve proper names, digits and punctuation. Do not omit, merge, repeat or explain.\n"
+        "English:\n%s\n[[FIELD_END]]\nChinese:" % marked
+    )
+    mark_translation_engine("lmt_q4")
+    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
+    response = http_post("/v1/chat/completions", {
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+        "temperature": 0.0,
+        "repeat_penalty": 1.1,
+        "stream": False,
+    }, timeout)
+    choices = response.get("choices") or []
+    if not choices:
+        raise RuntimeError("FIELD_UNIT_NO_CHOICES")
+    value = ((choices[0].get("message") or {}).get("content") or "").strip()
+    matches = list(FIELD_UNIT_MARKER.finditer(value))
+    if len(matches) != len(fields):
+        raise RuntimeError("FIELD_UNIT_MARKERS_MISSING")
+    output = [None] * len(fields)
+    for position, match in enumerate(matches):
+        index = int(match.group(1))
+        if index < 0 or index >= len(fields) or output[index] is not None:
+            raise RuntimeError("FIELD_UNIT_MARKERS_INVALID")
+        end = matches[position + 1].start() if position + 1 < len(matches) else len(value)
+        translated = value[match.end():end].strip(" \t\r\n:-")
+        translated = FIELD_UNIT_END_MARKER.sub("", translated).strip()
+        if not translated:
+            raise RuntimeError("FIELD_UNIT_EMPTY")
+        translated = " ".join(translated.splitlines()).strip()
+        ok, reason = translation_sanity_ok(fields[index], translated)
+        if not ok:
+            raise RuntimeError("FIELD_UNIT_SANITY_" + reason)
+        output[index] = translated
+    if not all(output):
+        raise RuntimeError("FIELD_UNIT_INCOMPLETE")
+    return output
+
+
 def is_room_prose_candidate(text):
     """Conservatively identify a long narrative room, not arbitrary dialogue."""
     value = str(text).replace("\r\n", "\n").replace("\r", "\n")
@@ -1313,67 +1517,35 @@ def seed_room_sentence_cache(source, translated, c):
 
 def translate_room_prose_cached(text, c):
     """Reuse known room sentences without slowing an entirely new room."""
-    chunks = semantic_sentence_chunks(text)
+    chunks = room_semantic_chunks(text)
     if len(chunks) < 2:
         return translate_piece(text, c, force_robust=len(text) >= 180)
     cached = [cache_get(chunk, c) for chunk in chunks]
-    if not any(value is not None for value in cached):
-        translated = translate_piece(text, c, force_robust=True)
-        learned = seed_room_sentence_cache(text, translated, c)
-        if learned:
-            log("room sentence cache learned=%d" % learned)
-        return translated
-
     missing_indexes = [index for index, value in enumerate(cached) if value is None]
-    combined_source = " ".join(chunks[index] for index in missing_indexes)
-    combined_translation = translate_piece(
-        combined_source, c, force_robust=len(combined_source) >= 180
-    )
-    combined_chunks = semantic_sentence_chunks(combined_translation)
-    if len(combined_chunks) == len(missing_indexes):
-        for index, translated_chunk in zip(missing_indexes, combined_chunks):
-            ok, _ = translation_sanity_ok(chunks[index], translated_chunk)
+    if missing_indexes:
+        missing_sources = [chunks[index] for index in missing_indexes]
+        translated_missing = None
+        cloud_results = cloud_translate_many(missing_sources)
+        if cloud_results is not None and len(cloud_results) == len(missing_sources):
+            translated_missing = cloud_results
+        if translated_missing is None:
+            try:
+                translated_missing = translate_room_units_once(missing_sources, c)
+            except Exception as error:
+                # This is a presentation optimisation.  If a model changes or
+                # drops a marker, retain the proven whole-room translation path.
+                log("room aligned translation fallback: %r" % error, True)
+                return translate_piece(text, c, force_robust=True)
+        for index, translated_chunk in zip(missing_indexes, translated_missing):
+            ok, reason = translation_sanity_ok(chunks[index], translated_chunk)
             if not ok:
-                break
-        else:
-            for index, translated_chunk in zip(missing_indexes, combined_chunks):
-                cache_put(chunks[index], translated_chunk, c)
-                cached[index] = translated_chunk
-            result = "\n".join(
-                " ".join(value.splitlines()).strip() for value in cached if value.strip()
-            )
-            ok, reason = translation_sanity_ok(text, result)
-            if not ok:
-                raise RuntimeError("ROOM_SENTENCE_CACHE_SANITY_" + reason)
-            return result
+                log("room aligned translation fallback: %s" % reason, True)
+                return translate_piece(text, c, force_robust=True)
+            translated_chunk = " ".join(translated_chunk.splitlines()).strip()
+            cache_put(chunks[index], translated_chunk, c)
+            cached[index] = translated_chunk
 
-    output, index = [], 0
-    while index < len(chunks):
-        if cached[index] is not None:
-            output.append(cached[index])
-            index += 1
-            continue
-        end = index + 1
-        while end < len(chunks) and cached[end] is None:
-            end += 1
-        missing_source = " ".join(chunks[index:end])
-        missing_translation = translate_piece(
-            missing_source, c, force_robust=len(missing_source) >= 180
-        )
-        source_run = chunks[index:end]
-        translated_run = semantic_sentence_chunks(missing_translation)
-        if len(source_run) == len(translated_run):
-            for source_chunk, translated_chunk in zip(source_run, translated_run):
-                ok, _ = translation_sanity_ok(source_chunk, translated_chunk)
-                if ok:
-                    cache_put(source_chunk, translated_chunk, c)
-            output.extend(translated_run)
-        else:
-            output.append(missing_translation)
-        index = end
-    result = "\n".join(
-        " ".join(value.splitlines()).strip() for value in output if value.strip()
-    )
+    result = "\n".join(value for value in cached if value and value.strip())
     ok, reason = translation_sanity_ok(text, result)
     if not ok:
         raise RuntimeError("ROOM_SENTENCE_CACHE_SANITY_" + reason)
@@ -1479,6 +1651,7 @@ def has_deterministic_lines(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     return len(lines) >= 2 and any(
         deterministic_translate(line.strip()) is not None
+        or semantic_event_match(line) is not None
         or action_template_match(line) is not None
         or combat_template_match(line) is not None
         for line in lines if line.strip()
@@ -1488,6 +1661,7 @@ def has_deterministic_lines(text):
 def translate_mixed_deterministic_block(text, c):
     """Route known lines locally and translate only the remaining contiguous text."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    prefetch_semantic_event_fields(lines, c)
     output, model_buffer = [], []
 
     def flush_model_buffer():
@@ -1506,6 +1680,17 @@ def translate_mixed_deterministic_block(text, c):
     for line in lines:
         stripped = line.strip()
         deterministic = deterministic_translate(stripped) if stripped else None
+        if semantic_event_match(line) is not None:
+            flush_model_buffer()
+            try:
+                rendered_event = translate_semantic_event_line(line, c)
+                if numeric_values(line) and not numeric_items_preserved(line, rendered_event):
+                    raise RuntimeError("mixed_semantic_event_numeric_items_missing")
+                output.append(rendered_event)
+            except Exception as error:
+                log("mixed semantic-event fallback: %r source=%r" % (error, line[:160]), True)
+                output.append(line)
+            continue
         if action_template_match(line) is not None:
             flush_model_buffer()
             try:
@@ -1625,11 +1810,49 @@ def is_put_item_block(text):
 
 def translate_cached_phrase(text, c):
     """Translate one complete semantic field; never split it into reusable words."""
-    translated = cache_get(text, c)
+    field_config = dict(c)
+    field_config["translation_cache_version"] = (
+        int(c.get("translation_cache_version", 12)) * 1000 + STRUCTURED_FIELD_CACHE_VERSION
+    )
+    translated = cache_get(text, field_config)
     if translated is None:
         translated = translate_piece(text, c, force_robust=True)
-        cache_put(text, translated, c)
+        cache_put(text, translated, field_config)
     return " ".join(str(translated).splitlines()).strip()
+
+
+def prefetch_cached_phrases(values, c):
+    """Populate versioned field cache in bounded batches before reconstruction."""
+    field_config = dict(c)
+    field_config["translation_cache_version"] = (
+        int(c.get("translation_cache_version", 12)) * 1000 + STRUCTURED_FIELD_CACHE_VERSION
+    )
+    missing = []
+    seen = set()
+    for value in values:
+        value = str(value).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        if cache_get(value, field_config) is None:
+            missing.append(value)
+    for start in range(0, len(missing), 32):
+        batch = missing[start:start + 32]
+        translated = cloud_translate_many(batch)
+        if translated is None:
+            try:
+                translated = translate_numbered_fields_once(batch, c) if len(batch) > 1 else [translate_piece(batch[0], c, force_robust=True)]
+            except Exception as error:
+                log("structured field batch fallback: %r" % error, True)
+                translated = []
+                for value in batch:
+                    try:
+                        translated.append(translate_piece(value, c, force_robust=True))
+                    except Exception:
+                        translated.append(value)
+        for source, result in zip(batch, translated):
+            ok, _reason = translation_sanity_ok(source, result)
+            cache_put(source, result if ok else source, field_config)
 
 
 def translate_safe_display_row(text, c):
@@ -1939,6 +2162,27 @@ def is_tip_block(text):
     return len(rows) >= 2 and rows[0] in {"Tip:", "Tip!"}
 
 
+def has_embedded_tip_block(text):
+    rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return any(row.strip() in {"Tip:", "Tip!"} for row in rows[1:])
+
+
+def translate_embedded_tip_block(text, c):
+    """Preserve events before Tip:, then translate its wrapped prose whole."""
+    rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    tip_index = next(
+        index for index, row in enumerate(rows)
+        if index and row.strip() in {"Tip:", "Tip!"}
+    )
+    prefix = "\n".join(rows[:tip_index]).strip()
+    tip = "\n".join(rows[tip_index:]).strip()
+    output = []
+    if prefix:
+        output.append(translate(prefix, c))
+    output.append(translate_tip_block(tip, c))
+    return "\n".join(output)
+
+
 def translate_tip_block(text, c):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     output = ["提示："]
@@ -2023,11 +2267,15 @@ def has_historical_fallback_shape(text):
 
 def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
-    return (is_scan_listing(text) or is_class_skill_table(text) or
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return (is_room_prose_candidate(text) or
+            any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
+            any(semantic_event_match(line) for line in lines) or
+            is_scan_listing(text) or is_class_skill_table(text) or
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
-            is_equipment_advice(text) or is_room_with_doors(text) or
+            is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
             is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
             is_room_preview_block(text) or is_quest_information_block(text))
 
@@ -2133,6 +2381,270 @@ def action_template_match(line):
                 continue
             return kind, match
     return None
+
+
+def semantic_event_match(line):
+    """Recognize reviewed visible event shells taken from Mush-Z triggers."""
+    source = str(line)
+    for kind, pattern in SEMANTIC_EVENT_PATTERNS:
+        match = pattern.fullmatch(source)
+        if not match:
+            continue
+        if kind == "get_item" and re.match(r"\d+ items?:", match.group(2), re.I):
+            # Mush-Z reconstructs this aggregate into a table-like row.
+            continue
+        return kind, match
+    return None
+
+
+def translate_semantic_event_line(line, c):
+    """Translate a stable shell and cache only its changing semantic fields."""
+    matched = semantic_event_match(line)
+    if not matched:
+        return None
+    kind, match = matched
+    groups = match.groups()
+    if kind == "blade_spin":
+        indent, weapon, trailing = groups
+        return "%s你開始揮動並旋轉刀刃「%s」……%s" % (indent, weapon, trailing)
+    if kind in {"blade_flick_hit", "blade_flick_miss"}:
+        indent, weapon, target, trailing = groups
+        template = "你將刀刃「%s」迅速揮向%s，成功擊中！" if kind == "blade_flick_hit" else "你將刀刃「%s」迅速揮向%s，但對方避開了攻擊。"
+        return "%s%s%s" % (indent, template % (weapon, translate_cached_phrase(target, c)), trailing)
+    if kind == "blade_reaction":
+        indent, target, reaction, weapon, trailing = groups
+        reaction_zh = "看起來有些惱火" if reaction.lower().startswith("looks") else "發出奇怪的聲音"
+        return "%s當你將刀刃「%s」刺入%s背部時，對方%s。%s" % (
+            indent, weapon, translate_cached_phrase(target, c), reaction_zh, trailing,
+        )
+    if kind == "damage_other":
+        indent, attacker, damage_type, grade, target, punctuation, trailing = groups
+        grade_key = re.sub(r"[^A-Z]", "", grade.upper())
+        grade_zh = {
+            "HEALS": "治癒", "ANNOYS": "騷擾", "SCRATCHES": "擦傷", "HITS": "擊中",
+            "INJURES": "傷害", "WOUNDS": "創傷", "MAULS": "重創", "DECIMATES": "嚴重打擊",
+            "DEVASTATES": "毀滅性重創", "MAIMS": "致殘", "MUTILATES": "殘害",
+            "DISMEMBERS": "肢解", "DISEMBOWELS": "開膛", "MASSACRES": "屠殺",
+            "OBLITERATES": "徹底摧毀", "DEMOLISHES": "粉碎", "DESTROYS": "摧毀",
+            "ANNIHILATES": "殲滅",
+        }[grade_key]
+        return "%s%s的%s對%s造成%s%s%s" % (
+            indent, translate_cached_phrase(attacker, c), translate_cached_phrase(damage_type, c),
+            translate_cached_phrase(target, c), grade_zh, punctuation, trailing,
+        )
+    if kind == "aura_fades":
+        indent, color, actor, trailing = groups
+        color_zh = "白色" if color.lower() == "white" else "黑色"
+        return "%s%s身旁的%s光環消退了。%s" % (indent, translate_cached_phrase(actor, c), color_zh, trailing)
+    if kind == "actor_white_aura":
+        indent, actor, trailing = groups
+        return "%s%s被白色光環包圍。%s" % (indent, translate_cached_phrase(actor, c), trailing)
+    if kind == "restored_health":
+        indent, actor, trailing = groups
+        return "%s%s使你完全恢復健康！%s" % (indent, translate_cached_phrase(actor, c), trailing)
+    if kind in {"get_gold", "drop_gold"}:
+        indent, amount, trailing = groups
+        template = "你取得 %s 枚金幣。" if kind == "get_gold" else "你丟下 %s 枚金幣。"
+        return "%s%s%s" % (indent, template % amount, trailing)
+    if kind == "get_gold_from":
+        indent, amount, source, trailing = groups
+        return "%s你從%s取得 %s 枚金幣。%s" % (indent, translate_cached_phrase(source, c), amount, trailing)
+    if kind == "gives_you":
+        indent, actor, item, trailing = groups
+        return "%s%s將%s交給你。%s" % (indent, translate_cached_phrase(actor, c), translate_cached_phrase(item, c), trailing)
+    if kind == "item_compare":
+        indent, first, relation, second, trailing = groups
+        relation_zh = {"worse": "比%s差", "a bit better": "比%s稍好", "looks better": "看起來比%s好"}[relation.lower()]
+        return "%s%s%s。%s" % (
+            indent, translate_cached_phrase(first, c), relation_zh % translate_cached_phrase(second, c), trailing,
+        )
+    if kind in {"starts_following_you", "stops_following_you"}:
+        indent, actor, trailing = groups
+        template = "%s開始跟隨你。" if kind == "starts_following_you" else "%s停止跟隨你。"
+        return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
+    if kind == "you_follow":
+        indent, action, actor, trailing = groups
+        template = "你開始跟隨%s。" if action.lower() == "start" else "你停止跟隨%s。"
+        return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
+    if kind in {"group_add", "group_member"}:
+        indent, actor, trailing = groups
+        template = "你將%s加入隊伍。" if kind == "group_add" else "%s加入了隊伍。"
+        return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
+    if kind in {"teleport_vanish", "teleport_appear"}:
+        indent, actor, trailing = groups
+        template = "%s消失在閃爍的紅光中。" if kind == "teleport_vanish" else "%s在房間中央的閃爍藍光中現身。"
+        return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
+    if kind == "unique_item":
+        indent, item, trailing = groups
+        return "%s%s（唯一）%s" % (indent, translate_cached_phrase(item, c), trailing)
+    if kind == "actor_puts":
+        indent, actor, item, container, trailing = groups
+        return "%s%s將%s放入%s。%s" % (
+            indent, translate_cached_phrase(actor, c),
+            translate_cached_phrase(item, c),
+            translate_cached_phrase(container, c), trailing,
+        )
+    if kind == "equipment":
+        indent, action, item, trailing = groups
+        templates = {
+            "wearing": "你穿戴著%s。", "holding": "你拿著%s。",
+            "wielding": "你揮舞著%s。", "carrying": "你攜帶著%s。",
+        }
+        return "%s%s%s" % (
+            indent, templates[action.lower()] % translate_cached_phrase(item, c), trailing,
+        )
+    if kind == "door_action":
+        indent, action, target, trailing = groups
+        templates = {"open": "你打開%s。", "close": "你關上%s。", "lock": "你鎖上%s。", "unlock": "你解鎖%s。"}
+        return "%s%s%s" % (
+            indent, templates[action.lower()] % translate_cached_phrase(target, c), trailing,
+        )
+    if kind == "door_closed":
+        indent, target, trailing = groups
+        return "%s%s關著。%s" % (indent, translate_cached_phrase(target, c), trailing)
+    if kind == "sacrifice_gold":
+        indent, amount, offered, trailing = groups
+        return "%s你奉獻%s，獲得 %s 枚金幣。%s" % (
+            indent, translate_cached_phrase(offered, c), amount, trailing,
+        )
+    if kind == "condition":
+        indent, condition, trailing = groups
+        translated = {
+            "a few scratches": "你有幾處擦傷。",
+            "some small wounds and bruises": "你有一些小傷口和瘀青。",
+            "quite a few wounds": "你身上有不少傷口。",
+            "big nasty wounds and scratches": "你有嚴重的傷口與擦傷。",
+        }[condition.lower()]
+        return "%s%s%s" % (indent, translated, trailing)
+    if kind in {"physical_reserve", "sense_life"}:
+        indent, trailing = groups
+        translated = {
+            "physical_reserve": "你體內深處的體力儲備已經恢復。",
+            "sense_life": "你感覺到房間裡有隱藏的生命。",
+        }[kind]
+        return "%s%s%s" % (indent, translated, trailing)
+    if kind == "pray_transport":
+        indent, deity, trailing = groups
+        return "%s你向%s祈求傳送……%s" % (
+            indent, translate_cached_phrase(deity, c), trailing,
+        )
+    if kind == "directional_departure":
+        indent, actor, action, direction, trailing = groups
+        action_zh = {
+            "leaves": "離開", "flies": "飛走", "walks": "走去",
+            "runs": "跑去", "departs": "離去",
+        }[action.lower()]
+        direction_zh = {
+            "north": "北方", "south": "南方", "east": "東方", "west": "西方",
+            "northeast": "東北方", "northwest": "西北方",
+            "southeast": "東南方", "southwest": "西南方", "up": "上方", "down": "下方",
+        }[direction.lower()]
+        return "%s%s往%s%s。%s" % (
+            indent, translate_cached_phrase(actor, c), direction_zh, action_zh, trailing,
+        )
+    if kind in {"get_item", "drop_item", "stop_using"}:
+        indent, item, trailing = groups
+        item_zh = translate_cached_phrase(item, c)
+        template = {
+            "get_item": "你取得%s。",
+            "drop_item": "你丟下%s。",
+            "stop_using": "你停止使用%s。",
+        }[kind]
+        return "%s%s%s" % (indent, template % item_zh, trailing)
+    if kind == "cast_spell":
+        indent, actor, spell, trailing = groups
+        return "%s%s施放「%s」。%s" % (
+            indent, translate_cached_phrase(actor, c),
+            translate_cached_phrase(spell, c), trailing,
+        )
+    if kind in {"actor_here", "actor_darkened", "mortally_wounded"}:
+        indent, actor, trailing = groups
+        actor_zh = translate_cached_phrase(actor, c)
+        template = {
+            "actor_here": "%s在這裡。",
+            "actor_darkened": "%s籠罩在黑暗中。",
+            "mortally_wounded": "%s受到致命傷，若未獲救很快便會死亡。",
+        }[kind]
+        return "%s%s%s" % (indent, template % actor_zh, trailing)
+    if kind in {"receive_xp", "limited_xp"}:
+        indent, amount, trailing = groups
+        template = "你獲得 %s 點經驗值。" if kind == "receive_xp" else "你從這場戰鬥中學到的不多，但仍獲得 %s 點經驗值。"
+        return "%s%s%s" % (indent, template % amount, trailing)
+    if kind == "gain_favor":
+        indent, deity, trailing = groups
+        return "%s你獲得%s的青睞！%s" % (
+            indent, translate_cached_phrase(deity, c), trailing,
+        )
+    if kind == "achievement":
+        indent, achievement, trailing = groups
+        return "%s你完成了成就：%s%s" % (
+            indent, translate_cached_phrase(achievement, c), trailing,
+        )
+    if kind == "sacrifice":
+        indent, actor, offered, trailing = groups
+        return "%s你將%s奉獻給%s。%s" % (
+            indent, translate_cached_phrase(offered, c),
+            translate_cached_phrase(actor, c), trailing,
+        )
+    if kind in {"miss", "dodge"}:
+        indent, actor, target, trailing = groups
+        actor_zh = translate_cached_phrase(actor, c)
+        target_zh = translate_cached_phrase(target, c)
+        template = "%s沒有擊中%s。" if kind == "miss" else "%s閃避了%s的攻擊。"
+        return "%s%s%s" % (indent, template % (actor_zh, target_zh), trailing)
+    return None
+
+
+def is_semantic_event_block(text):
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(lines) and all(semantic_event_match(line) for line in lines)
+
+
+def prefetch_semantic_event_fields(lines, c):
+    """Batch variable fields from visible trigger-shaped event runs."""
+    values = []
+    for line in lines:
+        matched = semantic_event_match(line)
+        if not matched:
+            continue
+        kind, match = matched
+        groups = match.groups()
+        if kind == "actor_puts": values.extend(groups[1:4])
+        elif kind in {"blade_flick_hit", "blade_flick_miss"}: values.append(groups[2])
+        elif kind == "blade_reaction": values.append(groups[1])
+        elif kind == "damage_other": values.extend((groups[1], groups[2], groups[4]))
+        elif kind == "aura_fades": values.append(groups[2])
+        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item"}: values.append(groups[1])
+        elif kind == "get_gold_from": values.append(groups[2])
+        elif kind == "gives_you": values.extend(groups[1:3])
+        elif kind == "item_compare": values.extend((groups[1], groups[3]))
+        elif kind == "you_follow": values.append(groups[2])
+    if values:
+        prefetch_cached_phrases(values, c)
+
+
+def translate_semantic_event_block(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    prefetch_semantic_event_fields(lines, c)
+    output = []
+    for line in lines:
+        if not line.strip():
+            output.append("")
+            continue
+        try:
+            rendered = translate_semantic_event_line(line, c)
+            if rendered is None:
+                raise RuntimeError("semantic_event_not_rendered")
+            if numeric_values(line) and not numeric_items_preserved(line, rendered):
+                raise RuntimeError("semantic_event_numeric_items_missing")
+            output.append(rendered)
+        except Exception as error:
+            log("semantic-event line fallback: %r source=%r" % (error, line[:160]), True)
+            output.append(line)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("SEMANTIC_EVENT_LINE_COUNT_MISMATCH")
+    return result
 
 
 def translate_action_line(line, c):
@@ -2369,7 +2881,10 @@ def translate_trailing_independent_rows(text, c):
         if is_room_prose_candidate(prefix)
         else translate_piece(prefix, c, force_robust=len(prefix) >= 180)
     )
-    output = [" ".join(prefix_translation.splitlines()).strip()]
+    # An aligned room prefix deliberately contains one semantic row for the
+    # title and each complete sentence.  Do not flatten those rows merely
+    # because NPC/object rows follow the room description.
+    output = [line.strip() for line in prefix_translation.splitlines() if line.strip()]
     for source_line in lines[start:]:
         stripped = source_line.strip()
         translated = cache_get(stripped, c)
@@ -3300,9 +3815,13 @@ def translate_character_status_block(text, c):
 
 
 def translate(text,c):
+    if has_embedded_tip_block(text):
+        return translate_embedded_tip_block(text, c)
     xp_history = translate_xp_history_line(text, c)
     if xp_history is not None:
         return xp_history
+    if is_semantic_event_block(text):
+        return translate_semantic_event_block(text, c)
     if is_action_template_block(text):
         return translate_action_template_block(text, c)
     if is_combat_template_block(text):

@@ -818,7 +818,7 @@ end
 -- same semantic rows here so NVDA history can retain one bilingual entry per
 -- label or paragraph instead of collapsing the entire quest into one entry.
 local function quest_semantic_source_lines(lines)
-  local output, field = {}, {}
+  local output, field, split_long_field = {}, {}, false
   local function flush_field()
     if #field == 0 then return end
     output[#output + 1] = table.concat(field, " ")
@@ -843,9 +843,16 @@ local function quest_semantic_source_lines(lines)
     if value ~= "" then
       if is_quest_label(value) then
         flush_field()
-        field[1] = value
+        split_long_field = value:match("^Previous goal long description:%s*") ~= nil
+          or value:match("^Current goal long description:%s*") ~= nil
+        if split_long_field then
+          output[#output + 1] = value
+        else
+          field[1] = value
+        end
       else
         field[#field + 1] = value
+        if split_long_field and value:match("[%.%!%?][\"']?$") then flush_field() end
       end
     end
   end
@@ -859,7 +866,7 @@ end
 -- it with quest_semantic_source_lines.  Without this, a harmless line-count
 -- difference makes the history layer collapse the entire quest into one row.
 local function quest_semantic_translated_lines(lines)
-  local output, field = {}, {}
+  local output, field, split_long_field = {}, {}, false
   local function flush_field()
     if #field == 0 then return end
     output[#output + 1] = table.concat(field, " ")
@@ -895,9 +902,23 @@ local function quest_semantic_translated_lines(lines)
     if value ~= "" then
       if is_quest_label(value) then
         flush_field()
-        field[1] = value
+        split_long_field = value:match("^之前目標詳細說明：") ~= nil
+          or value:match("^之前的任務詳細描述：") ~= nil
+          or value:match("^之前的支線任務詳細描述：") ~= nil
+          or value:match("^目前目標詳細說明：") ~= nil
+          or value:match("^當前目標詳細描述：") ~= nil
+          or value:match("^當前目標長描述：") ~= nil
+        if split_long_field then
+          output[#output + 1] = value
+        else
+          field[1] = value
+        end
       else
-        field[#field + 1] = value
+        if split_long_field then
+          output[#output + 1] = value
+        else
+          field[#field + 1] = value
+        end
       end
     end
   end
@@ -914,6 +935,64 @@ local function is_quoted_dialogue(value)
     or text:match("^[^\r\n]- asks,%s*['\"]") ~= nil
     or text:match("^[^\r\n]- tells? [^\r\n]-,%s*['\"]") ~= nil
   return starts and (text:match("['\"]%s*$") ~= nil)
+end
+
+local function room_semantic_source_lines(value)
+  local physical = split_lines(value)
+  local rows = {}
+  for _, line in ipairs(physical) do
+    local cleaned = line:gsub("^%s+", ""):gsub("%s+$", "")
+    if cleaned ~= "" then rows[#rows + 1] = cleaned end
+  end
+  if #rows < 3 then return nil end
+  local title = rows[1]
+  if #title > 100 or title:match("[%.%!%?%:%;]$") then return nil end
+  local body = table.concat(rows, " ", 2)
+  local sentences, start = {}, 1
+  while start <= #body do
+    local nearest_start, nearest_end = nil, nil
+    for _, delimiter in ipairs({".", "!", "?"}) do
+      local a, b = body:find(delimiter, start, true)
+      if a and (not nearest_start or a < nearest_start) then nearest_start, nearest_end = a, b end
+    end
+    if not nearest_start then break end
+    local finish = nearest_end
+    while finish < #body do
+      local next_byte = body:sub(finish + 1, finish + 1)
+      if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end
+    end
+    local sentence = body:sub(start, finish):gsub("^%s+", ""):gsub("%s+$", "")
+    if sentence ~= "" then sentences[#sentences + 1] = sentence end
+    start = finish + 1
+  end
+  local tail = body:sub(start):gsub("^%s+", ""):gsub("%s+$", "")
+  if tail ~= "" then sentences[#sentences + 1] = tail end
+  if #sentences < 2 then return nil end
+  local output = {title}
+  for _, sentence in ipairs(sentences) do output[#output + 1] = sentence end
+  return output
+end
+
+local function wrapped_semantic_source_lines(lines)
+  local output, current = {}, {}
+  local function flush()
+    if #current == 0 then return end
+    output[#output + 1] = table.concat(current, " ")
+    current = {}
+  end
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      if value:match(":$") and #current == 0 then
+        output[#output + 1] = value
+      else
+        current[#current + 1] = value
+        if value:match("[%.%!%?][\"']?$") then flush() end
+      end
+    end
+  end
+  flush()
+  return output
 end
 
 local function collect_accessible_history(original, translated)
@@ -943,12 +1022,33 @@ local function collect_accessible_history(original, translated)
     end
   end
   local translated_lines = split_lines(translated_text)
+  -- The worker emits an aligned room title and one complete sentence per
+  -- output line. Recreate the same semantic units from the wrapped English so
+  -- every NVDA history row becomes "corresponding Chinese | English".
+  local room_source = room_semantic_source_lines(original)
+  if room_source and #room_source == #translated_lines then
+    for i, en in ipairs(room_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
   local quest_source = quest_semantic_source_lines(source_lines)
   if quest_source then
     local quest_translated = quest_semantic_translated_lines(translated_lines)
     if quest_translated and #quest_source == #quest_translated then
       for i, en in ipairs(quest_source) do
         entries[#entries + 1] = quest_translated[i] .. " | " .. en
+      end
+      return entries
+    end
+  end
+  if #source_lines ~= #translated_lines then
+    local semantic_source = wrapped_semantic_source_lines(source_lines)
+    if #semantic_source < #source_lines and #semantic_source == #translated_lines then
+      for i, en in ipairs(semantic_source) do
+        local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+        if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
       end
       return entries
     end
