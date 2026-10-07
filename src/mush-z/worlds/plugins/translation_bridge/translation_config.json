@@ -1,0 +1,15 @@
+{
+  "provider": "lmt_q4",
+  "source_language": "en",
+  "target_language": "zh-TW",
+  "context_segments": 3,
+  "debug_logging": false,
+  "request_timeout_seconds": 25,
+  "google_endpoint": "https://translate.googleapis.com/translate_a/single",
+  "google_cloud_endpoint": "https://translation.googleapis.com/language/translate/v2",
+  "google_cloud_key_file": "translate_api.txt",
+  "translation_cache_enabled": true,
+  "translation_cache_max_entries": 10000,
+  "translation_cache_version": 13,
+  "accessible_history_mode": "all"
+}

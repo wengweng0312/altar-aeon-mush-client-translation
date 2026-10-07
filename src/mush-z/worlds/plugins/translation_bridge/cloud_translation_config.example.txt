@@ -1,0 +1,27 @@
+# Mush-Z Translation Mode - optional cloud translation settings
+# 雲端翻譯服務：
+# 0 = 關閉，只使用離線 LMT
+# 1 = Microsoft Azure Translator
+# 2 = Google Cloud Translation
+# 3 = DeepL API Free
+
+service=0
+
+# service 是第一順位。第一順位不可用時，程式會依序嘗試其他有填金鑰的服務。
+# 在對應的等號後貼上 API 金鑰，請勿加引號；沒有的服務保持空白。
+azure_api_key=
+
+# 只有 Azure 需要。通常保持 global 即可。
+azure_region=global
+
+google_api_key=
+
+deepl_api_key=
+
+# 網路請求最多等待幾秒。
+timeout_seconds=1.5
+
+# 是否允許將私人訊息送往線上翻譯服務：
+# 0 = 不允許
+# 1 = 允許
+allow_private_messages=0

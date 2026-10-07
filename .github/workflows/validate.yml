@@ -1,0 +1,35 @@
+name: Validate translation source
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate source and privacy rules
+        run: python tools/validate_source.py
+
+      - name: Parse updater with Windows PowerShell 5
+        shell: powershell
+        run: |
+          $path = Resolve-Path "src\mush-z\worlds\plugins\translation_bridge\update_translation.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }

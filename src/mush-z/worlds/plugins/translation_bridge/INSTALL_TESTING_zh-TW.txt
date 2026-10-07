@@ -1,0 +1,42 @@
+Mush-Z Translation Mode 0.6.3 Portable Preview
+================================================
+
+用途
+----
+這是給測試者使用的可攜預覽版。內含 Python embeddable runtime，測試者不需
+另外安裝 Python，也不需要手動開啟 CMD、Python 或 PowerShell 視窗。
+
+安裝
+----
+1. 完全關閉 Mush-Z。
+2. 備份原本的 Mush-Z\worlds\plugins\MushReader.xml。
+3. 將壓縮檔內的 worlds 資料夾覆蓋到 Mush-Z 安裝目錄。
+4. 啟動 Mush-Z。
+5. 按 Ctrl+Shift+T 開啟 Translation Mode。
+
+正常行為
+--------
+- 背景程序會隱藏、非阻塞啟動，不應出現 CMD 視窗。
+- 開啟翻譯時應立即聽到 Translation mode on。
+- 翻譯失敗或逾時時，應朗讀原始英文。
+- 再按一次 Ctrl+Shift+T 可關閉翻譯。
+
+診斷
+----
+預設 debug_logging=false，正常遊玩不會大量寫 log。
+若需要完整 timing，將 translation_config.json 中的 debug_logging 改成 true，
+重新啟動 Mush-Z 與 Translation Mode，再重現問題。
+
+回報測試結果時請附上：
+- Windows 版本
+- Mush-Z 版本
+- NVDA 版本
+- 是否出現任何黑色命令視窗
+- translation_plugin.log
+- translation_bridge\translation_worker.log
+
+移除／回滾
+---------
+關閉 Mush-Z，將安裝前備份的 MushReader.xml 與 Translation_Mode.xml 放回原位，
+再刪除 worlds\plugins\translation_bridge。重新啟動 Mush-Z。
+

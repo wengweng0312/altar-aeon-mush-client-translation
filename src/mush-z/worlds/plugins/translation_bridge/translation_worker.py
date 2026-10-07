@@ -1,0 +1,3487 @@
+# Mush-Z asynchronous translation worker - LMT-60 1.7B Q4 live integration
+# Minimal first-run build: preserve inbox/outbox/cache protocol; replace MADLAD with persistent llama-server.
+import base64, ctypes, hashlib, importlib.util, json, os, platform, re, sqlite3, subprocess, sys, time, urllib.request
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from statistics import median
+
+ROOT = Path(__file__).resolve().parent
+_CLOUD_CLIENT_SPEC = importlib.util.spec_from_file_location(
+    "mushz_cloud_translation_client", ROOT / "cloud_translation_client.py"
+)
+cloud_translation_client = importlib.util.module_from_spec(_CLOUD_CLIENT_SPEC)
+_CLOUD_CLIENT_SPEC.loader.exec_module(cloud_translation_client)
+INBOX, OUTBOX = ROOT/"inbox", ROOT/"outbox"
+LOCK = ROOT/"worker.lock"
+CONFIG = ROOT/"translation_config.json"
+CLOUD_CONFIG = ROOT/"cloud_translation_config.txt"
+LOG = ROOT/"translation_worker.log"
+CACHE_DB = ROOT/"translation_cache.sqlite3"
+SERVER_LOG = ROOT/"llama_server.log"
+TRACE_LOG = ROOT/"lmt_translation_trace.log"
+SKILL_GLOSSARY_FILE = ROOT/"skill_glossary_zh_tw.json"
+LIBRARY_GLOSSARY_FILE = ROOT/"library_glossary_zh_tw.json"
+STRUCTURE_CATALOG_FILE = ROOT/"mush_structure_catalog.sqlite3"
+BACKEND_CHOICE_FILE = ROOT/"backend_choice.json"
+SESSION_FILE = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+SESSION_MAX_AGE = 4.0
+CACHE_CONNECTION = None
+CACHE_DISABLED = False
+SERVER_PROCESS = None
+SERVER_BACKEND = None
+SERVER_THREADS = None
+CLOUD_FAILURE_COUNT = {1: 0, 2: 0, 3: 0}
+CLOUD_DISABLED_UNTIL = {1: 0.0, 2: 0.0, 3: 0.0}
+CLOUD_DISABLED_FOR_SESSION = set()
+TRANSLATION_ENGINES_USED = set()
+SKILL_GLOSSARY = None
+LIBRARY_GLOSSARY = None
+DETERMINISTIC_TEMPLATES = None
+DETERMINISTIC_FIELD_GLOSSARY = None
+PORT = 18082
+CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
+CPU_AUTOTUNE_VERSION = 1
+CPU_AUTOTUNE_MIN_GAIN = 1.05
+CLOUD_FAILURE_LIMIT = 3
+CLOUD_COOLDOWN_SECONDS = 300
+
+DEFAULT = {
+    "provider":"lmt_q4",
+    "source_language":"en",
+    "target_language":"zh",
+    "context_segments":3,
+    "debug_logging":False,
+    "request_timeout_seconds":25,
+    "translation_cache_enabled":True,
+    "translation_cache_max_entries":10000,
+    "translation_cache_version":13
+}
+
+CLOUD_TRANSLATION_DEFAULT = {
+    "service": 0,
+    "api_keys": {1: "", 2: "", 3: ""},
+    "azure_region": "global",
+    "timeout_seconds": 1.5,
+    "allow_private_messages": False,
+}
+
+PROMPT_PREFIX = "Translate the following English text into Traditional Chinese. Preserve proper names and do not add explanations.\nEnglish: "
+ROBUST_PROMPT_PREFIX = ("Translate every line of the following English text into Traditional Chinese. "
+                        "Preserve proper names, all digits, percentages, item order, and line order exactly. "
+                        "Do not omit, summarize, repeat, or add explanations.\nEnglish: ")
+PROMPT_SUFFIX = "\nTraditional Chinese:"
+OFFICIAL_PROMPT_TEMPLATE = "Translate the following text from English into Chinese:\nEnglish: {text}\nChinese:"
+
+STRUCTURED_EXACT_HEADERS = {
+    "You are carrying:": "你攜帶著：",
+    "The following items are available for sale at this time:": "目前有以下物品可供出售：",
+    "The following spell castings may be purchased for a small fee:": "支付少量費用即可購買以下法術施放服務：",
+    "The following items are currently up for grabs:": "目前可免費取用以下物品：",
+    "carried contains:": "隨身容器包含：",
+    "on ground contains:": "地面容器包含：",
+}
+STRUCTURED_CONTAINS_MARKERS = {
+    "carried contains:": "carried_container",
+    "on ground contains:": "ground_container",
+}
+
+WEEKDAY_ZH = {
+    "Mon": "星期一", "Tue": "星期二", "Wed": "星期三",
+    "Thu": "星期四", "Fri": "星期五", "Sat": "星期六", "Sun": "星期日",
+}
+MONTH_ZH = {
+    "Jan": "一月", "Feb": "二月", "Mar": "三月", "Apr": "四月",
+    "May": "五月", "Jun": "六月", "Jul": "七月", "Aug": "八月",
+    "Sep": "九月", "Oct": "十月", "Nov": "十一月", "Dec": "十二月",
+}
+INVENTORY_TIMESTAMP = re.compile(
+    r"^New inventory last added on "
+    r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun) "
+    r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
+    r"(\d{1,2}) (\d{1,2}:\d{2}:\d{2}) (\d{4})$"
+)
+DIRECTION_LINE = re.compile(r"^(\s*)Direction\s*->\s*([A-Za-z]+)(\s*)$", re.IGNORECASE)
+DIRECTION_NAMES = {
+    "N": "北", "S": "南", "E": "東", "W": "西", "U": "上", "D": "下",
+    "NE": "東北", "NW": "西北", "SE": "東南", "SW": "西南",
+}
+NEARBY_MAP_SEARCH_HEADER = re.compile(
+    r"^You consult your maps for nearby areas named '([^']*)':$", re.IGNORECASE
+)
+NEARBY_MAP_ROW = re.compile(
+    r"^(\s*)Lvl\s+(\d+)\s+(.+?)\s+(?:is|are)\s+"
+    r"(a very short distance|a short distance|a fair distance|far away),?\s+"
+    r"to the (north|south|east|west|northeast|northwest|southeast|southwest)\.(\s*)$",
+    re.IGNORECASE,
+)
+NEARBY_MAP_DIRECTIONS = {
+    "north": "北", "south": "南", "east": "東", "west": "西",
+    "northeast": "東北", "northwest": "西北",
+    "southeast": "東南", "southwest": "西南",
+}
+NEARBY_MAP_DISTANCES = {
+    "a very short distance": "距離非常近",
+    "a short distance": "距離不遠",
+    "a fair distance": "有一段距離",
+    "far away": "距離很遠",
+}
+SCAN_HEADER = re.compile(r"^You scan the surrounding area\.\.\.$", re.IGNORECASE)
+SCAN_ENTITY_ROW = re.compile(
+    r"^(North|South|East|West|Northeast|Northwest|Southeast|Southwest|Up|Down)"
+    r"\s+(\d+)\s+-\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
+SCAN_PAREN_ROW = re.compile(
+    r"^\((north|south|east|west|northeast|northwest|southeast|southwest|up|down)\)\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
+SCAN_DIRECTIONS = {
+    "north": "北", "south": "南", "east": "東", "west": "西",
+    "northeast": "東北", "northwest": "西北",
+    "southeast": "東南", "southwest": "西南", "up": "上", "down": "下",
+}
+SCAN_DOOR_MATERIALS = {
+    "wooden": "木", "wood": "木", "stone": "石", "iron": "鐵",
+    "steel": "鋼", "bronze": "青銅", "brass": "黃銅", "oak": "橡木",
+}
+SCAN_DOOR_STATES = {
+    "closed": "緊閉", "open": "敞開", "locked": "上鎖",
+}
+BONUS_FIELD_ZH = {
+    "movement": "移動力", "hitpoints": "生命值", "hit points": "生命值",
+    "mana": "法力", "morale": "士氣", "armor": "護甲",
+    "warrior skill level": "戰士技能等級", "thief skill level": "盜賊技能等級",
+    "mage cast level": "法師施法等級", "cleric cast level": "牧師施法等級",
+    "druid cast level": "德魯伊施法等級", "necromancer cast level": "死靈法師施法等級",
+}
+LIBRARY_HEADER = re.compile(r"^\s*AABN\s*-\s*Book Title\s*$", re.IGNORECASE)
+LIBRARY_ROW = re.compile(r"^(\s*)(\d+)(\s*-\s*)(.*?)(\s*)$")
+QUEST_LIST_ROW = re.compile(r"^(\s*)Quest\s+(\d+)\s+-\s+(.*?)(\s+\[ACTIVE\])?(\s*)$", re.IGNORECASE)
+QUEST_AVAILABLE_ROW = re.compile(r"^(\s*)\[\s*(\d+)\]\s*(.*?)(\s*)$", re.IGNORECASE)
+JOB_LIST_ROW = re.compile(r"^(\s*)Job\s+(\d+)\s*:\s*(.*?)(\s*)$", re.IGNORECASE)
+NEARBY_QUEST_ROW = re.compile(r"^(\s*)(\d+)\s+(\d+)\s+(.+?)(\s*)$")
+NEARBY_DIRECTION_HEADER = re.compile(r"^\s*Dir\s+Nearby (Landmarks|Shops)\s*$", re.IGNORECASE)
+NEARBY_DIRECTION_ROW = re.compile(
+    r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
+)
+DENSE_ITEM_ROW = re.compile(
+    r"^(\s*(?:R\s+)?\((?:(?:lvl|tot)\s+)?\s*\d+\)\s*)(.+?)(\s*)$", re.IGNORECASE
+)
+QUEST_DETAIL_FIELD = re.compile(
+    r"^(Quest Name|Location|Area Level|Creator|Editors|Approximate difficulty \(scale from 1 to 10\)|"
+    r"General Quest Info|Previous goal short description|Previous goal long description|"
+    r"Current goal short description|Current goal long description):\s*(.*?)\s*$",
+    re.IGNORECASE,
+)
+QUEST_DETAIL_LABELS = {
+    "quest name": "任務名稱", "location": "地點", "area level": "區域等級",
+    "creator": "作者", "editors": "編輯者",
+    "approximate difficulty (scale from 1 to 10)": "大約難度（1 到 10）",
+    "general quest info": "任務概述",
+    "previous goal short description": "之前目標簡述",
+    "previous goal long description": "之前目標詳細說明",
+    "current goal short description": "目前目標簡述",
+    "current goal long description": "目前目標詳細說明",
+}
+STATUS_SPELL_LINE = re.compile(r"^Spell '([^']+)'(?:,\s*(.*))?$", re.IGNORECASE)
+STATUS_STAT_NAMES = {"Str": "力量", "Int": "智力", "Wis": "智慧", "Dex": "敏捷", "Con": "體質", "Chr": "魅力"}
+ATTRIBUTE_CHANGE_ZH = {
+    "strength": "力量", "intelligence": "智力", "wisdom": "智慧",
+    "dex": "敏捷", "con": "體質", "chr": "魅力",
+    "spell save": "法術豁免", "fire save": "火焰豁免",
+    "cold save": "冰冷豁免", "zap save": "電擊豁免",
+    "breath save": "吐息豁免", "poison save": "毒素豁免",
+    "physical save": "物理豁免", "hitroll": "命中加值",
+    "damage": "傷害加值",
+}
+PUT_ITEM_LINE = re.compile(r"^(\s*)You put (.+) in (.+)\.(\s*)$", re.IGNORECASE)
+GET_FROM_LINE = re.compile(r"^(\s*)You get (.+) from (.+)\.(\s*)$", re.IGNORECASE)
+DROP_ITEM_LINE = re.compile(r"^(\s*)You drop (.+)\.(\s*)$", re.IGNORECASE)
+GIVE_ITEM_LINE = re.compile(r"^(\s*)You give (.+) to (.+)\.(\s*)$", re.IGNORECASE)
+BUY_ITEM_LINE = re.compile(
+    r"^(\s*)You buy (.+) from (.+) for (\d[\d,]*) gold coins\.(\s*)$",
+    re.IGNORECASE,
+)
+COMBAT_TARGET_PATTERNS = (
+    ("stomp_crunch", re.compile(r"^(\s*)You stomp on (.+) and hear something crunch!(\s*)$", re.I)),
+    ("stomp_toes", re.compile(r"^(\s*)You stomp on (.+)'s toes!(\s*)$", re.I)),
+    ("lunge", re.compile(r"^(\s*)You lunge at (.+)!(\s*)$", re.I)),
+    ("evaluate", re.compile(r"^(\s*)You quickly evaluate (.+)'s armor and anatomy\.\.\.(\s*)$", re.I)),
+    ("stomp", re.compile(r"^(\s*)You stomp on (.+)!(\s*)$", re.I)),
+    ("weapon_display", re.compile(r"^(\s*)You direct the final motions of your weapon display at (.+)\.\.\.(\s*)$", re.I)),
+    ("quick_thrust", re.compile(r"^(\s*)You quickly thrust your weapon at (.+)!(\s*)$", re.I)),
+    ("draw_thrust", re.compile(r"^(\s*)You draw back your weapon, then thrust it at (.+)!(\s*)$", re.I)),
+    ("circle", re.compile(r"^(\s*)You circle behind (.+) and find a perfect opportunity!(\s*)$", re.I)),
+    ("downward_thrust", re.compile(
+        r"^(\s*)You aim a powerful downward thrust at (.+) in an attempt to finish (?:him|her|it) off!(\s*)$", re.I
+    )),
+    ("feign", re.compile(r"^(\s*)You feign a sudden attack on (.+), who moves to block!(\s*)$", re.I)),
+    ("death_cry", re.compile(r"^(\s*)Your blood freezes as you hear (.+)'s death cry!(\s*)$", re.I)),
+    ("dead", re.compile(r"^(\s*)(.+) is DEAD!(\s*)$")),
+    ("backstab_damage", re.compile(r"^(\s*)Your backstab does considerable damage to (.+)!(\s*)$", re.I)),
+    ("dirt", re.compile(r"^(\s*)You throw dirt in (.+)'s face, blinding (?:him|her|it)!(\s*)$", re.I)),
+    ("blade_back", re.compile(
+        r"^(\s*)You place the blade, '([^']+)' in the back of (.+), mortally wounding (?:him|her|it)\.(\s*)$", re.I
+    )),
+)
+
+QUEST_HELP_FIXED_LINES = {
+    "Sorry, unknown option for 'quest' command.": "抱歉，quest 指令沒有這個選項。",
+    "Quests Help": "任務指令說明",
+    "For quests you have already accepted:": "已接受的任務：",
+    "To list or accept new quests:": "列出或接受新任務：",
+    "To find nearby quests:": "尋找附近的任務：",
+    "For quests you have completed:": "已完成的任務：",
+    "                          such as Sloe, Kordan, Archais, the mainland,":
+        "                          例如 Sloe、Kordan、Archais、mainland、",
+    "                          Ramanek or Suboria":
+        "                          Ramanek 或 Suboria",
+}
+QUEST_HELP_DESCRIPTIONS = {
+    "show a list of quests you are on": "顯示你正在進行的任務列表",
+    "show information about a quest you are on": "顯示進行中任務的資訊",
+    "show even more information about a quest": "顯示任務的更多資訊",
+    "shows information about your active quest": "顯示目前作用中任務的資訊",
+    "change your active quest": "變更目前作用中的任務",
+    "show quests on hold or put a quest on hold": "顯示擱置的任務，或將任務擱置",
+    "show any quests that are available here": "顯示此處可接受的任務",
+    "show some details about a specific quest": "顯示指定任務的部分詳細資訊",
+    "accept a given quest from 'quest list'": "接受 quest list 中指定的任務",
+    "show any nearby quests": "顯示附近的任務",
+    "show info on nearby quests": "顯示附近任務的資訊",
+    "show a global list of all available quests": "顯示所有可接受任務的全域列表",
+    "show all quests on an island or continent,": "顯示某座島嶼或大陸上的所有任務，",
+    "show all completed feats, deeds and legacies": "顯示所有已完成的功績、事蹟與傳承",
+    "show a quest's completion string": "顯示任務完成時的文字",
+    "show dependent chained quests": "顯示相依的連鎖任務",
+}
+
+
+def translate_inventory_timestamp(text):
+    """Translate the fixed label while preserving every timestamp digit."""
+    match = INVENTORY_TIMESTAMP.match(str(text).strip())
+    if not match:
+        return None
+    weekday, month, day, clock, year = match.groups()
+    return "最新庫存新增時間：%s %s %s %s %s" % (
+        WEEKDAY_ZH[weekday], MONTH_ZH[month], day, clock, year
+    )
+
+
+def to_traditional_characters(text):
+    """Convert Chinese glyphs with Windows itself; preserve wording and ASCII."""
+    value = str(text)
+    if not value:
+        return value
+    try:
+        flag = 0x04000000  # LCMAP_TRADITIONAL_CHINESE
+        fn = ctypes.windll.kernel32.LCMapStringEx
+        fn.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_wchar_p,
+                       ctypes.c_int, ctypes.c_wchar_p, ctypes.c_int,
+                       ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long]
+        fn.restype = ctypes.c_int
+        needed = fn("zh-TW", flag, value, len(value), None, 0, None, None, 0)
+        if needed <= 0:
+            return value
+        output = ctypes.create_unicode_buffer(needed)
+        written = fn("zh-TW", flag, value, len(value), output, needed, None, None, 0)
+        return output[:written] if written > 0 else value
+    except Exception:
+        # Character normalization is optional; it must never break translation.
+        return value
+
+
+def structured_block_kind(text):
+    """Return a non-skills structured block kind without inspecting its items."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "You are carrying:":
+            return "inventory"
+        if stripped == "The following items are available for sale at this time:":
+            return "shop_items"
+        if stripped == "The following spell castings may be purchased for a small fee:":
+            return "shop_spells"
+        if stripped == "The following items are currently up for grabs:":
+            return "free_items"
+        for marker, kind in STRUCTURED_CONTAINS_MARKERS.items():
+            if marker in line:
+                return kind
+        # Some containers use a descriptive heading instead of the shorter
+        # "on ground contains:" marker, for example shelves and tables.  Match
+        # the stable grammatical shell, not a particular container name.
+        if re.match(r"^\s*\(on ground\)\s+.+?\s+has on it:\s*$", line, re.I):
+            return "ground_container"
+    # Quiet-period buffering can split a large container or shop listing after
+    # its start marker.  Recognize continuation pages by their repeated column
+    # shape, never by specific item names.  Allow one trailing summary line.
+    nonempty = [line for line in lines if line.strip()]
+    if len(nonempty) >= 3:
+        required = len(nonempty) - 1
+        counted_items = sum(bool(re.match(r"^\s*\(\s*\d+\)", line)) for line in nonempty)
+        priced_items = sum(bool(re.match(
+            r"^\s*(?:[A-Z]\s+)?\[\s*(?:\d+|Price)\s*\]",
+            line,
+            re.IGNORECASE,
+        )) for line in nonempty)
+        if counted_items >= required:
+            return "counted_item_continuation"
+        if priced_items >= required:
+            return "shop_item_continuation"
+    return None
+
+def log(msg, critical=False):
+    try:
+        if critical or config().get("debug_logging", False):
+            with LOG.open("a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S")+" [LMT] "+str(msg)+"\n")
+    except Exception:
+        pass
+
+def config():
+    c=DEFAULT.copy()
+    try: c.update(json.loads(CONFIG.read_text(encoding="utf-8")))
+    except Exception: pass
+    return c
+
+
+def cloud_translation_config():
+    """Read the human-editable cloud settings; this does not make network calls."""
+    result = CLOUD_TRANSLATION_DEFAULT.copy()
+    try:
+        values = {}
+        for raw_line in CLOUD_CONFIG.read_text(encoding="utf-8-sig").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip().lower()] = value.strip()
+        service = int(values.get("service", 0))
+        result["service"] = service if service in {0, 1, 2, 3} else 0
+        result["api_keys"] = {
+            1: values.get("azure_api_key", ""),
+            2: values.get("google_api_key", ""),
+            3: values.get("deepl_api_key", ""),
+        }
+        # Upgrade compatibility: an older single api_key belongs to the
+        # selected primary service.  It is never copied to another provider.
+        legacy_key = values.get("api_key", "")
+        if legacy_key and result["service"] in result["api_keys"]:
+            result["api_keys"][result["service"]] = (
+                result["api_keys"][result["service"]] or legacy_key
+            )
+        result["azure_region"] = values.get("azure_region", "global") or "global"
+        result["timeout_seconds"] = max(0.5, min(10.0, float(values.get("timeout_seconds", 1.5))))
+        result["allow_private_messages"] = values.get("allow_private_messages", "0") == "1"
+    except Exception:
+        return CLOUD_TRANSLATION_DEFAULT.copy()
+    # service=0 is an explicit master switch.  A selected provider without a
+    # key may still fall through to another provider whose key is configured.
+    if result["service"] == 0:
+        return result
+    if not any(result["api_keys"].values()):
+        result["service"] = 0
+    return result
+
+
+def is_private_cloud_text(text):
+    """Conservatively keep direct/private player communication offline."""
+    value = str(text)
+    patterns = (
+        r"\btells you[,:' ]", r"\bYou tell\b", r"\bwhispers? to you\b",
+        r"\bYou whisper\b", r"\bsends you (?:a )?private message\b",
+        r"\bprivate message\b",
+    )
+    return any(re.search(pattern, value, re.I) for pattern in patterns)
+
+
+def cloud_translation_candidates(text=""):
+    settings = cloud_translation_config()
+    if settings["service"] == 0:
+        return []
+    if not settings["allow_private_messages"] and is_private_cloud_text(text):
+        return []
+    primary = settings["service"]
+    order = [primary] + [service for service in (1, 2, 3) if service != primary]
+    now = time.monotonic()
+    return [
+        (service, settings["api_keys"].get(service, ""), settings)
+        for service in order
+        if settings["api_keys"].get(service, "")
+        and service not in CLOUD_DISABLED_FOR_SESSION
+        and now >= CLOUD_DISABLED_UNTIL.get(service, 0.0)
+    ]
+
+
+def validate_cloud_translation(source, translated):
+    translated = to_traditional_characters(str(translated).strip())
+    if not translated or not any("\u3400" <= char <= "\u9fff" for char in translated):
+        raise RuntimeError("CLOUD_NO_CHINESE")
+    if numeric_values(source) and not numeric_items_preserved(source, translated):
+        raise RuntimeError("CLOUD_NUMERIC_ITEMS_MISSING")
+    ok, reason = translation_sanity_ok(source, translated)
+    if not ok:
+        raise RuntimeError("CLOUD_SANITY_" + reason)
+    return translated
+
+
+def mark_translation_engine(name):
+    TRANSLATION_ENGINES_USED.add(str(name))
+
+
+def cloud_translate_many(sources):
+    """Try configured cloud providers in priority order, then allow LMT fallback."""
+    sources = [str(source) for source in sources]
+    for service, api_key, settings in cloud_translation_candidates("\n".join(sources)):
+        provider = cloud_translation_client.SERVICE_NAMES.get(service, "unknown")
+        try:
+            translated = cloud_translation_client.translate_many(
+                service, sources, api_key,
+                settings["azure_region"], settings["timeout_seconds"],
+            )
+            if len(translated) != len(sources):
+                raise RuntimeError("CLOUD_RESULT_COUNT_MISMATCH")
+            results = [validate_cloud_translation(source, result)
+                       for source, result in zip(sources, translated)]
+            mark_translation_engine(provider)
+            CLOUD_FAILURE_COUNT[service] = 0
+            return results
+        except Exception as error:
+            if cloud_translation_client.is_session_blocking_error(error):
+                CLOUD_DISABLED_FOR_SESSION.add(service)
+                CLOUD_FAILURE_COUNT[service] = 0
+                log("cloud provider=%s disabled for this worker session after provider error: %s" %
+                    (provider, str(error)), True)
+                continue
+            CLOUD_FAILURE_COUNT[service] = CLOUD_FAILURE_COUNT.get(service, 0) + 1
+            if CLOUD_FAILURE_COUNT[service] >= CLOUD_FAILURE_LIMIT:
+                CLOUD_DISABLED_UNTIL[service] = time.monotonic() + CLOUD_COOLDOWN_SECONDS
+                CLOUD_FAILURE_COUNT[service] = 0
+                log("cloud provider=%s paused for %d seconds after repeated failures" %
+                    (provider, CLOUD_COOLDOWN_SECONDS), True)
+            else:
+                log("cloud provider=%s fallback: %s" % (provider, str(error)), True)
+    return None
+
+
+def load_deterministic_templates():
+    """Load only explicitly enabled, reviewed templates; catalog is optional."""
+    global DETERMINISTIC_TEMPLATES, DETERMINISTIC_FIELD_GLOSSARY
+    if DETERMINISTIC_TEMPLATES is not None:
+        return DETERMINISTIC_TEMPLATES
+    templates = []
+    try:
+        uri = STRUCTURE_CATALOG_FILE.resolve().as_uri() + "?mode=ro"
+        db = sqlite3.connect(uri, uri=True, timeout=1)
+        try:
+            rows = db.execute(
+                "SELECT source_regex,output_template,category FROM translation_templates "
+                "WHERE enabled=1 ORDER BY priority DESC,id"
+            ).fetchall()
+            glossary_rows = db.execute(
+                "SELECT field_name,source_value,translated_value FROM field_glossary"
+            ).fetchall()
+        finally:
+            db.close()
+        for source_regex, output_template, category in rows:
+            try:
+                templates.append((re.compile(source_regex), output_template, category))
+            except re.error as error:
+                log("ignored invalid deterministic template: %r" % error, True)
+        DETERMINISTIC_FIELD_GLOSSARY = {
+            (str(field).lower(), str(source).upper()): str(translated)
+            for field, source, translated in glossary_rows
+        }
+    except Exception as error:
+        # The catalog is an optional accelerator, never a translation dependency.
+        log("structure catalog unavailable: %r" % error, True)
+    DETERMINISTIC_TEMPLATES = templates
+    if DETERMINISTIC_FIELD_GLOSSARY is None:
+        DETERMINISTIC_FIELD_GLOSSARY = {}
+    return templates
+
+
+def deterministic_translate(text):
+    """Return a reviewed full-match translation while preserving named fields."""
+    source = str(text)
+    if "\n" in source or "\r" in source:
+        return None
+    combo = translate_combo_line(source)
+    if combo is not None:
+        return combo
+    if re.fullmatch(
+        r"You know the following skills:\s+You don't know of any skills by that name\.",
+        source,
+        re.I,
+    ):
+        return "你會以下技能：你不知道任何符合該名稱的技能。"
+    match = re.fullmatch(r"<\s*(\d+)hp\s+(\d+)m\s+(\d+)mv\s*>", source, re.I)
+    if match:
+        # Keep the compact unit suffixes because the general numeric guard
+        # interprets m as a multiplier; labels make the prompt readable.
+        return "<生命 %shp 法力 %sm 移動 %smv>" % match.groups()
+    match = re.fullmatch(r"You have (\d+) practices? remaining\.", source, re.I)
+    if match:
+        return "你還有 %s 點練習點數。" % match.group(1)
+    match = re.fullmatch(r"(\d{1,2})\s+(am|pm)", source, re.I)
+    if match:
+        period = "上午" if match.group(2).lower() == "am" else "下午"
+        return "%s %s 點" % (period, match.group(1))
+    match = re.fullmatch(r"freak\s+(\d+)!", source, re.I)
+    if match:
+        # Alter Aeon uses "freak" as a game-specific combat grade. Preserve
+        # the term and number locally instead of asking LMT to guess it.
+        return "freak %s!" % match.group(1)
+    match = re.fullmatch(r"You are level (\d+) ([A-Za-z]+)\.", source, re.I)
+    if match:
+        class_name = {
+            "mage": "法師", "cleric": "牧師", "thief": "盜賊",
+            "warrior": "戰士", "necromancer": "死靈法師", "druid": "德魯伊",
+        }.get(match.group(2).lower(), match.group(2))
+        return "你是 %s 級%s。" % (match.group(1), class_name)
+    match = re.fullmatch(r"Your skill level is (.+)\.", source, re.I)
+    if match:
+        class_names = {
+            "mage": "法師", "cleric": "牧師", "thief": "盜賊",
+            "warrior": "戰士", "necromancer": "死靈法師", "druid": "德魯伊",
+        }
+        entries = re.findall(r"level\s+(\d+)\s+([A-Za-z]+)", match.group(1), re.I)
+        if entries:
+            rendered = ["%s 級%s" % (level, class_names.get(name.lower(), name)) for level, name in entries]
+            return "你的技能等級是 %s。" % "、".join(rendered)
+    match = re.fullmatch(r"--- Received (\d+) lines, sent (\d+) lines\.", source, re.I)
+    if match:
+        return "--- 收到 %s 行，送出 %s 行。" % match.groups()
+    match = re.fullmatch(
+        r"--- Output buffer has (\d+)/(\d+) lines in it \(([\d.]+)% full\)\.",
+        source,
+        re.I,
+    )
+    if match:
+        return "--- 輸出緩衝區中有 %s/%s 行（已使用 %s%%）。" % match.groups()
+    match = re.fullmatch(
+        r"--- Matched (\d+) triggers, (\d+) aliases, and (\d+) timers fired\.",
+        source,
+        re.I,
+    )
+    if match:
+        return "--- 已比對 %s 個觸發器、%s 個別名，並觸發 %s 個計時器。" % match.groups()
+    match = re.fullmatch(r"You spend (\d[\d,]*) experience\.\.\.", source, re.I)
+    if match:
+        return "你花費了 %s 點經驗值……" % match.group(1)
+    if source == ("You can use alt-1 through alt-0 to retrieve your last 10 received messages. "
+                   "Double clicking the hotkey copies the message to the clipboard. "
+                   "Hit it 3 times to paste the message into the input window for reviewing."):
+        return ("你可以使用 alt-1 到 alt-0 取回最近 10 則收到的訊息。按兩下快速鍵會將訊息複製到剪貼簿；"
+                "按 3 次則會貼到輸入視窗供你檢查。")
+    if source == "Type config showtips to disable these tips.":
+        return "輸入 config showtips 可停用這些提示。"
+    match = re.fullmatch(
+        r"Your (strength|intelligence|wisdom|dex|con|chr|spell save|fire save|cold save|"
+        r"zap save|breath save|poison save|physical save|hitroll|damage) is now\s+"
+        r"([-+]?\d+(?:\.\d+)?%?)",
+        source,
+        re.I,
+    )
+    if match:
+        return "你的%s現在是 %s。" % (ATTRIBUTE_CHANGE_ZH[match.group(1).lower()], match.group(2))
+    match = re.fullmatch(
+        r"Armor:\s*([-+]?\d+)\s*\(you are only wearing (\d+) of (\d+) pieces of armor\)",
+        source,
+        re.I,
+    )
+    if match:
+        armor, worn, total = match.groups()
+        return "護甲：%s（你目前只穿戴 %s 個護甲部位中的 %s 個）。" % (armor, total, worn)
+    for pattern, output_template, _category in load_deterministic_templates():
+        match = pattern.fullmatch(source)
+        if not match:
+            continue
+        raw_values = match.groupdict()
+        rendered_values = {}
+        for field, value in raw_values.items():
+            if value is None:
+                rendered_values[field] = value
+                continue
+            translated = DETERMINISTIC_FIELD_GLOSSARY.get((field.lower(), str(value).upper()))
+            if translated is None and field.lower() == "wear":
+                tokens = str(value).split()
+                translated_tokens = [
+                    DETERMINISTIC_FIELD_GLOSSARY.get(("wear", token.upper()), token)
+                    for token in tokens
+                ]
+                translated = "、".join(translated_tokens)
+            rendered_values[field] = translated if translated is not None else value
+        try:
+            result = output_template.format_map(rendered_values)
+        except (KeyError, ValueError):
+            continue
+        # Every captured source value must survive verbatim in the result.
+        if any(value is not None and value not in result and rendered_values.get(field) not in result
+               for field, value in raw_values.items()):
+            continue
+        return result
+    return None
+
+
+def translate_combo_line(text):
+    """Render attack-combo counters and every bonus without asking the model."""
+    source = str(text).strip()
+    starts = (
+        (r"^You got a (\d+) attack combo!", "你完成了 %s 連擊！"),
+        (r"^You successfully finished a full (\d+) attack combo!", "你成功完成完整 %s 連擊！"),
+    )
+    for pattern, template in starts:
+        match = re.match(pattern, source, re.I)
+        if not match:
+            continue
+        output = [template % match.group(1)]
+        suffix = source[match.end():]
+        bonus_re = re.compile(
+            r"\s*(Combo bonus|Completion bonus):\s*([A-Za-z ]+?)\s+by\s+(-?\d+(?:\.\d+)?%?)!",
+            re.I,
+        )
+        position = 0
+        for bonus in bonus_re.finditer(suffix):
+            if suffix[position:bonus.start()].strip():
+                return None
+            label, field, value = bonus.groups()
+            zh_label = "連擊獎勵" if label.lower().startswith("combo") else "完成獎勵"
+            zh_field = BONUS_FIELD_ZH.get(field.strip().lower(), field.strip())
+            output.append("%s：%s增加 %s！" % (zh_label, zh_field, value))
+            position = bonus.end()
+        if suffix[position:].strip():
+            return None
+        return " ".join(output)
+    return None
+
+def session_alive():
+    if SESSION_FILE is None: return True
+    try: return (time.time()-SESSION_FILE.stat().st_mtime) <= SESSION_MAX_AGE
+    except OSError: return False
+
+def process_is_alive(pid):
+    if pid <= 0: return False
+    try:
+        import ctypes
+        SYNCHRONIZE=0x00100000
+        h=ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE,False,pid)
+        if not h: return False
+        ctypes.windll.kernel32.CloseHandle(h); return True
+    except Exception: return False
+
+def acquire_lock():
+    for _ in range(2):
+        try:
+            fd=os.open(str(LOCK),os.O_CREAT|os.O_EXCL|os.O_WRONLY)
+            with os.fdopen(fd,"w",encoding="ascii") as f:f.write(str(os.getpid()))
+            return True
+        except FileExistsError:
+            try:
+                t=LOCK.read_text(encoding="ascii").strip()
+                if t and process_is_alive(int(t)): return False
+            except Exception: pass
+            try: LOCK.unlink()
+            except Exception: return False
+    return False
+
+def cache_connection():
+    global CACHE_CONNECTION,CACHE_DISABLED
+    if CACHE_DISABLED:return None
+    if CACHE_CONNECTION is not None:return CACHE_CONNECTION
+    try:
+        c=sqlite3.connect(str(CACHE_DB),timeout=2)
+        c.execute("PRAGMA synchronous=NORMAL")
+        c.execute("""CREATE TABLE IF NOT EXISTS translations(
+          cache_key TEXT PRIMARY KEY, source_text TEXT NOT NULL, translated_text TEXT NOT NULL,
+          source_language TEXT NOT NULL, target_language TEXT NOT NULL, cache_version INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,last_used INTEGER NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0)""")
+        c.commit();CACHE_CONNECTION=c;return c
+    except Exception as e:
+        CACHE_DISABLED=True;log("cache disabled: %r"%e,True);return None
+
+def cache_key(text,c):
+    v=int(c.get("translation_cache_version",12))
+    m="\0".join((str(v),c["source_language"],c["target_language"],text))
+    return hashlib.sha256(m.encode("utf-8")).hexdigest(),v
+
+def cache_get(text,c):
+    if not c.get("translation_cache_enabled",True):return None
+    db=cache_connection()
+    if db is None:return None
+    try:
+        k,_=cache_key(text,c); row=db.execute("SELECT translated_text FROM translations WHERE cache_key=?",(k,)).fetchone()
+        if not row:return None
+        # Cached output is not automatically trustworthy.  Earlier versions
+        # could store a heading-only result as a successful translation.  Run
+        # every hit through the current, content-agnostic completeness rules.
+        translated = to_traditional_characters(row[0])
+        ok, reason = translation_sanity_ok(text, translated)
+        if not ok:
+            db.execute("DELETE FROM translations WHERE cache_key=?", (k,))
+            db.commit()
+            log("discarded invalid cached translation: %s" % reason, True)
+            return None
+        db.execute("UPDATE translations SET translated_text=?,last_used=?,hit_count=hit_count+1 WHERE cache_key=?",
+                   (translated,int(time.time()),k));db.commit()
+        return translated
+    except Exception:return None
+
+def cache_put(text,out,c):
+    if not c.get("translation_cache_enabled",True):return
+    db=cache_connection()
+    if db is None:return
+    try:
+        out=to_traditional_characters(out)
+        k,v=cache_key(text,c);now=int(time.time())
+        db.execute("""INSERT OR REPLACE INTO translations
+        (cache_key,source_text,translated_text,source_language,target_language,cache_version,created_at,last_used,hit_count)
+        VALUES(?,?,?,?,?,?,?,?,COALESCE((SELECT hit_count FROM translations WHERE cache_key=?),0))""",
+        (k,text,out,c["source_language"],c["target_language"],v,now,now,k));db.commit()
+    except Exception as e:log("cache write failed: %r"%e,True)
+
+
+def clear_recent_translation_cache(limit=5):
+    """Delete recently used translation rows on the owning worker connection."""
+    db = cache_connection()
+    if db is None:
+        raise RuntimeError("CACHE_UNAVAILABLE")
+    limit = max(1, min(50, int(limit)))
+    rows = db.execute(
+        "SELECT cache_key FROM translations ORDER BY last_used DESC, rowid DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    if rows:
+        db.executemany("DELETE FROM translations WHERE cache_key=?", rows)
+        db.commit()
+    return len(rows)
+
+def find_runtime():
+    home=Path.home()
+    roots=[
+        ROOT/"lmt_runtime",
+        ROOT,
+        home/"Downloads"/"LMT60_1.7B_HOME_DOWNLOADER",
+    ]
+    server=model=None
+    for r in roots:
+        if not r.exists(): continue
+        if server is None:
+            hits=list((r/"tools").rglob("llama-server.exe")) if (r/"tools").exists() else []
+            if hits: server=hits[0]
+        if model is None:
+            q=r/"gguf"/"LMT-60-1.7B-Q4_K_M.gguf"
+            if q.is_file(): model=q
+    if not server: raise RuntimeError("llama-server.exe not found. Keep LMT60_1.7B_HOME_DOWNLOADER in Downloads, or copy tools into translation_bridge/lmt_runtime.")
+    if not model: raise RuntimeError("LMT-60-1.7B-Q4_K_M.gguf not found. Keep it in Downloads\\LMT60_1.7B_HOME_DOWNLOADER\\gguf, or copy gguf into translation_bridge/lmt_runtime.")
+    return server,model
+
+
+def find_runtime_candidates():
+    runtime = ROOT / "lmt_runtime"
+    model = runtime / "gguf" / "LMT-60-1.7B-Q4_K_M.gguf"
+    if not model.is_file():
+        _server, model = find_runtime()
+    candidates = []
+    vulkan = runtime / "backends" / "vulkan" / "llama-server.exe"
+    cpu = runtime / "tools" / "llama-server.exe"
+    if vulkan.is_file():
+        candidates.append(("vulkan", vulkan, model, 99))
+    if cpu.is_file():
+        candidates.append(("cpu", cpu, model, 0))
+    if not candidates:
+        server, model = find_runtime()
+        candidates.append(("cpu", server, model, 0))
+    return candidates
+
+def http_get(path,timeout=1):
+    with urllib.request.urlopen("http://127.0.0.1:%d%s"%(PORT,path),timeout=timeout) as r:return r.read()
+
+def http_post(path,obj,timeout):
+    data=json.dumps(obj,ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request("http://127.0.0.1:%d%s"%(PORT,path),data=data,headers={"Content-Type":"application/json"})
+    with urllib.request.urlopen(req,timeout=timeout) as r:return json.loads(r.read().decode("utf-8","replace"))
+
+def backend_fingerprint(candidates):
+    parts=[platform.node().lower(), "cpu-autotune-v%d"%CPU_AUTOTUNE_VERSION,
+           "logical-cpus:%s"%(os.cpu_count() or 0)]
+    for backend,server,model,gpu_layers in candidates:
+        for path in (server,model):
+            try:
+                stat=path.stat();parts.append("%s:%s:%s"%(str(path),stat.st_size,stat.st_mtime_ns))
+            except OSError:parts.append("%s:missing"%path)
+        parts.append("%s:%s"%(backend,gpu_layers))
+    return hashlib.sha256("\n".join(parts).encode("utf-8","replace")).hexdigest()
+
+def load_backend_choice(candidates):
+    try:
+        data=json.loads(BACKEND_CHOICE_FILE.read_text(encoding="utf-8"))
+        if data.get("fingerprint") != backend_fingerprint(candidates):return None
+        selected=str(data.get("backend") or "")
+        if any(item[0] == selected for item in candidates):
+            threads=data.get("threads")
+            threads_batch=data.get("threads_batch")
+            if threads is not None:
+                threads=int(threads)
+                if threads < 1 or threads > (os.cpu_count() or 1):return None
+                threads_batch=int(threads_batch or threads)
+                if threads_batch < 1 or threads_batch > (os.cpu_count() or 1):return None
+            return {"backend":selected,"threads":threads,
+                    "threads_batch":threads_batch}
+    except Exception:pass
+    return None
+
+def save_backend_choice(candidates,selection,scores,metrics=None):
+    try:
+        backend=selection["backend"]
+        data={"fingerprint":backend_fingerprint(candidates),"machine":platform.node(),
+              "backend":backend,"threads":selection.get("threads"),
+              "threads_batch":selection.get("threads_batch"),
+              "scores_tokens_per_second":scores,"updated_at":int(time.time())}
+        if metrics:data["benchmark_metrics"]=metrics
+        tmp=BACKEND_CHOICE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
+        os.replace(tmp,BACKEND_CHOICE_FILE)
+    except Exception as e:log("backend choice save failed: %r"%e,True)
+
+def stop_candidate(candidate):
+    if candidate is None:return
+    try:candidate.terminate();candidate.wait(timeout=3)
+    except Exception:
+        try:candidate.kill();candidate.wait(timeout=2)
+        except Exception:pass
+
+def launch_candidate(item,sf,threads=None,threads_batch=None):
+    backend,server,model,gpu_layers=item
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+    profile=("default" if threads is None else "t%d-tb%d"%(threads,threads_batch or threads))
+    log("trying backend=%s profile=%s llama-server=%s model=%s"%(backend,profile,server,model),True)
+    sf.write("\n=== BACKEND %s PROFILE %s ===\n" % (backend,profile));sf.flush()
+    cmd=[str(server),"-m",str(model),"--host","127.0.0.1","--port",str(PORT),
+         "--ctx-size","4096","--parallel","1","--gpu-layers",str(gpu_layers),
+         "--reasoning","off","--no-warmup","--log-colors","off"]
+    if threads is not None:
+        cmd.extend(["--threads",str(threads),"--threads-batch",str(threads_batch or threads)])
+    candidate=subprocess.Popen(cmd,stdout=sf,stderr=subprocess.STDOUT,creationflags=flags)
+    deadline=time.time()+15
+    while time.time()<deadline:
+        if candidate.poll() is not None:raise RuntimeError("process exited during startup")
+        try:http_get("/health",1);break
+        except Exception:time.sleep(.15)
+    else:raise RuntimeError("startup timeout")
+    warm=http_post("/completion",{
+        "prompt":"Translate English to Chinese.\nEnglish: Ready\nChinese:",
+        "n_predict":8,"temperature":0.0,"stream":False},20)
+    if not (warm.get("content") or "").strip():raise RuntimeError("warm-up returned blank output")
+    return candidate
+
+def benchmark_candidate(runs=2):
+    prompt=("Translate the following English text into Traditional Chinese.\nEnglish: "
+            "The old guard points toward the eastern gate. Patients at the town hospital are "
+            "getting worse, and the administrator needs evidence before nightfall.\nTraditional Chinese:")
+    samples=[];prompt_samples=[];total_samples=[]
+    for _ in range(max(1,runs)):
+        started=time.perf_counter()
+        response=http_post("/completion",{
+            "prompt":prompt,"n_predict":96,"temperature":0.0,
+            "repeat_penalty":1.1,"repeat_last_n":64,"stream":False},25)
+        elapsed=max(.001,time.perf_counter()-started)
+        content=(response.get("content") or "").strip()
+        tokens=int(response.get("tokens_predicted") or 0)
+        if tokens < 4 or not content or not re.search(r"[\u3400-\u9fff]",content):
+            raise RuntimeError("invalid benchmark output")
+        timings=response.get("timings") or {}
+        decode=float(timings.get("predicted_per_second") or 0)
+        if decode <= 0:decode=tokens/elapsed
+        samples.append(decode);total_samples.append(elapsed)
+        prompt_speed=float(timings.get("prompt_per_second") or 0)
+        if prompt_speed > 0:prompt_samples.append(prompt_speed)
+    return {"decode_tps":round(median(samples),2),
+            "prompt_tps":round(median(prompt_samples),2) if prompt_samples else None,
+            "elapsed_seconds":round(median(total_samples),3)}
+
+def cpu_thread_profiles():
+    logical=max(1,os.cpu_count() or 1)
+    return [value for value in (2,4,6,8,12,16) if value <= logical]
+
+def profile_key(backend,threads):
+    return backend if threads is None else "%s-t%d"%(backend,threads)
+
+def benchmark_profile(item,sf,threads=None,threads_batch=None):
+    candidate=None
+    try:
+        candidate=launch_candidate(item,sf,threads,threads_batch)
+        return benchmark_candidate()
+    finally:
+        stop_candidate(candidate);time.sleep(.15)
+
+def start_server():
+    global SERVER_PROCESS, SERVER_BACKEND, SERVER_THREADS
+    # Reuse a server already answering on our private port.
+    try:
+        http_get("/health",.5); log("reusing llama-server on port %d"%PORT,True); return
+    except Exception: pass
+    sf=open(SERVER_LOG,"w",encoding="utf-8",errors="replace")
+    candidates=find_runtime_candidates();selection=load_backend_choice(candidates)
+    if selection is None:
+        scores={};metrics={};base_metrics={}
+        for item in candidates:
+            try:
+                result=benchmark_profile(item,sf)
+                base_metrics[item[0]]=result;metrics[item[0]]=result
+                scores[item[0]]=result["decode_tps"]
+                log("backend benchmark %s=%.2f decode tokens/sec"%(item[0],scores[item[0]]),True)
+            except Exception as e:log("backend benchmark %s failed: %r"%(item[0],e),True)
+        if scores:
+            cpu_item=next((item for item in candidates if item[0] == "cpu"),None)
+            cpu_default=scores.get("cpu",0);vulkan_score=scores.get("vulkan",0)
+            best_cpu_threads=None;best_cpu_score=cpu_default
+            # A clearly faster GPU makes a CPU sweep pure startup delay.  Tune only
+            # CPU-first machines, while retaining llama.cpp's default as a control.
+            if cpu_item and (not vulkan_score or cpu_default >= vulkan_score*.5):
+                logical=max(1,os.cpu_count() or 1)
+                for threads in cpu_thread_profiles():
+                    key=profile_key("cpu",threads)
+                    try:
+                        result=benchmark_profile(cpu_item,sf,threads,logical)
+                        metrics[key]=result;scores[key]=result["decode_tps"]
+                        log("CPU profile t=%d tb=%d benchmark=%.2f decode tokens/sec"%
+                            (threads,logical,scores[key]),True)
+                        if scores[key] > best_cpu_score:
+                            best_cpu_score=scores[key];best_cpu_threads=threads
+                    except Exception as e:log("CPU profile t=%d failed: %r"%(threads,e),True)
+                if best_cpu_threads is not None and best_cpu_score < cpu_default*CPU_AUTOTUNE_MIN_GAIN:
+                    log("CPU profile gain below %.0f%%; keeping llama.cpp default"%
+                        ((CPU_AUTOTUNE_MIN_GAIN-1)*100),True)
+                    best_cpu_threads=None;best_cpu_score=cpu_default
+            if best_cpu_score > vulkan_score:
+                selection={"backend":"cpu","threads":best_cpu_threads,
+                           "threads_batch":max(1,os.cpu_count() or 1) if best_cpu_threads else None}
+            else:
+                selection={"backend":"vulkan","threads":None,"threads_batch":None}
+            save_backend_choice(candidates,selection,scores,metrics)
+            selected_profile=profile_key(selection["backend"],selection.get("threads"))
+            log("backend benchmark selected=%s"%selected_profile,True)
+    selected_backend=selection.get("backend") if selection else None
+    ordered=sorted(candidates,key=lambda item:0 if item[0] == selected_backend else 1)
+    errors=[]
+    for item in ordered:
+        candidate=None
+        try:
+            threads=selection.get("threads") if selection and item[0] == selected_backend else None
+            threads_batch=selection.get("threads_batch") if threads is not None else None
+            candidate=launch_candidate(item,sf,threads,threads_batch)
+            SERVER_PROCESS=candidate;SERVER_BACKEND=item[0];SERVER_THREADS=threads
+            profile=profile_key(item[0],threads)
+            log("llama-server READY backend=%s"%profile,True);return
+        except Exception as e:
+            errors.append("%s: %r"%(item[0],e));log("backend %s unavailable; falling back: %r"%(item[0],e),True)
+            stop_candidate(candidate)
+            # A tuned profile is optional.  If its flags fail for any reason,
+            # retry the same CPU executable with llama.cpp defaults before
+            # considering another backend.
+            if item[0] == "cpu" and selection and selection.get("threads") is not None:
+                candidate=None
+                try:
+                    candidate=launch_candidate(item,sf)
+                    SERVER_PROCESS=candidate;SERVER_BACKEND="cpu";SERVER_THREADS=None
+                    log("llama-server READY backend=cpu-default (tuned profile fallback)",True);return
+                except Exception as fallback_error:
+                    errors.append("cpu-default: %r"%fallback_error)
+                    log("CPU default profile unavailable: %r"%fallback_error,True)
+                    stop_candidate(candidate)
+    raise RuntimeError("all llama-server backends failed: " + "; ".join(errors))
+
+NUMERIC_MULTIPLIERS = {
+    "": Decimal(1), "k": Decimal(1000), "m": Decimal(1000000), "b": Decimal(1000000000),
+}
+NUMERIC_PATTERN = re.compile(r"(?<![A-Za-z])([-+]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)(%?)")
+
+
+def numeric_values(value):
+    output = []
+    for number, suffix, percent in NUMERIC_PATTERN.findall(str(value)):
+        try:
+            amount = Decimal(number.replace(",", "")) * NUMERIC_MULTIPLIERS[suffix.lower()]
+            output.append((amount, bool(percent)))
+        except (InvalidOperation, KeyError):
+            pass
+    return output
+
+
+def numeric_items_preserved(source, translated):
+    remaining = numeric_values(translated)
+    for number in numeric_values(source):
+        try:
+            remaining.remove(number)
+        except ValueError:
+            return False
+    return True
+
+
+def translation_sanity_ok(source, translated):
+    s = " ".join(str(source).split())
+    t = " ".join(str(translated).split())
+    if not t:
+        return False, "blank"
+    leakage_patterns = (
+        r"(?:將|将)所有文字翻(?:譯|译)(?:成|為|为)",
+        r"保留(?:正確|正确).{0,20}(?:數字|数字).{0,20}(?:百分比)",
+        r"不要(?:省略|刪減|删减).{0,20}(?:總結|总结).{0,20}(?:重複|重复)",
+        # The model sometimes translates/paraphrases the instruction itself
+        # instead of the game text.  Match its semantic shape rather than one
+        # exact wording so unseen variants are rejected too.
+        r"保留.{0,12}(?:名字|名稱|名称|姓名).{0,20}(?:不要|不得).{0,10}(?:添加|加入|增加).{0,8}(?:解釋|解释|說明|说明)",
+        r"preserve.{0,20}(?:proper\s+)?names?.{0,30}(?:do\s+not|don't).{0,15}(?:add|include).{0,15}explanations?",
+    )
+    if any(re.search(pattern, t, re.IGNORECASE) for pattern in leakage_patterns):
+        return False, "prompt_leakage"
+    # Compact rewards are gameplay data. Accept equivalent formatting such as
+    # 14k -> 14,000, but reject magnitude changes such as 232k -> 23.2k.
+    xp_pattern_en = re.compile(r"([+-]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)\s*(?:xp|experience)\b", re.I)
+    xp_pattern_zh = re.compile(r"([+-]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)\s*(?:點?經驗(?:值|點)?|xp|experience)\b", re.I)
+    def xp_values(pattern, value):
+        output = []
+        for number, suffix in pattern.findall(value):
+            try:
+                output.append(Decimal(number.replace(",", "")) * NUMERIC_MULTIPLIERS[suffix.lower()])
+            except (InvalidOperation, KeyError):
+                pass
+        return output
+    source_xp = xp_values(xp_pattern_en, s)
+    if source_xp:
+        translated_xp = xp_values(xp_pattern_zh, t)
+        if source_xp != translated_xp[:len(source_xp)]:
+            return False, "xp_value_changed_or_missing"
+    if len(s) >= 220 and len(t) < 24:
+        return False, "catastrophic_undertranslation"
+    if len(s) >= 500 and len(t) < 45:
+        return False, "severe_undertranslation"
+    source_lines = [q.strip() for q in str(source).splitlines() if q.strip()]
+    translated_lines = [q.strip() for q in str(translated).splitlines() if q.strip()]
+    if is_nearby_map_listing(source) and len(source_lines) != len(translated_lines):
+        return False, "nearby_map_line_count_mismatch"
+    # Old whole-quest cache entries may contain all of the text but collapse
+    # section boundaries into one line. Require every source label to appear
+    # at the start of its own translated line. A rejected cache row is deleted
+    # by cache_get(), then rebuilt by the structured quest renderer.
+    if re.search(r"^Quest Name:\s*", str(source), re.MULTILINE | re.IGNORECASE):
+        required_quest_labels = []
+        for source_line in str(source).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            match = QUEST_DETAIL_FIELD.match(source_line.strip())
+            if match:
+                required_quest_labels.append(QUEST_DETAIL_LABELS[match.group(1).lower()])
+        for label in required_quest_labels:
+            if not any(line.startswith(label + "：") for line in translated_lines):
+                return False, "quest_section_labels_missing_or_merged"
+    if (is_quest_list_block(source) or is_job_list_block(source)) and len(source_lines) != len(translated_lines):
+        return False, "task_list_line_count_mismatch"
+    if (is_nearby_direction_listing(source) or is_dense_item_table(source)) and len(source_lines) != len(translated_lines):
+        return False, "tabular_line_count_mismatch"
+    block_kind = structured_block_kind(source)
+    if block_kind and len(source_lines) != len(translated_lines):
+        return False, block_kind + "_line_count_mismatch"
+    # Quest prose and daily-task wording are intentionally regrouped by the
+    # quest renderer. They are not room/NPC display rows, even when several
+    # source lines happen to end in punctuation.
+    quest_shape = is_quest_structured_block(source)
+    independent_start = None if quest_shape else trailing_independent_row_start(source)
+    if independent_start is not None:
+        required_lines = 1 + len(str(source).replace("\r\n", "\n").replace("\r", "\n").split("\n")[independent_start:])
+        if len(translated_lines) < required_lines:
+            return False, "trailing_display_rows_merged"
+    if len(source_lines) >= 4 and len(s) >= 180 and len(t) < 32:
+        return False, "multiline_body_missing"
+    # Chinese is normally more compact than English, but a result containing
+    # less than roughly a quarter of a substantive source is almost always a
+    # translated heading followed by omitted content.  This deliberately uses
+    # only shape and length, so it also protects unseen rooms, signs, quests,
+    # conversations, and future structured blocks.
+    length_ratio = len(t) / max(1, len(s))
+    # Short English display-wrapped fragments can legitimately compress below
+    # 22% in Chinese.  Keep a conservative 18% floor here; longer blocks retain
+    # the stricter thresholds below, so a missing room title/body still causes
+    # repair instead of being accepted.
+    if len(s) >= 60 and length_ratio < 0.18:
+        return False, "substantive_content_missing"
+    # For short paragraphs, fluent Chinese commonly uses only 20-25% of the
+    # English character count.  Keep the severe 18% floor above, but do not
+    # reject complete three-sentence messages merely for natural compression.
+    # Blocks of 300+ characters retain the stricter 28% guard below.
+    if len(s) >= 120 and length_ratio < 0.20:
+        return False, "low_length_ratio"
+    # A multi-line source introduced by a colon cannot validly translate to
+    # another dangling colon: the payload after the heading has disappeared.
+    if len(source_lines) >= 2 and source_lines[0].endswith((':', '：')) and t.endswith((':', '：')):
+        return False, "multiline_payload_missing"
+    # LMT can stop cleanly after translating only a heading.  Absolute length
+    # checks miss larger, but still badly truncated, list output.
+    if len(s) >= 300 and length_ratio < 0.28:
+        source_sentence_marks = len(re.findall(r"[.!?]+(?=\s|$)", s))
+        translated_sentence_marks = len(re.findall(r"[。！？.!?]+", t))
+        sentence_coverage = (
+            source_sentence_marks >= 2 and
+            translated_sentence_marks >= max(2, (source_sentence_marks + 1) // 2)
+        )
+        # A complete Chinese rendering can naturally fall below 28% of the
+        # English character count.  Sentence coverage distinguishes that from
+        # the known title-only/premature-EOS failure without weakening the 20%
+        # substantive-content floor.
+        if not (sentence_coverage and length_ratio >= 0.20):
+            return False, "low_length_ratio"
+    # Numeric menu/list data is semantic content, not prose the model may omit.
+    # Compare numeric *values*, not spelling: the deterministic XP renderer and
+    # fluent Chinese may legitimately expand 475k to 475,000.  The old textual
+    # comparison rejected that safe equivalent and caused a whole mixed combat
+    # + ground-container block to fall back to English.
+    source_numbers = numeric_values(s)
+    if (len(source_numbers) >= 3 or (block_kind and source_numbers)) and not numeric_items_preserved(s, t):
+        return False, "numeric_items_missing"
+    # Detect the pathological decoder loop without rejecting normal repeated
+    # words.  Three consecutive copies of a 12+ character phrase are not a
+    # legitimate translation unless the game itself emitted the same complete
+    # line that many times (for example, four identical chairs in a room).
+    compact = re.sub(r"\s+", "", t)
+    repeated_phrases = re.finditer(r"(.{12,80}?)\1\1", compact)
+    # Runs of dashes and other table decoration are normal MUD output, not a
+    # decoder loop.  Only language-bearing or numeric repeated units count.
+    repeated_phrase = next(
+        (match for match in repeated_phrases
+         if re.search(r"[A-Za-z0-9\u3400-\u9fff]", match.group(1))),
+        None,
+    )
+    def max_line_repeats(lines):
+        counts = {}
+        for line in lines:
+            counts[line] = counts.get(line, 0) + 1
+        return max(counts.values()) if counts else 0
+    source_repeat_max = max_line_repeats(source_lines)
+    translated_repeat_max = max_line_repeats(translated_lines)
+    # Old cache entries created before the repeated-line pipeline could keep
+    # only one copy of several identical NPC/object rows.  Such output is not
+    # a decoder loop, so the check below did not reject it.  Require repeated
+    # substantive source rows to survive with the same multiplicity; a stale
+    # collapsed cache entry will then be deleted and rebuilt by the current
+    # repeated-line pipeline.
+    substantive_source_counts = {}
+    for line in source_lines:
+        if len(re.sub(r"\s+", "", line)) >= 12:
+            substantive_source_counts[line] = substantive_source_counts.get(line, 0) + 1
+    # Structured blocks are already rebuilt one source row at a time and the
+    # exact line-count check above catches collapsed cache entries.  Comparing
+    # repetition again can falsely reject a valid inventory when distinct item
+    # names happen to receive the same Chinese rendering.
+    if not block_kind and max(substantive_source_counts.values(), default=0) >= 2:
+        if translated_repeat_max < max(substantive_source_counts.values()):
+            return False, "repeated_source_items_missing"
+    legitimate_line_repetition = (
+        source_repeat_max >= 3 and
+        translated_repeat_max == source_repeat_max
+    )
+    if repeated_phrase and not legitimate_line_repetition:
+        return False, "repetition_loop"
+    return True, ""
+
+def completion_once(text, c, n_predict=384, force_robust=False, force_simple=False):
+    mark_translation_engine("lmt_q4")
+    # LMT was trained and documented with this Standard Translation Prompt.
+    # The primary request uses the GGUF's own chat template.  force_simple is
+    # retained as the raw-completion fallback flag for older callers.
+    prompt = OFFICIAL_PROMPT_TEMPLATE.format(text=text)
+    timeout=max(3,float(c.get("request_timeout_seconds",25)))
+    if force_simple:
+        resp=http_post("/completion",{
+            "prompt":prompt,
+            "n_predict":n_predict,
+            "temperature":0.0,
+            "repeat_penalty":1.1,
+            "repeat_last_n":128,
+            "stream":False,
+        },timeout)
+        out=(resp.get("content") or "").strip()
+        tokens=int(resp.get("tokens_predicted") or 0)
+    else:
+        resp=http_post("/v1/chat/completions",{
+            "messages":[{"role":"user","content":prompt}],
+            "max_tokens":n_predict,
+            "temperature":0.0,
+            "repeat_penalty":1.1,
+            "stream":False,
+        },timeout)
+        choices=resp.get("choices") or []
+        if not choices:
+            raise RuntimeError("LMT_CHAT_NO_CHOICES")
+        out=((choices[0].get("message") or {}).get("content") or "").strip()
+        tokens=int((resp.get("usage") or {}).get("completion_tokens") or 0)
+    if tokens >= n_predict:
+        raise RuntimeError("LMT_TOKEN_LIMIT")
+    ok, reason = translation_sanity_ok(text, out)
+    if not ok:
+        raise RuntimeError("LMT_SANITY_" + reason)
+    return out
+
+
+def split_source(text, target_chars=650):
+    """Split on source lines, preserving order and every non-empty line."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    chunks, current = [], []
+    for line in lines:
+        candidate = "\n".join(current + [line])
+        if current and len(candidate) > target_chars:
+            chunks.append("\n".join(current))
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        chunks.append("\n".join(current))
+    return [chunk for chunk in chunks if chunk.strip()]
+
+
+def semantic_display_chunks(text):
+    """Rejoin MUD display wrapping so fallback never translates half a sentence."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    chunks, current = [], []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                chunks.append(" ".join(current))
+                current = []
+            continue
+        current.append(stripped)
+        if re.search(r"[.!?][\"')\]]*\s*$", stripped):
+            chunks.append(" ".join(current))
+            current = []
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
+def semantic_sentence_chunks(text):
+    """Return complete prose sentences while repairing MUD display wrapping."""
+    normalized = " ".join(
+        line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if line.strip()
+    )
+    if not normalized:
+        return []
+    chunks, start = [], 0
+    for match in re.finditer(r"[.!?。！？]+[\"'”’』】）)\]]*", normalized):
+        value = normalized[start:match.end()].strip()
+        if value:
+            chunks.append(value)
+        start = match.end()
+    tail = normalized[start:].strip()
+    if tail:
+        chunks.append(tail)
+    return chunks
+
+
+def is_room_prose_candidate(text):
+    """Conservatively identify a long narrative room, not arbitrary dialogue."""
+    value = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    rows = [line.strip() for line in value.split("\n") if line.strip()]
+    if len(value) < 180 or len(rows) < 3:
+        return False
+    title = rows[0]
+    if not (2 <= len(title) <= 100) or re.search(r"[:.!?。！？]$", title):
+        return False
+    if re.search(r"\b(?:says|asks|tells|exclaims|yells|whispers),?\s*['\"]", value, re.I):
+        return False
+    return sum(
+        1 for chunk in semantic_sentence_chunks(value)
+        if re.search(r"[.!?。！？]", chunk)
+    ) >= 2
+
+
+def seed_room_sentence_cache(source, translated, c):
+    """Learn only one-to-one, independently sane sentence pairs."""
+    source_chunks = semantic_sentence_chunks(source)
+    translated_chunks = semantic_sentence_chunks(translated)
+    if len(source_chunks) < 2 or len(source_chunks) != len(translated_chunks):
+        return 0
+    pairs = []
+    for source_chunk, translated_chunk in zip(source_chunks, translated_chunks):
+        ok, _ = translation_sanity_ok(source_chunk, translated_chunk)
+        if not ok:
+            return 0
+        pairs.append((source_chunk, translated_chunk))
+    for source_chunk, translated_chunk in pairs:
+        cache_put(source_chunk, translated_chunk, c)
+    return len(pairs)
+
+
+def translate_room_prose_cached(text, c):
+    """Reuse known room sentences without slowing an entirely new room."""
+    chunks = semantic_sentence_chunks(text)
+    if len(chunks) < 2:
+        return translate_piece(text, c, force_robust=len(text) >= 180)
+    cached = [cache_get(chunk, c) for chunk in chunks]
+    if not any(value is not None for value in cached):
+        translated = translate_piece(text, c, force_robust=True)
+        learned = seed_room_sentence_cache(text, translated, c)
+        if learned:
+            log("room sentence cache learned=%d" % learned)
+        return translated
+
+    missing_indexes = [index for index, value in enumerate(cached) if value is None]
+    combined_source = " ".join(chunks[index] for index in missing_indexes)
+    combined_translation = translate_piece(
+        combined_source, c, force_robust=len(combined_source) >= 180
+    )
+    combined_chunks = semantic_sentence_chunks(combined_translation)
+    if len(combined_chunks) == len(missing_indexes):
+        for index, translated_chunk in zip(missing_indexes, combined_chunks):
+            ok, _ = translation_sanity_ok(chunks[index], translated_chunk)
+            if not ok:
+                break
+        else:
+            for index, translated_chunk in zip(missing_indexes, combined_chunks):
+                cache_put(chunks[index], translated_chunk, c)
+                cached[index] = translated_chunk
+            result = "\n".join(
+                " ".join(value.splitlines()).strip() for value in cached if value.strip()
+            )
+            ok, reason = translation_sanity_ok(text, result)
+            if not ok:
+                raise RuntimeError("ROOM_SENTENCE_CACHE_SANITY_" + reason)
+            return result
+
+    output, index = [], 0
+    while index < len(chunks):
+        if cached[index] is not None:
+            output.append(cached[index])
+            index += 1
+            continue
+        end = index + 1
+        while end < len(chunks) and cached[end] is None:
+            end += 1
+        missing_source = " ".join(chunks[index:end])
+        missing_translation = translate_piece(
+            missing_source, c, force_robust=len(missing_source) >= 180
+        )
+        source_run = chunks[index:end]
+        translated_run = semantic_sentence_chunks(missing_translation)
+        if len(source_run) == len(translated_run):
+            for source_chunk, translated_chunk in zip(source_run, translated_run):
+                ok, _ = translation_sanity_ok(source_chunk, translated_chunk)
+                if ok:
+                    cache_put(source_chunk, translated_chunk, c)
+            output.extend(translated_run)
+        else:
+            output.append(missing_translation)
+        index = end
+    result = "\n".join(
+        " ".join(value.splitlines()).strip() for value in output if value.strip()
+    )
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("ROOM_SENTENCE_CACHE_SANITY_" + reason)
+    return result
+
+
+def translate_piece(text, c, depth=0, force_robust=False, force_simple=False, allow_cloud=True):
+    deterministic = deterministic_translate(text)
+    if deterministic is not None:
+        return deterministic
+    if allow_cloud and depth == 0:
+        cloud_result = cloud_translate_many([text])
+        if cloud_result is not None:
+            return cloud_result[0]
+    try:
+        return completion_once(text, c, 384, force_robust, force_simple)
+    except Exception as error:
+        if not force_simple:
+            # Retry the same complete block with the official raw STP before
+            # splitting.  This catches any chat-template-specific failure.
+            return translate_piece(text, c, depth + 1, False, True, False)
+        # When a model translates only the heading of a short multi-line
+        # message, character-sized chunking is the wrong repair: it can split
+        # words while still hiding which line vanished.  Translate each
+        # non-empty source line independently, preserve blank lines and order,
+        # then let the caller validate the reconstructed block as a whole.
+        source_lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if depth < 5 and sum(1 for line in source_lines if line.strip()) >= 2:
+            semantic_chunks = semantic_display_chunks(text)
+            if len(semantic_chunks) >= 2:
+                return "\n".join(
+                    translate_piece(chunk, c, depth + 1, False, True, False)
+                    for chunk in semantic_chunks
+                )
+        # A failed whole block is retried as smaller ordered pieces.  This is
+        # bounded so a hostile/model-looping input cannot recurse forever.
+        if depth >= 5 or len(text) < 80:
+            numbered = re.match(r"^(\s*\d+\)\s*)(.+)$", text, re.DOTALL)
+            if numbered:
+                return numbered.group(1) + completion_once(numbered.group(2), c, 128, force_robust, force_simple)
+            raise
+        chunks = split_source(text, max(90, len(text) // 2))
+        if len(chunks) < 2:
+            midpoint = len(text) // 2
+            left = text.rfind(" ", 0, midpoint)
+            if left < 20:
+                left = midpoint
+            chunks = [text[:left], text[left:]]
+        return "\n".join(translate_piece(chunk, c, depth + 1, force_robust, force_simple, False) for chunk in chunks if chunk.strip())
+
+
+def has_repeated_source_lines(text):
+    """Return true when the game emitted the same substantive row twice.
+
+    Two identical NPCs or objects are common in room output.  Sending both
+    rows through one prose request lets the model legitimately-looking but
+    incorrectly collapse them into one.  Blank, decorative and short rows are
+    ignored; exact matching prevents ordinary repeated words from triggering
+    this path.
+    """
+    counts = {}
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        stripped = line.strip()
+        if len(re.sub(r"\s+", "", stripped)) < 12:
+            continue
+        counts[stripped] = counts.get(stripped, 0) + 1
+    return any(count >= 2 for count in counts.values())
+
+
+def trailing_independent_row_start(text):
+    """Return the first trailing display row, or None.
+
+    Alter Aeon room prose is display-wrapped: continuation lines usually begin
+    after a line without terminal punctuation.  NPCs and visible objects are
+    then emitted as complete, independent lines.  Walk backward only while
+    both the row and its predecessor are complete, so wrapped narrative stays
+    together while the room's trailing entities retain their line boundaries.
+    """
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(lines) < 2:
+        return None
+
+    def complete(line):
+        stripped = line.strip()
+        return (
+            len(re.sub(r"\s+", "", stripped)) >= 12
+            and re.search(r"[.!?]['\"\)\]]*$", stripped) is not None
+        )
+
+    start = len(lines)
+    for index in range(len(lines) - 1, 0, -1):
+        if not complete(lines[index]) or not complete(lines[index - 1]):
+            break
+        start = index
+    return start if start < len(lines) else None
+
+
+def has_trailing_independent_rows(text):
+    return trailing_independent_row_start(text) is not None
+
+
+def has_deterministic_lines(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return len(lines) >= 2 and any(
+        deterministic_translate(line.strip()) is not None
+        or action_template_match(line) is not None
+        or combat_template_match(line) is not None
+        for line in lines if line.strip()
+    )
+
+
+def translate_mixed_deterministic_block(text, c):
+    """Route known lines locally and translate only the remaining contiguous text."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output, model_buffer = [], []
+
+    def flush_model_buffer():
+        if not model_buffer:
+            return
+        block = "\n".join(model_buffer)
+        try:
+            output.append(translate_piece(block, c, force_robust=len(block) >= 180))
+        except Exception as error:
+            # A failed semantic fragment falls back to its complete English
+            # source without discarding deterministic rewards around it.
+            log("mixed fragment fallback: %r" % error, True)
+            output.append(block)
+        model_buffer[:] = []
+
+    for line in lines:
+        stripped = line.strip()
+        deterministic = deterministic_translate(stripped) if stripped else None
+        if action_template_match(line) is not None:
+            flush_model_buffer()
+            try:
+                rendered_action = translate_action_line(line, c)
+                if numeric_values(line) and not numeric_items_preserved(line, rendered_action):
+                    raise RuntimeError("mixed_action_numeric_items_missing")
+                output.append(rendered_action)
+            except Exception as error:
+                log("mixed action-template fallback: %r source=%r" % (error, line[:160]), True)
+                output.append(line)
+            continue
+        if combat_template_match(line) is not None:
+            flush_model_buffer()
+            try:
+                rendered_combat = translate_combat_template_line(line, c)
+                if numeric_values(line) and not numeric_items_preserved(line, rendered_combat):
+                    raise RuntimeError("mixed_combat_template_numeric_items_missing")
+                output.append(rendered_combat)
+            except Exception as error:
+                log("mixed combat-template fallback: %r source=%r" % (error, line[:160]), True)
+                output.append(line)
+            continue
+        numeric_tokens = numeric_values(stripped)
+        if deterministic is None and numeric_tokens:
+            flush_model_buffer()
+            try:
+                translated_line = translate_piece(stripped, c, force_robust=True)
+                if not numeric_items_preserved(stripped, translated_line):
+                    raise RuntimeError("numeric_line_items_missing")
+                output.append(translated_line)
+            except Exception as error:
+                log("numeric line fallback: %r source=%r" % (error, stripped[:160]), True)
+                output.append(line)
+            continue
+        if deterministic is None:
+            model_buffer.append(line)
+            continue
+        flush_model_buffer()
+        indent = line[:len(line) - len(line.lstrip())]
+        output.append(indent + deterministic)
+    flush_model_buffer()
+    result = "\n".join(output)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("MIXED_FINAL_SANITY_" + reason)
+    return result
+
+
+def is_numeric_report_block(text):
+    """Recognize item comparison/detail reports by stable shape, not names."""
+    lines = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(lines) < 2:
+        return False
+    if lines[0].startswith("Comparing objects "):
+        return True
+    return any(", Level:" in line and ", Type:" in line for line in lines)
+
+
+def translate_numeric_report_block(text, c):
+    """Translate reports per line; one bad numeric line cannot discard all rows."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        stripped = line.strip()
+        indent = line[:len(line) - len(line.lstrip())]
+        if not stripped:
+            output.append("")
+            continue
+        deterministic = deterministic_translate(stripped)
+        if deterministic is not None:
+            output.append(indent + deterministic)
+            continue
+        translated = cache_get(stripped, c)
+        if translated is None:
+            try:
+                translated = translate_piece(stripped, c, force_robust=True)
+                if numeric_values(stripped) and not numeric_items_preserved(stripped, translated):
+                    raise RuntimeError("numeric_report_line_items_missing")
+                cache_put(stripped, translated, c)
+            except Exception as error:
+                log("numeric report line fallback: %r source=%r" % (error, stripped[:160]), True)
+                translated = line
+        output.append(indent + translated)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("NUMERIC_REPORT_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("NUMERIC_REPORT_FINAL_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def translate_xp_history_line(text, c):
+    """Translate the semantic target while preserving XP and age fields exactly."""
+    match = re.fullmatch(
+        r"\s*([+-]?\d[\d,]*(?:\.\d+)?[kKmMbB]?)\s+xp from (.+?)\.\s+"
+        r"(\d+) minutes? (\d+) seconds? ago\s*",
+        str(text),
+        re.I,
+    )
+    if not match:
+        return None
+    amount, target, minutes, seconds = match.groups()
+    translated_target = cache_get(target, c)
+    if translated_target is None:
+        translated_target = translate_piece(target, c, force_robust=True)
+        cache_put(target, translated_target, c)
+    return "%s 經驗值，來自 %s；%s 分鐘 %s 秒前" % (
+        amount, translated_target, minutes, seconds,
+    )
+
+
+def is_put_item_block(text):
+    """Recognize a buffered run of fixed-shape container transfer messages."""
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(lines) >= 2 and all(PUT_ITEM_LINE.match(line) for line in lines)
+
+
+def translate_cached_phrase(text, c):
+    """Translate one complete semantic field; never split it into reusable words."""
+    translated = cache_get(text, c)
+    if translated is None:
+        translated = translate_piece(text, c, force_robust=True)
+        cache_put(text, translated, c)
+    return " ".join(str(translated).splitlines()).strip()
+
+
+def translate_safe_display_row(text, c):
+    """Translate one visible row while preserving its numbers and row boundary."""
+    source = str(text).strip()
+    translated = translate_cached_phrase(source, c)
+    if numeric_values(source) and not numeric_items_preserved(source, translated):
+        log("structured display row numeric fallback: source=%r" % source[:160], True)
+        return source
+    return translated
+
+
+def is_login_menu(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(rows and rows[0] == "Welcome to Alter Aeon!" and
+                sum(bool(re.match(r"^\d+\)\s+", line)) for line in rows) >= 3)
+
+
+def translate_login_menu(text, c):
+    fixed = {
+        "Welcome to Alter Aeon!": "歡迎來到 Alter Aeon！",
+        "Enter Selection ->": "請輸入選項 ->",
+    }
+    output = []
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        value = line.strip()
+        numbered = re.match(r"^(\d+\)\s+)(.*)$", value)
+        if value in fixed:
+            output.append(fixed[value])
+        elif numbered:
+            output.append(numbered.group(1) + translate_safe_display_row(numbered.group(2), c))
+        elif value:
+            output.append(translate_safe_display_row(value, c))
+        else:
+            output.append("")
+    return "\n".join(output)
+
+
+def is_help_search_listing(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(rows and rows[0] == "There is help available on the following topics:" and
+                any(re.match(r"^\[\s*\d+\]\s+", line) for line in rows[1:]))
+
+
+def translate_help_search_listing(text, c):
+    output = []
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        value = line.strip()
+        row = re.match(r"^(\[\s*\d+\]\s+)(.*)$", value)
+        if value == "There is help available on the following topics:":
+            output.append("以下主題有說明文件：")
+        elif value == "To pick a particular help page, add in the number of the page.":
+            output.append("若要選擇特定說明頁，請加上該頁的編號。")
+        elif row:
+            output.append(row.group(1) + translate_safe_display_row(row.group(2), c))
+        elif value:
+            output.append(translate_safe_display_row(value, c))
+        else:
+            output.append("")
+    return "\n".join(output)
+
+
+def is_friends_listing(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 2 and rows[0] in {"Logged in friends:", "Logged off friends:"}
+
+
+def translate_friends_listing(text, c):
+    headers = {"Logged in friends:": "已登入的好友：", "Logged off friends:": "已登出的好友："}
+    output = []
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        value = line.strip()
+        if value in headers:
+            output.append(headers[value]); continue
+        friend = re.match(r"^([A-Za-z][A-Za-z0-9_'’-]*)(?:\s+(\(.*\)))?$", value)
+        if friend:
+            name, detail = friend.groups()
+            if not detail:
+                output.append(name)
+            elif detail.lower() == "(idle for a very long time)":
+                output.append(name + "（已閒置很長時間）")
+            else:
+                output.append(name + " " + translate_safe_display_row(detail, c))
+        elif value:
+            output.append(translate_safe_display_row(value, c))
+        else:
+            output.append("")
+    return "\n".join(output)
+
+
+def is_skill_help_detail(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    head = rows[:6]
+    return bool(len(rows) >= 3 and
+                any(line.startswith("Keywords are:") for line in head) and
+                any(re.match(r"^(?:Skill|Spell):\s+", line, re.I) for line in head))
+
+
+def parse_help_semantic_units(text):
+    """Turn display-wrapped help into ordered, independently verifiable units."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    units, body = [], []
+    in_usage = False
+    metadata = re.compile(
+        r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
+        r"\((?:critical|important|helpful|useful)\)|Group:|Speed:|Usage:|"
+        r"You can use .* while:)", re.I
+    )
+
+    def flush_body():
+        if body:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(body)))
+            body[:] = []
+
+    for row in rows:
+        if metadata.match(row):
+            flush_body()
+            units.append(("fixed", "用法：") if row == "Usage:" else ("translate", row))
+            in_usage = row == "Usage:"
+            continue
+        if in_usage and re.fullmatch(
+            r"(?:[a-z][a-z-]*|[a-z][a-z-]*(?:\s+<[^>]+>)+)", row, re.I
+        ):
+            units.append(("raw", row))
+            continue
+        in_usage = False
+        body.append(row)
+    flush_body()
+    return units
+
+
+def translate_semantic_units(units, c, context="semantic"):
+    """Translate ordered units without asking a model to reproduce structure."""
+    prepared = {}
+    missing = []
+    for kind, source in units:
+        if kind != "translate" or source in prepared or source in missing:
+            continue
+        translated = cache_get(source, c)
+        if translated is not None and not any("\u3400" <= ch <= "\u9fff" for ch in translated):
+            translated = None
+        if translated is None:
+            missing.append(source)
+        else:
+            prepared[source] = translated
+    if missing:
+        cloud_results = cloud_translate_many(missing)
+        if cloud_results is not None:
+            for source, translated in zip(missing, cloud_results):
+                prepared[source] = translated
+                cache_put(source, translated, c)
+
+    output = []
+    for kind, source in units:
+        if kind in {"fixed", "raw"}:
+            output.append(source)
+            continue
+        translated = prepared.get(source)
+        # Old per-sentence cache rows can contain a model echo in English.  A
+        # semantic prose unit is not complete unless it actually contains CJK.
+        if translated is not None and not any("\u3400" <= ch <= "\u9fff" for ch in translated):
+            translated = None
+        try:
+            if translated is None:
+                translated = translate_piece(
+                    source, c, force_robust=len(source) >= 180, allow_cloud=False
+                )
+            if not any("\u3400" <= ch <= "\u9fff" for ch in translated):
+                raise RuntimeError(context.upper() + "_UNIT_UNTRANSLATED")
+            if numeric_values(source) and not numeric_items_preserved(source, translated):
+                raise RuntimeError(context.upper() + "_UNIT_NUMERIC_ITEMS_MISSING")
+            translated = " ".join(translated.splitlines()).strip()
+            cache_put(source, translated, c)
+            prepared[source] = translated
+        except Exception as error:
+            log("%s unit fallback: %r source=%r" % (context, error, source[:160]), True)
+            translated = source
+        output.append(translated)
+    if len(output) != len(units) or any(not value.strip() for value in output):
+        raise RuntimeError(context.upper() + "_UNIT_RECONSTRUCTION_FAILED")
+    return "\n".join(output)
+
+
+def translate_skill_help_detail(text, c):
+    """Translate field/command/prose units and reconstruct their exact order."""
+    units = parse_help_semantic_units(text)
+    if len(units) < 3:
+        raise RuntimeError("HELP_SEMANTIC_UNITS_EMPTY")
+    return translate_semantic_units(units, c, "help")
+
+
+ROOM_PREVIEW_HEADER = "In the next room you see:"
+QUEST_INFORMATION_HEADER = re.compile(r"^Information for quest\s+(\d+):\s*$", re.I)
+QUEST_INFORMATION_FOOTER = re.compile(
+    r"^\(For more information, try 'quest extra\s+(\d+)'\.\)\s*$", re.I
+)
+
+
+def is_room_preview_block(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 2 and rows[0] == ROOM_PREVIEW_HEADER
+
+
+def parse_room_preview_units(text):
+    """Preserve a looked-ahead room's title, prose and repeated entities."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    units = [("fixed", "在下一個房間，你可以看到：")]
+    payload = rows[1:]
+    if not payload:
+        return units
+    if len(payload[0]) <= 100 and not re.search(r"[.!?。！？]$", payload[0]):
+        units.append(("translate", payload.pop(0)))
+    if not payload:
+        return units
+    trailing = trailing_independent_row_start("\n".join(payload))
+    prose_rows = payload if trailing is None else payload[:trailing]
+    entity_rows = [] if trailing is None else payload[trailing:]
+    units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose_rows)))
+    # Repeated NPCs/objects use one cached translation but retain every row.
+    units.extend(("translate", row) for row in entity_rows)
+    return units
+
+
+def translate_room_preview_block(text, c):
+    units = parse_room_preview_units(text)
+    if len(units) < 2:
+        raise RuntimeError("ROOM_PREVIEW_SEMANTIC_UNITS_EMPTY")
+    return translate_semantic_units(units, c, "room_preview")
+
+
+def is_quest_information_block(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(len(rows) >= 2 and QUEST_INFORMATION_HEADER.match(rows[0]))
+
+
+def parse_quest_information_units(text):
+    """Separate quest number, narrative sentences and the exact quest command."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    header = QUEST_INFORMATION_HEADER.match(rows[0]) if rows else None
+    if not header:
+        return []
+    units = [("fixed", "任務 %s 的資訊：" % header.group(1))]
+    body = []
+    for row in rows[1:]:
+        footer = QUEST_INFORMATION_FOOTER.match(row)
+        if footer:
+            if body:
+                units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(body)))
+                body[:] = []
+            number = footer.group(1)
+            units.append(("fixed", "（如需更多資訊，請輸入 'quest extra %s'。）" % number))
+        else:
+            body.append(row)
+    if body:
+        units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(body)))
+    return units
+
+
+def translate_quest_information_block(text, c):
+    units = parse_quest_information_units(text)
+    if len(units) < 2:
+        raise RuntimeError("QUEST_INFORMATION_SEMANTIC_UNITS_EMPTY")
+    return translate_semantic_units(units, c, "quest_information")
+
+
+def is_equipment_advice(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(rows and re.match(r"^Things .+ should consider getting\.\.\.$", rows[0], re.I) and
+                any(line.startswith("FYI:") for line in rows[1:]))
+
+
+def translate_equipment_advice(text, c):
+    return "\n".join(
+        translate_safe_display_row(line.strip(), c) if line.strip() else ""
+        for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    )
+
+
+def is_room_with_doors(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 3 and any(re.match(r"^Doors?\s+", line, re.I) for line in rows)
+
+
+def translate_room_with_doors(text, c):
+    """Preserve room titles, semantic sentences, visible entities and doors."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    output, body = [], []
+    # At most two leading punctuation-free rows are area/room titles.
+    while rows and len(output) < 2 and len(rows[0]) <= 90 and not re.search(r"[.!?]$", rows[0]):
+        output.append(translate_safe_display_row(rows.pop(0), c))
+    doors = []
+    while rows and re.match(r"^Doors?\s+", rows[-1], re.I):
+        doors.insert(0, rows.pop())
+    body.extend(rows)
+    output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(body)))
+    direction_words = {"north": "北", "south": "南", "east": "東", "west": "西",
+                       "northeast": "東北", "northwest": "西北", "southeast": "東南",
+                       "southwest": "西南", "up": "上", "down": "下", "none": "無"}
+    for door in doors:
+        parts = door.split()[1:]
+        output.append("門：" + "、".join(direction_words.get(part.lower().strip(","), part) for part in parts))
+    return "\n".join(output)
+
+
+def is_tip_block(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 2 and rows[0] in {"Tip:", "Tip!"}
+
+
+def translate_tip_block(text, c):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    output = ["提示："]
+    output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(rows[1:])))
+    return "\n".join(output)
+
+
+def is_syntax_help_block(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 2 and rows[0].startswith("Syntax:")
+
+
+def translate_syntax_help_block(text, c):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    output, body = [], []
+    for row in rows:
+        if row.startswith("Syntax:"):
+            if body:
+                output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(body)))
+                body = []
+            # Commands and argument punctuation must remain exact.
+            output.append("語法：" + row[len("Syntax:"):].strip())
+        else:
+            body.append(row)
+    if body:
+        output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(body)))
+    return "\n".join(output)
+
+
+def is_book_text_block(text):
+    first = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n", 1)[0].strip()
+    return bool(re.match(r"^\d+\s+-\s+a book entitled,.*\bTopic:\s*", first, re.I))
+
+
+def translate_book_text_block(text, c):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if not rows:
+        return ""
+    output = [translate_safe_display_row(rows[0], c)]
+    paragraphs = semantic_display_chunks("\n".join(rows[1:]))
+    # Keep requests bounded while avoiding one model call per display-wrapped row.
+    for chunk in split_source("\n".join(paragraphs), 650):
+        output.append(translate_safe_display_row(" ".join(chunk.splitlines()), c))
+    return "\n".join(output)
+
+
+def is_scan_listing(text):
+    """Recognize Alter Aeon's directional scan table by shape, never names."""
+    lines = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(lines) < 2 or not SCAN_HEADER.fullmatch(lines[0]):
+        return False
+    return all(SCAN_ENTITY_ROW.fullmatch(line) or SCAN_PAREN_ROW.fullmatch(line) for line in lines[1:])
+
+
+MOBS_IN_ROOM_HEADER = "Mobs in the room with you:"
+
+
+def is_mobs_in_room_listing(text):
+    """Recognize the room mob list even when the quiet buffer adds an event."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    substantive = [line.strip() for line in lines if line.strip()]
+    return len(substantive) >= 2 and substantive[0] == MOBS_IN_ROOM_HEADER
+
+
+def has_historical_fallback_shape(text):
+    """Bypass legacy cache rows for formats now rendered deterministically."""
+    patterns = (
+        r"You know the following skills:\s+You don't know of any skills by that name\.",
+        r"<\s*\d+hp\s+\d+m\s+\d+mv\s*>",
+        r"You have \d+ practices? remaining\.",
+        r"\d{1,2}\s+(?:am|pm)",
+        r"freak\s+\d+!",
+        r"You are level \d+ [A-Za-z]+\.",
+        r"Your skill level is .+\.",
+        r"--- Received \d+ lines, sent \d+ lines\.",
+        r"--- Output buffer has \d+/\d+ lines in it \([\d.]+% full\)\.",
+        r"--- Matched \d+ triggers, \d+ aliases, and \d+ timers fired\.",
+    )
+    lines = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return any(re.fullmatch(pattern, line, re.I) for line in lines for pattern in patterns)
+
+
+def should_bypass_whole_block_cache(text):
+    """Structured sources must not be trapped behind legacy whole-block rows."""
+    return (is_scan_listing(text) or is_class_skill_table(text) or
+            is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
+            is_login_menu(text) or is_help_search_listing(text) or
+            is_friends_listing(text) or is_skill_help_detail(text) or
+            is_equipment_advice(text) or is_room_with_doors(text) or
+            is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
+            is_room_preview_block(text) or is_quest_information_block(text))
+
+
+def translate_mobs_in_room_listing(text, c):
+    """Keep every mob and adjacent room event on its original output row."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            output.append("")
+        elif stripped == MOBS_IN_ROOM_HEADER:
+            output.append("與你同處房間的生物：")
+        else:
+            # A quiet-period buffer may append an arrival/departure event.
+            # One complete source row per request keeps that event separate.
+            output.append(translate_cached_phrase(stripped, c))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("MOBS_IN_ROOM_LINE_COUNT_MISMATCH")
+    return result
+
+
+def is_probable_scan_name(value):
+    """Preserve compact title-cased proper names such as Adin or Sir Kay."""
+    value = str(value).strip()
+    if not value or re.match(r"^(?:a|an|the)\b", value, re.I):
+        return False
+    words = re.findall(r"[A-Za-z][A-Za-z'’-]*", value)
+    return bool(words) and len(words) <= 4 and all(word[0].isupper() for word in words)
+
+
+def translate_scan_target(value, c):
+    value = str(value).strip()
+    if is_probable_scan_name(value):
+        return value
+    return translate_cached_phrase(value, c)
+
+
+def translate_scan_parenthesized(description, c):
+    """Render door state fields deterministically; translate only unknown text."""
+    match = re.fullmatch(r"(?:A|An|The)\s+(.+?)\s+door\s+is\s+(closed|open|locked)\.", description, re.I)
+    if not match:
+        return translate_cached_phrase(description, c)
+    material, state = match.groups()
+    material_key = material.strip().lower()
+    material_zh = SCAN_DOOR_MATERIALS.get(material_key)
+    if material_zh is None:
+        material_zh = translate_cached_phrase(material.strip(), c)
+    return "一扇%s門%s。" % (material_zh, SCAN_DOOR_STATES[state.lower()])
+
+
+def translate_scan_listing(text, c):
+    """Translate scan rows without exposing directions or distances to the LLM."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            output.append("")
+            continue
+        if SCAN_HEADER.fullmatch(stripped):
+            output.append("你掃描周圍區域……")
+            continue
+        entity = SCAN_ENTITY_ROW.fullmatch(stripped)
+        if entity:
+            direction, distance, target = entity.groups()
+            output.append("%s　距離 %s：%s" % (
+                SCAN_DIRECTIONS[direction.lower()], distance, translate_scan_target(target, c),
+            ))
+            continue
+        parenthesized = SCAN_PAREN_ROW.fullmatch(stripped)
+        if parenthesized:
+            direction, description = parenthesized.groups()
+            output.append("（%s）%s" % (
+                SCAN_DIRECTIONS[direction.lower()], translate_scan_parenthesized(description, c),
+            ))
+            continue
+        raise RuntimeError("SCAN_ROW_PARSE_FAILED: " + stripped[:120])
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("SCAN_FINAL_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("SCAN_FINAL_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def action_template_match(line):
+    """Return a strict action template; ambiguous plain 'You get ...' is excluded."""
+    for kind, pattern in (
+        ("buy_from", BUY_ITEM_LINE),
+        ("put_in", PUT_ITEM_LINE),
+        ("get_from", GET_FROM_LINE),
+        ("give_to", GIVE_ITEM_LINE),
+    ):
+        match = pattern.fullmatch(str(line))
+        if match:
+            # "You get 2 items from <container>: item, item" is a different
+            # table-like grammar.  Treating "2 items" as the item name and the
+            # entire remainder as a container would corrupt both field caches.
+            if kind == "get_from" and re.fullmatch(r"\d+ items?", match.group(2), re.I):
+                continue
+            return kind, match
+    return None
+
+
+def translate_action_line(line, c):
+    """Reconstruct one unambiguous action from exact full-field cache entries."""
+    matched = action_template_match(line)
+    if not matched:
+        return None
+    kind, match = matched
+    groups = match.groups()
+    if kind == "put_in":
+        indent, item, container, trailing = groups
+        return "%s你將%s放入%s。%s" % (
+            indent, translate_cached_phrase(item, c),
+            translate_cached_phrase(container, c), trailing,
+        )
+    if kind == "get_from":
+        indent, item, container, trailing = groups
+        return "%s你從%s取得%s。%s" % (
+            indent, translate_cached_phrase(container, c),
+            translate_cached_phrase(item, c), trailing,
+        )
+    if kind == "give_to":
+        indent, item, target, trailing = groups
+        return "%s你將%s交給%s。%s" % (
+            indent, translate_cached_phrase(item, c),
+            translate_cached_phrase(target, c), trailing,
+        )
+    indent, item, target, price, trailing = groups
+    return "%s你以 %s 枚金幣向%s購買%s。%s" % (
+        indent, price, translate_cached_phrase(target, c),
+        translate_cached_phrase(item, c), trailing,
+    )
+
+
+def is_action_template_block(text):
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(lines) and all(action_template_match(line) for line in lines)
+
+
+def translate_action_template_block(text, c):
+    """Translate strict action rows independently; one novel field falls back one row."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        if not line.strip():
+            output.append("")
+            continue
+        try:
+            rendered = translate_action_line(line, c)
+            if rendered is None:
+                raise RuntimeError("action_template_not_rendered")
+            if numeric_values(line) and not numeric_items_preserved(line, rendered):
+                raise RuntimeError("action_template_numeric_items_missing")
+            output.append(rendered)
+        except Exception as error:
+            log("action-template line fallback: %r source=%r" % (error, line[:160]), True)
+            output.append(line)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("ACTION_TEMPLATE_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("ACTION_TEMPLATE_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def combat_template_match(line):
+    for kind, pattern in COMBAT_TARGET_PATTERNS:
+        match = pattern.fullmatch(str(line))
+        if match:
+            return kind, match
+    return None
+
+
+def translate_combat_template_line(line, c):
+    """Translate a combat shell while caching the complete NPC phrase once."""
+    matched = combat_template_match(line)
+    if not matched:
+        return None
+    kind, match = matched
+    if kind == "blade_back":
+        indent, weapon, target, trailing = match.groups()
+        return "%s你將刀刃「%s」刺入%s背部，造成致命傷。%s" % (
+            indent, weapon, translate_cached_phrase(target, c), trailing,
+        )
+    indent, target, trailing = match.groups()
+    target_zh = translate_cached_phrase(target, c)
+    templates = {
+        "stomp_crunch": "你重踩%s，並聽見碎裂聲！",
+        "stomp_toes": "你重踩%s的腳趾！",
+        "lunge": "你猛撲向%s！",
+        "evaluate": "你迅速評估%s的護甲與身體構造……",
+        "stomp": "你重踩%s！",
+        "weapon_display": "你將武器展示的最後一連串動作對準%s……",
+        "quick_thrust": "你迅速將武器刺向%s！",
+        "draw_thrust": "你收回武器，接著刺向%s！",
+        "circle": "你繞到%s身後，找到絕佳機會！",
+        "downward_thrust": "你朝%s使出強力下刺，試圖給予致命一擊！",
+        "feign": "你對%s佯裝突然攻擊，對方移動格擋！",
+        "death_cry": "你聽見%s的死亡哀號，頓時血液凝結！",
+        "dead": "%s已經死亡！",
+        "backstab_damage": "你的背刺對%s造成了相當大的傷害！",
+        "dirt": "你將泥土丟進%s的臉，使其失明！",
+    }
+    return "%s%s%s" % (indent, templates[kind] % target_zh, trailing)
+
+
+def is_combat_template_block(text):
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(lines) and all(combat_template_match(line) for line in lines)
+
+
+def translate_combat_template_block(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        if not line.strip():
+            output.append("")
+            continue
+        try:
+            rendered = translate_combat_template_line(line, c)
+            if rendered is None:
+                raise RuntimeError("combat_template_not_rendered")
+            if numeric_values(line) and not numeric_items_preserved(line, rendered):
+                raise RuntimeError("combat_template_numeric_items_missing")
+            output.append(rendered)
+        except Exception as error:
+            log("combat-template line fallback: %r source=%r" % (error, line[:160]), True)
+            output.append(line)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("COMBAT_TEMPLATE_LINE_COUNT_MISMATCH")
+    return result
+
+
+def translate_put_item_block(text, c):
+    """Reuse inventory/container phrases; preserve every transfer row and its order."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        if not line.strip():
+            output.append("")
+            continue
+        match = PUT_ITEM_LINE.match(line)
+        if not match:
+            output.append(line)
+            continue
+        indent, item, container, trailing = match.groups()
+        try:
+            item_zh = translate_cached_phrase(item, c)
+            container_zh = translate_cached_phrase(container, c)
+            output.append("%s你將%s放入%s。%s" % (indent, item_zh, container_zh, trailing))
+        except Exception as error:
+            log("put-item line fallback: %r source=%r" % (error, line[:160]), True)
+            output.append(line)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("PUT_ITEM_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("PUT_ITEM_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def is_quest_help_block(text):
+    value = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    return value.startswith("Sorry, unknown option for 'quest' command.\nQuests Help\n")
+
+
+def translate_quest_help_block(text):
+    """Render the fixed command table locally while leaving unknown future rows visible."""
+    output = []
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        fixed = QUEST_HELP_FIXED_LINES.get(line)
+        if fixed is not None:
+            output.append(fixed)
+            continue
+        command = re.match(r"^(\s*)(quest.*?)\s{2,}-\s(.+?)\s*$", line, re.I)
+        if command:
+            indent, syntax, description = command.groups()
+            translated = QUEST_HELP_DESCRIPTIONS.get(description)
+            output.append("%s%-24s - %s" % (indent, syntax, translated or description))
+            continue
+        output.append(line)
+    return "\n".join(output)
+
+
+def translate_repeated_line_block(text, c):
+    """Translate legitimate duplicate object/event rows once, then reconstruct."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    counts = {}
+    for line in lines:
+        stripped = line.strip()
+        counts[stripped] = counts.get(stripped, 0) + 1
+    repeated = {
+        line for line, count in counts.items()
+        if count >= 2 and len(re.sub(r"\s+", "", line)) >= 12
+    }
+    output, normal_buffer, translated_repeats = [], [], {}
+
+    def flush_normal():
+        if normal_buffer:
+            block = "\n".join(normal_buffer)
+            if has_deterministic_lines(block):
+                output.append(translate_mixed_deterministic_block(block, c))
+            else:
+                output.append(translate_piece(block, c, force_robust=len(block) >= 180))
+            normal_buffer[:] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped not in repeated:
+            normal_buffer.append(line)
+            continue
+        flush_normal()
+        if stripped not in translated_repeats:
+            translated_repeats[stripped] = translate_piece(stripped, c, force_robust=True)
+        output.append(translated_repeats[stripped])
+    flush_normal()
+    result = "\n".join(output)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("REPEATED_LINES_FINAL_SANITY_" + reason)
+    return result
+
+
+def translate_trailing_independent_rows(text, c):
+    """Keep room NPC/object rows separate from the translated room prose."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    start = trailing_independent_row_start(text)
+    if start is None:
+        return translate_piece(text, c)
+    prefix = "\n".join(lines[:start])
+    prefix_translation = (
+        translate_room_prose_cached(prefix, c)
+        if is_room_prose_candidate(prefix)
+        else translate_piece(prefix, c, force_robust=len(prefix) >= 180)
+    )
+    output = [" ".join(prefix_translation.splitlines()).strip()]
+    for source_line in lines[start:]:
+        stripped = source_line.strip()
+        translated = cache_get(stripped, c)
+        if translated is None:
+            translated = translate_piece(stripped, c, force_robust=True)
+            cache_put(stripped, translated, c)
+        output.append(" ".join(translated.splitlines()).strip())
+    result = "\n".join(output)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("TRAILING_ROWS_FINAL_SANITY_" + reason)
+    return result
+
+
+SKILL_RATINGS = {
+    "very bad": "非常差", "bad": "差", "poor": "不佳", "fair": "尚可",
+    "average": "普通", "moderate": "中等", "good": "良好",
+    "very good": "很好", "exceptional": "卓越", "perfect": "完美",
+}
+SKILL_SECTIONS = {
+    "Mage": "法師", "Thief": "盜賊", "Warrior": "戰士",
+    "Druid": "德魯伊", "General": "通用",
+}
+SKILL_LINE = re.compile(
+    r"^(\s*)(.*?)(?:\s{2,})(very bad|very good|exceptional|moderate|average|perfect|poor|fair|good|bad)\s+(\d+%)\s*$",
+    re.IGNORECASE,
+)
+PRACTICE_HEADER = re.compile(r"^You have\s+(\d+)\s+practices?\s+left\.$", re.IGNORECASE)
+PRACTICE_COLUMN_HEADER = re.compile(r"^-+\s+Int\s+Wis\s+Chr\s+Lvl\s+-+$", re.IGNORECASE)
+PRACTICE_LINE = re.compile(
+    r"^(\s*)(.*?)(\s{2,})"
+    r"(not learned|very bad|very good|exceptional|moderate|average|perfect|poor|fair|good|bad)"
+    r"(\s+)(\S.*)$",
+    re.IGNORECASE,
+)
+CLASS_SKILL_HEADER = re.compile(
+    r"^(Spell|Skill)\s+Mage\s+Cler\s+Thie\s+Warr\s+Necr\s+Drui\s+Lvl\s+Prac\s+Known\s+Dependencies\s*$",
+    re.IGNORECASE,
+)
+CLASS_SKILL_DEPENDENCY = re.compile(r"^(.*?)\s*\((important|helpful)\)\s*$", re.IGNORECASE)
+
+
+def load_skill_glossary():
+    global SKILL_GLOSSARY
+    if SKILL_GLOSSARY is not None:
+        return SKILL_GLOSSARY
+    try:
+        raw = json.loads(SKILL_GLOSSARY_FILE.read_text(encoding="utf-8"))
+        SKILL_GLOSSARY = {str(k).strip().lower(): str(v).strip() for k, v in raw.items() if str(v).strip()}
+    except Exception as e:
+        log("skill glossary load failed: %r" % e, True)
+        SKILL_GLOSSARY = {}
+    return SKILL_GLOSSARY
+
+
+def learned_skill_get(name):
+    db = cache_connection()
+    if db is None:
+        return None
+    try:
+        db.execute("CREATE TABLE IF NOT EXISTS skill_glossary(source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        row = db.execute("SELECT translated_name FROM skill_glossary WHERE source_name=?", (name.lower(),)).fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        log("skill glossary read failed: %r" % e, True)
+        return None
+
+
+def learned_skill_put(name, translated):
+    db = cache_connection()
+    if db is None:
+        return
+    try:
+        db.execute("CREATE TABLE IF NOT EXISTS skill_glossary(source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        db.execute("INSERT OR REPLACE INTO skill_glossary(source_name,translated_name,updated_at) VALUES(?,?,?)",
+                   (name.lower(), translated, int(time.time())))
+        db.commit()
+    except Exception as e:
+        log("skill glossary write failed: %r" % e, True)
+
+
+def translate_unknown_skill(name, c):
+    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
+    prompt = ("Translate this English RPG skill name into Traditional Chinese. "
+              "Output only the translated skill name.\nEnglish: " + name + "\nTraditional Chinese:")
+    response = http_post("/completion", {
+        "prompt": prompt, "n_predict": 48, "temperature": 0.0,
+        "repeat_penalty": 1.1, "repeat_last_n": 64, "stream": False,
+    }, timeout)
+    translated = to_traditional_characters((response.get("content") or "").strip())
+    if (not translated or "\n" in translated or len(translated) > 40 or
+            not re.search(r"[\u3400-\u9fff]", translated)):
+        return name
+    learned_skill_put(name, translated)
+    return translated
+
+
+def translate_skill_names(names, c):
+    glossary = load_skill_glossary()
+    results = []
+    for name in names:
+        key = name.strip().lower()
+        translated = glossary.get(key) or learned_skill_get(key)
+        if translated is None:
+            translated = translate_unknown_skill(name, c)
+        results.append(translated)
+    return results
+
+
+def learned_library_get(name):
+    db = cache_connection()
+    if db is None:
+        return None
+
+
+def load_library_glossary():
+    global LIBRARY_GLOSSARY
+    if LIBRARY_GLOSSARY is not None:
+        return LIBRARY_GLOSSARY
+    try:
+        raw = json.loads(LIBRARY_GLOSSARY_FILE.read_text(encoding="utf-8"))
+        LIBRARY_GLOSSARY = {str(k).strip().lower(): str(v).strip() for k, v in raw.items() if str(v).strip()}
+    except Exception as e:
+        log("library glossary load failed: %r" % e, True)
+        LIBRARY_GLOSSARY = {}
+    return LIBRARY_GLOSSARY
+    try:
+        db.execute("CREATE TABLE IF NOT EXISTS library_glossary(source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        row = db.execute("SELECT translated_name FROM library_glossary WHERE source_name=?", (name.lower(),)).fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        log("library glossary read failed: %r" % e, True)
+        return None
+
+
+def learned_library_put(name, translated):
+    db = cache_connection()
+    if db is None:
+        return
+    try:
+        db.execute("CREATE TABLE IF NOT EXISTS library_glossary(source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        db.execute("INSERT OR REPLACE INTO library_glossary(source_name,translated_name,updated_at) VALUES(?,?,?)",
+                   (name.lower(), translated, int(time.time())))
+        db.commit()
+    except Exception as e:
+        log("library glossary write failed: %r" % e, True)
+
+
+def translate_library_batch(names, c):
+    """Translate ordered book titles, recursively shrinking any malformed batch."""
+    if not names:
+        return []
+    if len(names) == 1:
+        return [translate_piece(names[0], c)]
+    prompt = (
+        "Translate each English book title below into Chinese. Output exactly one translated "
+        "title per line, in the same order. Do not add numbering or explanations.\nEnglish:\n" +
+        "\n".join(names) + "\nChinese:"
+    )
+    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
+    try:
+        response = http_post("/v1/chat/completions", {
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": min(1024, max(192, len(prompt))),
+            "temperature": 0.0,
+            "repeat_penalty": 1.1,
+            "stream": False,
+        }, timeout)
+        choices = response.get("choices") or []
+        content = ((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+        lines = [re.sub(r"^\s*(?:[-*]\s+|\d+[.)：:]\s*)", "", line).strip() for line in lines]
+        if len(lines) != len(names) or any(not line for line in lines):
+            raise RuntimeError("LIBRARY_BATCH_LINE_COUNT_MISMATCH")
+        return [to_traditional_characters(line) for line in lines]
+    except Exception:
+        midpoint = len(names) // 2
+        return translate_library_batch(names[:midpoint], c) + translate_library_batch(names[midpoint:], c)
+
+
+def translate_library_titles(names, c):
+    static_glossary = load_library_glossary()
+    results = {}
+    unknown = []
+    for name in names:
+        key = name.strip().lower()
+        if key in results:
+            continue
+        learned = static_glossary.get(key) or learned_library_get(key)
+        if learned is not None:
+            results[key] = learned
+        else:
+            unknown.append(name.strip())
+    # Small batches bound latency and make a malformed response cheap to retry.
+    for start in range(0, len(unknown), 12):
+        batch = unknown[start:start + 12]
+        translated = translate_library_batch(batch, c)
+        for source_name, translated_name in zip(batch, translated):
+            results[source_name.lower()] = translated_name
+            learned_library_put(source_name, translated_name)
+    return [results[name.strip().lower()] for name in names]
+
+
+def is_library_catalog(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return bool(lines and LIBRARY_HEADER.match(lines[0]) and
+                sum(bool(LIBRARY_ROW.match(line)) for line in lines[1:]) >= 3)
+
+
+def translate_library_catalog(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    parsed, titles = [], []
+    for line in lines:
+        if LIBRARY_HEADER.match(line):
+            parsed.append(("header", line))
+            continue
+        row = LIBRARY_ROW.match(line)
+        if row:
+            parsed.append(("row", row.groups()))
+            titles.append(row.group(4))
+        elif not line.strip():
+            parsed.append(("raw", line))
+        else:
+            raise RuntimeError("LIBRARY_UNRECOGNIZED_ROW")
+    translated_titles = iter(translate_library_titles(titles, c))
+    output = []
+    for kind, value in parsed:
+        if kind == "header":
+            indent = value[:len(value) - len(value.lstrip())]
+            output.append(indent + "書號 - 書名")
+        elif kind == "row":
+            indent, book_id, separator, _title, trailing = value
+            output.append(indent + book_id + separator + next(translated_titles) + trailing)
+        else:
+            output.append(value)
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("LIBRARY_FINAL_LINE_COUNT_MISMATCH")
+    source_ids = [match.group(2) for line in lines if (match := LIBRARY_ROW.match(line))]
+    result_ids = [match.group(2) for line in result.split("\n") if (match := LIBRARY_ROW.match(line))]
+    if source_ids != result_ids:
+        raise RuntimeError("LIBRARY_FINAL_ID_MISMATCH")
+    return result
+
+
+def translate_skills_block(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    parsed, names = [], []
+    for line in lines:
+        match = SKILL_LINE.match(line)
+        if match:
+            parsed.append(("skill", match.groups()))
+            names.append(match.group(2).strip())
+        elif line.strip() in SKILL_SECTIONS:
+            parsed.append(("section", line.strip()))
+        elif line.strip() == "You know the following skills:":
+            parsed.append(("header", None))
+        else:
+            parsed.append(("raw", line))
+    if len(names) < 1:
+        raise RuntimeError("SKILLS_PARSE_EMPTY")
+    translated_names = iter(translate_skill_names(names, c))
+    output = []
+    for kind, value in parsed:
+        if kind == "header":
+            output.append("你會以下技能：")
+        elif kind == "section":
+            output.append(SKILL_SECTIONS[value] + " | " + value)
+        elif kind == "skill":
+            indent, _name, rating, percent = value
+            zh_name = next(translated_names)
+            output.append("%s%s，%s %s" % (indent, zh_name, SKILL_RATINGS[rating.lower()], percent))
+        else:
+            output.append(value)
+    result = "\n".join(output)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("SKILLS_FINAL_SANITY_" + reason)
+    return result
+
+
+def is_practice_table(text):
+    """Recognize the skill-practice requirement table by shape, not its contents."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    nonempty = [line.strip() for line in lines if line.strip()]
+    if not nonempty or not PRACTICE_HEADER.match(nonempty[0]):
+        return False
+    return (sum(bool(PRACTICE_COLUMN_HEADER.match(line)) for line in nonempty) >= 1 and
+            sum(bool(PRACTICE_LINE.match(line)) for line in lines) >= 1)
+
+
+def translate_practice_table(text, c):
+    """Translate a practice table while preserving every requirement field verbatim."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    parsed, names = [], []
+    for line in lines:
+        header = PRACTICE_HEADER.match(line.strip())
+        skill = PRACTICE_LINE.match(line)
+        if header:
+            parsed.append(("header", header.group(1)))
+        elif PRACTICE_COLUMN_HEADER.match(line.strip()):
+            # Keep the ASCII table geometry stable for history navigation.
+            parsed.append(("columns", line))
+        elif skill:
+            parsed.append(("skill", skill.groups()))
+            names.append(skill.group(2).strip())
+        elif line.strip():
+            parsed.append(("prose", line))
+        else:
+            parsed.append(("raw", line))
+    if not names:
+        raise RuntimeError("PRACTICE_PARSE_EMPTY")
+
+    translated_names = iter(translate_skill_names(names, c))
+    output = []
+    for kind, value in parsed:
+        if kind == "header":
+            output.append("你還剩 %s 次練習。" % value)
+        elif kind == "columns":
+            output.append(value.replace("Int Wis Chr Lvl", "智力 智慧 魅力 等級"))
+        elif kind == "skill":
+            indent, _name, separator, rating, rating_separator, suffix = value
+            zh_name = next(translated_names)
+            zh_rating = "尚未學會" if rating.lower() == "not learned" else SKILL_RATINGS[rating.lower()]
+            # suffix contains all requirements, class codes and percentages;
+            # never ask the model to reproduce or rewrite it.
+            output.append(indent + zh_name + separator + zh_rating + rating_separator + suffix)
+        elif kind == "prose":
+            translated = translate_piece(value, c, force_robust=True)
+            output.append(" ".join(translated.splitlines()).strip())
+        else:
+            output.append(value)
+
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("PRACTICE_FINAL_LINE_COUNT_MISMATCH")
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("PRACTICE_FINAL_SANITY_" + reason)
+    return result
+
+
+def parse_class_skill_table(text):
+    """Parse the fixed-width table emitted by ``skills <class>``."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines or not CLASS_SKILL_HEADER.match(lines[0].strip()):
+        return None
+    rows = []
+    for line in lines[1:]:
+        if not line.strip():
+            rows.append(("", "", ""))
+            continue
+        # Alter Aeon fixes Mage at column 28, Known at 67 and Dependencies at
+        # 73. Validate the class/numeric field so unrelated prose cannot be
+        # mistaken for this table merely because it is long.
+        if len(line) < 73:
+            return None
+        name = line[:28].strip()
+        fields = line[28:73]
+        dependency = line[73:].strip()
+        if not name or not re.fullmatch(r"[\s\d%+.,-]+", fields):
+            return None
+        rows.append((name, fields, dependency))
+    substantive = [row for row in rows if row[0]]
+    return (lines, rows) if len(substantive) >= 2 else None
+
+
+def is_class_skill_table(text):
+    return parse_class_skill_table(text) is not None
+
+
+def translate_class_skill_table(text, c):
+    """Translate skill and dependency names without exposing table rows to LMT."""
+    parsed = parse_class_skill_table(text)
+    if parsed is None:
+        raise RuntimeError("CLASS_SKILL_TABLE_PARSE_FAILED")
+    lines, rows = parsed
+    names = []
+    for name, _fields, dependency in rows:
+        if name:
+            names.append(name)
+        dep_match = CLASS_SKILL_DEPENDENCY.match(dependency)
+        if dep_match and dep_match.group(1).strip():
+            names.append(dep_match.group(1).strip())
+    unique_names = list(dict.fromkeys(name.lower() for name in names))
+    translated_names = translate_skill_names(unique_names, c)
+    translated = dict(zip(unique_names, translated_names))
+
+    output = ["技能／咒語  法師 牧師 盜賊 戰士 死靈法師 德魯伊 等級 練習 已知 依賴關係"]
+    importance = {"important": "重要", "helpful": "有幫助"}
+    for name, fields, dependency in rows:
+        if not name:
+            output.append("")
+            continue
+        suffix = " ".join(fields.split())
+        dep_match = CLASS_SKILL_DEPENDENCY.match(dependency)
+        if dep_match:
+            dep_name, rating = dep_match.groups()
+            dep_name = dep_name.strip()
+            rendered_dependency = translated.get(dep_name.lower(), dep_name) if dep_name else ""
+            rendered_dependency = (rendered_dependency + " " if rendered_dependency else "") + "（%s）" % importance[rating.lower()]
+        else:
+            # Preserve an unknown future dependency shape verbatim rather than
+            # risking loss of a requirement.
+            rendered_dependency = dependency
+        rendered = translated.get(name.lower(), name)
+        output.append(" ".join(part for part in (rendered, suffix, rendered_dependency) if part))
+
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("CLASS_SKILL_TABLE_LINE_COUNT_MISMATCH")
+    if numeric_values(text) != numeric_values(result):
+        raise RuntimeError("CLASS_SKILL_TABLE_NUMERIC_MISMATCH")
+    return result
+
+
+def is_direction_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return len(lines) >= 2 and any(DIRECTION_LINE.match(line) for line in lines)
+
+
+def translate_direction_listing(text, c):
+    """Preserve navigation result rows that small models often omit."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        direction = DIRECTION_LINE.match(line)
+        if direction:
+            indent, code, trailing = direction.groups()
+            rendered = DIRECTION_NAMES.get(code.upper(), code.upper())
+            output.append("%s方向 -> %s%s" % (indent, rendered, trailing))
+            continue
+        arrow = re.match(r"^(.*?)(\s*->\s*)(.*?)$", line)
+        if arrow and arrow.group(1).strip() and arrow.group(3).strip():
+            left = translate_piece(arrow.group(1).strip(), c)
+            right = translate_piece(arrow.group(3).strip(), c)
+            output.append(left + arrow.group(2) + right)
+        elif line.strip():
+            output.append(translate_piece(line, c))
+        else:
+            output.append("")
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("DIRECTION_FINAL_LINE_COUNT_MISMATCH")
+    if not any("方向 ->" in line for line in result.split("\n")):
+        raise RuntimeError("DIRECTION_FINAL_MARKER_MISSING")
+    return result
+
+
+def translate_structured_line_block(text, c):
+    """Translate a non-skills structured block with one output per input line."""
+    source_lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    block_kind = structured_block_kind(text)
+    if not block_kind:
+        raise RuntimeError("STRUCTURED_START_MARKER_MISSING")
+    output = []
+    for source_line in source_lines:
+        if not source_line.strip():
+            output.append("")
+            continue
+        fixed_header = STRUCTURED_EXACT_HEADERS.get(source_line.strip())
+        fixed_timestamp = translate_inventory_timestamp(source_line)
+        try:
+            translated_line = fixed_header or fixed_timestamp
+            if translated_line is None:
+                # Preserve item quantities deterministically.  A model may
+                # render "6 gold coins" as Chinese words (六枚金幣), which is
+                # readable but violates the numeric integrity contract and used
+                # to make the entire ground/inventory block fall back.  Keeping
+                # the prefix outside the model also lets different quantities
+                # share the same cached item-name translation.
+                quantity = re.match(r"^(\s*(?:\(\s*\d+\s*\)|\d+)\s+)(.+)$", source_line)
+                cache_source = quantity.group(2) if quantity else source_line
+                translated_body = cache_get(cache_source, c)
+                if translated_body is None:
+                    translated_body = translate_piece(cache_source, c, force_robust=True)
+                    cache_put(cache_source, translated_body, c)
+                translated_line = (quantity.group(1) if quantity else "") + translated_body
+                # A short line such as "freak 2!" has only one numeric item,
+                # so the general per-piece sanity guard may legitimately not
+                # run its block-level numeric rule.  Enforce it here before
+                # assembling a mixed combat + container block; otherwise one
+                # damaged line makes the final guard reject every translated
+                # combat event and item in the block.
+                if numeric_values(source_line) and not numeric_items_preserved(source_line, translated_line):
+                    raise RuntimeError("structured_line_numeric_items_missing")
+                cache_put(source_line, translated_line, c)
+        except Exception as error:
+            # Preserve a single problematic line in English. One novel combat
+            # fragment must not discard an otherwise valid inventory block.
+            log("structured line fallback: %r source=%r" % (error, source_line[:160]), True)
+            translated_line = source_line
+        # A single item must remain a single history entry even if the model
+        # decorates its answer with an unexpected line break.
+        output.append(" ".join(translated_line.splitlines()).strip())
+    result = "\n".join(output)
+    # Every structured source row was translated (or fell back to its complete
+    # English row) independently above.  Validate the structure itself here.
+    # Applying the prose length-ratio/repetition guard to the reconstructed
+    # block incorrectly rejects legitimate inventories containing many copies
+    # of one item, especially when its Chinese name is much shorter.
+    result_lines = result.split("\n")
+    if len(result_lines) != len(source_lines):
+        raise RuntimeError("STRUCTURED_FINAL_LINE_COUNT_MISMATCH")
+    if any(source_line.strip() and not translated_line.strip()
+           for source_line, translated_line in zip(source_lines, result_lines)):
+        raise RuntimeError("STRUCTURED_FINAL_BLANK_ROW")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("STRUCTURED_FINAL_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def translate_inventory_block(text, c):
+    """Backward-compatible name used by inventory regression tests."""
+    return translate_structured_line_block(text, c)
+
+
+def seed_structured_line_cache(source, translated, c):
+    """Learn safe row pairs from a valid whole-block cache hit."""
+    if not structured_block_kind(source):
+        return 0
+    source_lines = str(source).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    translated_lines = str(translated).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(source_lines) != len(translated_lines):
+        return 0
+    stored = 0
+    for source_line, translated_line in zip(source_lines, translated_lines):
+        if not source_line.strip() or not translated_line.strip():
+            continue
+        if source_line.strip() in STRUCTURED_EXACT_HEADERS:
+            continue
+        ok, _reason = translation_sanity_ok(source_line, translated_line)
+        if ok:
+            cache_put(source_line, translated_line, c)
+            stored += 1
+    return stored
+
+
+def is_quest_structured_block(text):
+    value = str(text)
+    return bool(
+        is_quest_list_block(value)
+        or re.search(r"^Quest Name:\s*", value, re.MULTILINE)
+        or re.search(r"^Complete the \d+ tasks below to gain a reward\.$", value, re.MULTILINE)
+    )
+
+
+def is_quest_list_block(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(lines) < 2:
+        return False
+    first = lines[0].strip().lower()
+    active = first == "you have discovered or been given the following quests:"
+    available = "following quests are available to you at this time:" in first
+    nearby = first == "there are the following unfinished quests nearby:"
+    return bool((active or available or nearby) and any(
+        QUEST_LIST_ROW.match(line) or QUEST_AVAILABLE_ROW.match(line) or NEARBY_QUEST_ROW.match(line)
+        for line in lines[1:]
+    ))
+
+
+def is_job_list_block(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return bool(
+        len(lines) >= 2
+        and lines[0].strip().lower() == "currently accepted jobs:"
+        and any(JOB_LIST_ROW.match(line) for line in lines[1:])
+    )
+
+
+def translate_task_list_block(text, c, kind):
+    """Render job and quest lists one source row at a time for NVDA history."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    exact = {
+        "You have discovered or been given the following quests:": "你已發現或接到以下任務：",
+        "Currently accepted jobs:": "目前已接受的工作：",
+        "There are the following unfinished quests nearby:": "附近有以下尚未完成的任務：",
+        "Num  Level  Name": "編號　等級　名稱",
+        "You can see more information with the 'quest info' command.": "你可以使用 'quest info' 指令查看更多資訊。",
+        "You can see more information with the 'job info' command.": "你可以使用 'job info' 指令查看更多資訊。",
+        "(There are no quests listed here, but there may be quests nearby.": "（這裡沒有列出任務，但附近可能有任務。",
+        "Use the 'quest nearby' command to see nearby quests.)": "請使用 'quest nearby' 指令查看附近任務。）",
+        "For details on a quest, use 'quest nearby'. For example, 'quest nearby 1'.":
+            "若要查看任務詳情，請使用 'quest nearby'，例如 'quest nearby 1'。",
+    }
+    for line in lines:
+        value = line.strip()
+        quest_row = QUEST_LIST_ROW.match(line) if kind == "quest" else None
+        available_row = QUEST_AVAILABLE_ROW.match(line) if kind == "quest" else None
+        nearby_row = NEARBY_QUEST_ROW.match(line) if kind == "quest" else None
+        job_row = JOB_LIST_ROW.match(line) if kind == "job" else None
+        if value in exact:
+            indent = line[:len(line) - len(line.lstrip())]
+            output.append(indent + exact[value])
+        elif quest_row:
+            indent, number, description, active, trailing = quest_row.groups()
+            zh = translate_piece(description.strip(), c, force_robust=True)
+            output.append("%s任務 %s - %s%s%s" % (
+                indent, number, zh, " [進行中]" if active else "", trailing
+            ))
+        elif available_row:
+            indent, number, description, trailing = available_row.groups()
+            zh = translate_piece(description.strip(), c, force_robust=True)
+            output.append("%s[%s] %s%s" % (indent, number, zh, trailing))
+        elif nearby_row:
+            indent, number, level, description, trailing = nearby_row.groups()
+            zh = translate_piece(description.strip(), c, force_robust=True)
+            output.append("%s%s　%s　%s%s" % (indent, number, level, zh, trailing))
+        elif job_row:
+            indent, number, description, trailing = job_row.groups()
+            zh = translate_piece(description.strip(), c, force_robust=True)
+            output.append("%s工作 %s：%s%s" % (indent, number, zh, trailing))
+        elif not value:
+            output.append("")
+        else:
+            fixed = deterministic_translate(value)
+            output.append(fixed if fixed is not None else translate_piece(value, c, force_robust=True))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("TASK_LIST_FINAL_LINE_COUNT_MISMATCH")
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("TASK_LIST_FINAL_SANITY_" + reason)
+    return result
+
+
+def is_nearby_direction_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return bool(
+        len(lines) >= 2
+        and any(NEARBY_DIRECTION_HEADER.match(line) for line in lines)
+        and any(NEARBY_DIRECTION_ROW.match(line) for line in lines)
+    )
+
+
+def translate_nearby_direction_listing(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        header = NEARBY_DIRECTION_HEADER.match(line)
+        row = NEARBY_DIRECTION_ROW.match(line)
+        if header:
+            output.append("方向　附近%s" % ("地標" if header.group(1).lower() == "landmarks" else "商店"))
+        elif row:
+            indent, direction, description, trailing = row.groups()
+            zh = translate_piece(description.strip(), c, force_robust=True)
+            output.append("%s%s　%s%s" % (indent, DIRECTION_NAMES[direction.upper()], zh, trailing))
+        elif line.strip():
+            fixed = deterministic_translate(line.strip())
+            output.append(fixed if fixed is not None else translate_piece(line.strip(), c, force_robust=True))
+        else:
+            output.append("")
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("NEARBY_DIRECTION_FINAL_LINE_COUNT_MISMATCH")
+    return result
+
+
+def is_dense_item_table(text):
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(lines) < 6:
+        return False
+    matched = sum(bool(DENSE_ITEM_ROW.match(line)) for line in lines)
+    return matched >= 5 and matched / len(lines) >= 0.70
+
+
+def translate_dense_item_table(text, c):
+    """Preserve large headerless equipment/item result sets row by row."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        row = DENSE_ITEM_ROW.match(line)
+        if row:
+            prefix, item, trailing = row.groups()
+            zh = cache_get(item.strip(), c)
+            if zh is None:
+                zh = translate_piece(item.strip(), c, force_robust=True)
+                cache_put(item.strip(), zh, c)
+            output.append(prefix + " ".join(zh.splitlines()).strip() + trailing)
+        elif line.strip():
+            fixed = deterministic_translate(line.strip())
+            output.append(fixed if fixed is not None else translate_piece(line.strip(), c, force_robust=True))
+        else:
+            output.append("")
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("DENSE_ITEM_FINAL_LINE_COUNT_MISMATCH")
+    return result
+
+
+def is_nearby_map_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(lines) < 2:
+        return False
+    first = lines[0].strip()
+    return bool(
+        (NEARBY_MAP_SEARCH_HEADER.match(first) or first == "You consult your maps and find nearby...")
+        and any(line.strip() == "Level      Name/Direction" for line in lines[1:])
+    )
+
+
+def translate_nearby_map_listing(text, c):
+    """Preserve the nearby-area table as one accessible row per source row."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        value = line.strip()
+        search = NEARBY_MAP_SEARCH_HEADER.match(value)
+        row = NEARBY_MAP_ROW.match(line)
+        if search:
+            output.append("你查閱地圖，尋找附近名稱包含「%s」的區域：" % search.group(1))
+        elif value == "You consult your maps and find nearby...":
+            output.append("你查閱地圖，找到附近區域：")
+        elif value == "Level      Name/Direction":
+            output.append("等級　名稱／方向")
+        elif row:
+            indent, level, area_name, distance, direction, trailing = row.groups()
+            zh_name = translate_piece(area_name.strip(), c, force_robust=True)
+            zh_distance = NEARBY_MAP_DISTANCES[distance.lower()]
+            zh_direction = NEARBY_MAP_DIRECTIONS[direction.lower()]
+            output.append("%s等級 %s　%s，位於%s方，%s。%s" % (
+                indent, level, zh_name, zh_direction, zh_distance, trailing
+            ))
+        elif value == "To see location of nearby major cities, try 'nearby city'.":
+            output.append("若要查看附近主要城市的位置，請輸入 'nearby city'。")
+        elif not value:
+            output.append("")
+        else:
+            fixed = deterministic_translate(value)
+            output.append(fixed if fixed is not None else translate_piece(value, c, force_robust=True))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("NEARBY_MAP_FINAL_LINE_COUNT_MISMATCH")
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("NEARBY_MAP_FINAL_SANITY_" + reason)
+    return result
+
+
+def translate_quest_structured_block(text, c):
+    """Preserve quest metadata/status and translate only semantic fields."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output, paragraph = [], []
+
+    def flush_paragraph():
+        if not paragraph:
+            return
+        chunks = semantic_display_chunks("\n".join(paragraph))
+        if chunks:
+            output.extend(translate_semantic_units(
+                [("translate", chunk) for chunk in chunks], c, "quest_detail"
+            ).splitlines())
+        paragraph[:] = []
+
+    for line in lines:
+        stripped = line.strip()
+        fixed = deterministic_translate(stripped) if stripped else None
+        quest_row = QUEST_LIST_ROW.match(line)
+        detail = QUEST_DETAIL_FIELD.match(stripped)
+        if fixed or quest_row or detail or not stripped:
+            flush_paragraph()
+        if not stripped:
+            output.append("")
+        elif fixed:
+            indent = line[:len(line) - len(line.lstrip())]
+            output.append(indent + fixed)
+        elif quest_row:
+            indent, number, description, active, trailing = quest_row.groups()
+            zh_description = translate_piece(description.strip(), c, force_robust=True)
+            zh_active = " [進行中]" if active else ""
+            output.append("%s任務 %s - %s%s%s" % (indent, number, zh_description, zh_active, trailing))
+        elif detail:
+            label, value = detail.groups()
+            zh_label = QUEST_DETAIL_LABELS[label.lower()]
+            if label.lower() in {"area level", "creator", "editors", "approximate difficulty (scale from 1 to 10)"}:
+                zh_value = value
+            else:
+                zh_value = translate_semantic_units(
+                    [("translate", value)], c, "quest_field"
+                ) if value else ""
+            output.append("%s：%s" % (zh_label, zh_value))
+        else:
+            paragraph.append(line)
+    flush_paragraph()
+    result = "\n".join(output)
+    if not result.strip():
+        raise RuntimeError("QUEST_FINAL_EMPTY")
+    if numeric_values(text) and not numeric_items_preserved(text, result):
+        raise RuntimeError("QUEST_FINAL_NUMERIC_ITEMS_MISSING")
+    return result
+
+
+def is_character_status_block(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return (len(lines) >= 4 and lines[0].startswith("You are ") and
+            bool(re.match(r"^You are level \d+ with \d+ practices?\s+\(\d+ hours?\)$", lines[1].strip())))
+
+
+def is_counter_stats_block(text):
+    value = str(text).strip()
+    return value.startswith("Counters since ") and "To reset the counters, type scm reset." in value
+
+
+def translate_counter_stats_block(text):
+    """Render the fixed scm counter table without model inference."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    patterns = (
+        (r"^Counters since (.+)$", lambda g: "自 %s 起的統計：" % g[0]),
+        (r"^You have been hit (\d+) times, dodged (\d+), and parried (\d+)\. Which means you avoided (\d+)percent of hits\.$",
+         lambda g: "你被擊中 %s 次、閃避 %s 次、招架 %s 次，總共避開百分之 %s 的攻擊。" % g),
+        (r"^You attacked (\d+) times\. Mobs dodged (\d+), and parried (\d+)\. (\d+)percent of your attacks avoided\.$",
+         lambda g: "你攻擊了 %s 次；怪物閃避 %s 次、招架 %s 次，你有百分之 %s 的攻擊被避開。" % g),
+        (r"^Your armor absorbed (\d+) hits\.$", lambda g: "你的護甲吸收了 %s 次攻擊。" % g[0]),
+        (r"^You've killed (\d+) mobs this session, and fled (\d+) times\.$", lambda g: "本次遊戲中你擊殺了 %s 隻怪物，並逃跑 %s 次。" % g),
+        (r"^You've casted a total of (\d+) spells\.$", lambda g: "你總共施放了 %s 次法術。" % g[0]),
+        (r"^You have disarmed a total of (\d+) mobs\.$", lambda g: "你總共繳械了 %s 隻怪物。" % g[0]),
+        (r"^You stole a total of (\d+) gold this session\.$", lambda g: "本次遊戲中你總共偷取了 %s 枚金幣。" % g[0]),
+        (r"^You became better (\d+) times\.$", lambda g: "你的能力提升了 %s 次。" % g[0]),
+        (r"^You got (\d+) necromancer teeth, and shattered (\d+)\.$", lambda g: "你取得了 %s 顆死靈法師牙齒，並擊碎了 %s 顆。" % g),
+        (r"^To reset the counters, type scm reset\.$", lambda g: "若要重設計數器，請輸入 scm reset。"),
+    )
+    for line in lines:
+        value = line.strip()
+        rendered = None
+        for pattern, formatter in patterns:
+            match = re.match(pattern, value, re.I)
+            if match:
+                rendered = formatter(match.groups())
+                break
+        if rendered is None:
+            # Format changes must remain visible in English, never disappear.
+            rendered = line
+        output.append(rendered)
+    result = "\n".join(output)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("COUNTERS_FINAL_SANITY_" + reason)
+    return result
+
+
+def status_spell_names(names):
+    """Use static/learned glossary only; status output must never wait per spell."""
+    glossary = load_skill_glossary()
+    output = {}
+    for name in names:
+        key = name.strip().lower()
+        output[key] = glossary.get(key) or learned_skill_get(key) or name
+    return output
+
+
+def translate_character_status_block(text, c):
+    """Render score/status output deterministically and preserve every number."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    spell_names = [m.group(1) for line in lines if (m := STATUS_SPELL_LINE.match(line.strip()))]
+    spell_map = status_spell_names(spell_names)
+    output = []
+    for line_index, line in enumerate(lines):
+        value = line.strip()
+        match = re.match(r"^You are (.+?)\s*$", value)
+        if line_index == 0 and match:
+            output.append("你是 %s" % match.group(1)); continue
+        match = re.match(r"^You are level (\d+) with (\d+) practices?\s+\((\d+) hours?\)$", value)
+        if match:
+            output.append("你是 %s 級，有 %s 點練習點數（%s 小時）。" % match.groups()); continue
+        match = re.match(r"^You are carrying (\d+)/(\d+) items with weight (\d+)/(\d+) pounds\.\s+Encumbrance:\s+(\d+)%$", value)
+        if match:
+            output.append("你攜帶 %s／%s 件物品，重量 %s／%s 磅；負重率 %s%%。" % match.groups()); continue
+        match = re.match(r"^You have collected (\d+) acorns\.$", value)
+        if match:
+            output.append("你已收集 %s 顆橡實。" % match.group(1)); continue
+        match = re.match(r"^You have (\d+)/(\d+) hit, (\d+)/(\d+) mana, (\d+)/(\d+) movement\.$", value)
+        if match:
+            output.append("生命 %s／%s，法力 %s／%s，移動力 %s／%s。" % match.groups()); continue
+        if re.match(r"^(?:Str|Int|Wis|Dex|Con|Chr):", value):
+            parts = re.findall(r"(Str|Int|Wis|Dex|Con|Chr):\s*(-?\d+)", value)
+            if parts:
+                output.append("  ".join("%s：%s" % (STATUS_STAT_NAMES[name], number) for name, number in parts)); continue
+        match = re.match(r"^Your levels are:\s*(.*)$", value)
+        if match:
+            output.append("你的職業等級：%s" % match.group(1)); continue
+        match = re.match(r"^Hitroll:\s*(-?\d+)\s+Damroll:\s*(-?\d+)$", value)
+        if match:
+            output.append("命中加值：%s  傷害加值：%s" % match.groups()); continue
+        match = re.match(r"^Armor:\s*(-?\d+)\s+\(you are wearing (.*?)\)$", value, re.I)
+        if match:
+            armor_kind = {"light armor": "輕甲", "medium armor": "中甲", "heavy armor": "重甲"}.get(match.group(2).lower(), match.group(2))
+            output.append("護甲：%s（你穿著%s）。" % (match.group(1), armor_kind)); continue
+        match = re.match(r"^You have (\d+) 'get out of death free' cards?!$", value)
+        if match:
+            output.append("你有 %s 張免死卡！" % match.group(1)); continue
+        if value == "You are hiding.": output.append("你正躲藏著。"); continue
+        if value == "You are not hungry.": output.append("你不餓。"); continue
+        match = re.match(r"^Alignment:\s*(-?\d+)\s+\(You are (neutral|good|evil)\.\)$", value, re.I)
+        if match:
+            alignment = {"neutral": "中立", "good": "善良", "evil": "邪惡"}[match.group(2).lower()]
+            output.append("陣營值：%s（你是%s陣營。）" % (match.group(1), alignment)); continue
+        if value == "You are not suffering from any major debilitating conditions.":
+            output.append("你沒有受到任何重大的衰弱狀態影響。"); continue
+        spell = STATUS_SPELL_LINE.match(value)
+        if spell:
+            name, details = spell.groups()
+            zh_name = spell_map.get(name.lower(), name)
+            if not details:
+                output.append("法術「%s」" % zh_name); continue
+            maintained = re.match(r"^maintained, level (\d+)$", details, re.I)
+            remaining = re.match(r"^(.*?), level (\d+)$", details, re.I)
+            if maintained:
+                output.append("法術「%s」，維持中，等級 %s" % (zh_name, maintained.group(1))); continue
+            if remaining:
+                duration = remaining.group(1)
+                duration = re.sub(r"\btwo hours\b", "2 小時", duration, flags=re.I)
+                duration = re.sub(r"\b(\d+) hours?\b", r"\1 小時", duration, flags=re.I)
+                duration = re.sub(r"\b(\d+) minutes? remaining\b", r"剩餘 \1 分鐘", duration, flags=re.I)
+                output.append("法術「%s」，%s，等級 %s" % (zh_name, duration, remaining.group(2))); continue
+        if not value:
+            output.append(""); continue
+        deterministic = deterministic_translate(value)
+        output.append(deterministic if deterministic is not None else translate_piece(value, c, force_robust=True))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("STATUS_FINAL_LINE_COUNT_MISMATCH")
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("STATUS_FINAL_SANITY_" + reason)
+    return result
+
+
+def translate(text,c):
+    xp_history = translate_xp_history_line(text, c)
+    if xp_history is not None:
+        return xp_history
+    if is_action_template_block(text):
+        return translate_action_template_block(text, c)
+    if is_combat_template_block(text):
+        return translate_combat_template_block(text, c)
+    if is_quest_help_block(text):
+        return translate_quest_help_block(text)
+    if is_room_preview_block(text):
+        return translate_room_preview_block(text, c)
+    if is_quest_information_block(text):
+        return translate_quest_information_block(text, c)
+    deterministic = deterministic_translate(text)
+    if deterministic is not None:
+        return deterministic
+    fixed_timestamp = translate_inventory_timestamp(text)
+    if fixed_timestamp:
+        return fixed_timestamp
+    if is_counter_stats_block(text):
+        return translate_counter_stats_block(text)
+    if is_character_status_block(text):
+        return translate_character_status_block(text, c)
+    if is_login_menu(text):
+        return translate_login_menu(text, c)
+    if is_help_search_listing(text):
+        return translate_help_search_listing(text, c)
+    if is_friends_listing(text):
+        return translate_friends_listing(text, c)
+    if is_skill_help_detail(text):
+        return translate_skill_help_detail(text, c)
+    if is_equipment_advice(text):
+        return translate_equipment_advice(text, c)
+    if is_room_with_doors(text):
+        return translate_room_with_doors(text, c)
+    if is_tip_block(text):
+        return translate_tip_block(text, c)
+    if is_syntax_help_block(text):
+        return translate_syntax_help_block(text, c)
+    if is_book_text_block(text):
+        return translate_book_text_block(text, c)
+    if is_mobs_in_room_listing(text):
+        return translate_mobs_in_room_listing(text, c)
+    if is_scan_listing(text):
+        return translate_scan_listing(text, c)
+    if is_nearby_map_listing(text):
+        return translate_nearby_map_listing(text, c)
+    if is_nearby_direction_listing(text):
+        return translate_nearby_direction_listing(text, c)
+    if is_dense_item_table(text):
+        return translate_dense_item_table(text, c)
+    if is_job_list_block(text):
+        return translate_task_list_block(text, c, "job")
+    if is_quest_list_block(text):
+        return translate_task_list_block(text, c, "quest")
+    if is_quest_structured_block(text):
+        return translate_quest_structured_block(text, c)
+    if str(text).lstrip().startswith("You know the following skills:"):
+        return translate_skills_block(text, c)
+    if is_class_skill_table(text):
+        return translate_class_skill_table(text, c)
+    if is_practice_table(text):
+        return translate_practice_table(text, c)
+    if is_library_catalog(text):
+        return translate_library_catalog(text, c)
+    if is_direction_listing(text):
+        return translate_direction_listing(text, c)
+    if structured_block_kind(text):
+        return translate_structured_line_block(text, c)
+    if is_numeric_report_block(text):
+        return translate_numeric_report_block(text, c)
+    if has_repeated_source_lines(text):
+        return translate_repeated_line_block(text, c)
+    if has_deterministic_lines(text):
+        return translate_mixed_deterministic_block(text, c)
+    if has_trailing_independent_rows(text):
+        return translate_trailing_independent_rows(text, c)
+    if is_room_prose_candidate(text):
+        return translate_room_prose_cached(text, c)
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if sum(1 for line in lines if re.match(r"^\s*\d+\)\s*", line)) >= 3:
+        rendered = []
+        for line in lines:
+            numbered = re.match(r"^(\s*\d+\)\s*)(.+)$", line)
+            if numbered:
+                rendered.append(numbered.group(1) + completion_once(numbered.group(2), c, 128))
+            elif line.strip():
+                rendered.append(translate_piece(line, c))
+            else:
+                rendered.append("")
+        result = "\n".join(rendered)
+        ok, reason = translation_sanity_ok(text, result)
+        if not ok:
+            raise RuntimeError("LMT_FINAL_SANITY_" + reason)
+        return result
+    # Large blocks are proactively chunked so they cannot silently hit the
+    # decoder limit after a long wait.  Short normal gameplay stays one call.
+    chunks = split_source(text, 650) if len(text) > 900 else [text]
+    robust = len(text) >= 180 or text.count("\n") >= 3
+    result = "\n".join(translate_piece(chunk, c, force_robust=robust) for chunk in chunks)
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("LMT_FINAL_SANITY_" + reason)
+    return result
+
+
+def trace_record(request_id, status, source, result="", elapsed=0.0, error=""):
+    """Local diagnostic record. Contains MUD text; never auto-shared."""
+    try:
+        rec = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "request_id": str(request_id),
+            "status": str(status),
+            "elapsed_seconds": round(float(elapsed), 3),
+            "source": str(source),
+            "result": str(result),
+            "error": str(error),
+            "engine": "+".join(sorted(TRANSLATION_ENGINES_USED)) or "local",
+        }
+        with TRACE_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def atomic_write(path,text):
+    tmp=path.with_suffix(".tmp");tmp.write_text(text,encoding="utf-8");os.replace(tmp,path)
+
+def run():
+    INBOX.mkdir(exist_ok=True);OUTBOX.mkdir(exist_ok=True)
+    if not acquire_lock():return
+    log("LMT Q4 WORKER START pid=%s python=%s"%(os.getpid(),sys.executable),True)
+    try:
+        start_server()
+        log("worker ready - LMT-60 1.7B Q4",True)
+        while session_alive():
+            jobs=sorted(INBOX.glob("req_*.txt"))
+            if not jobs:
+                time.sleep(.05);continue
+            job=jobs[0];rid=job.stem[4:];out=OUTBOX/("res_"+rid+".txt")
+            try:
+                raw=base64.b64decode(job.read_text(encoding="ascii")).decode("utf-8","replace")
+                TRANSLATION_ENGINES_USED.clear()
+                if raw.startswith(CONTROL_CLEAR_RECENT_CACHE):
+                    requested = raw[len(CONTROL_CLEAR_RECENT_CACHE):].strip() or "5"
+                    removed = clear_recent_translation_cache(int(requested))
+                    result = "已清除最近 %d 筆翻譯快取。請重新觸發內容以重新翻譯。" % removed
+                    trace_record(rid,"CONTROL",raw,result,0.0,"")
+                    atomic_write(out,"OK\n"+result)
+                    continue
+                c=config(); result=None if should_bypass_whole_block_cache(raw) else cache_get(raw,c)
+                if result is None:
+                    t=time.perf_counter()
+                    result=to_traditional_characters(translate(raw,c))
+                    elapsed=time.perf_counter()-t
+                    log("translated id=%s chars=%d in %.3fs"%(rid,len(raw),elapsed))
+                    trace_record(rid,"OK",raw,result,elapsed,"")
+                    cache_put(raw,result,c)
+                else:
+                    mark_translation_engine("cache")
+                    seed_structured_line_cache(raw, result, c)
+                    trace_record(rid,"CACHE",raw,result,0.0,"")
+                atomic_write(out,"OK\n"+result)
+            except Exception as e:
+                elapsed=(time.perf_counter()-t) if "t" in locals() else 0.0
+                log("request %s ERROR %r"%(rid,e),True)
+                try: trace_record(rid,"ERROR",raw if "raw" in locals() else "","",elapsed,repr(e))
+                except Exception: pass
+                atomic_write(out,"ERR\n"+str(e))
+            finally:
+                try:job.unlink()
+                except OSError:pass
+    finally:
+        if CACHE_CONNECTION is not None:
+            try:CACHE_CONNECTION.close()
+            except Exception:pass
+        if SERVER_PROCESS is not None:
+            try:SERVER_PROCESS.terminate();SERVER_PROCESS.wait(timeout=5)
+            except Exception:
+                try:SERVER_PROCESS.kill()
+                except Exception:pass
+        try:LOCK.unlink()
+        except OSError:pass
+        log("worker stopped",True)
+
+if __name__=="__main__":run()

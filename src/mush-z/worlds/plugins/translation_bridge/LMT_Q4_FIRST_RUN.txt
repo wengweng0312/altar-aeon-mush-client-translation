@@ -1,0 +1,15 @@
+LMT-60 1.7B Q4 first-run integration
+
+This build searches for llama-server.exe and LMT-60-1.7B-Q4_K_M.gguf in:
+1. translation_bridge\lmt_runtime\tools and \gguf
+2. translation_bridge\tools and \gguf
+3. %USERPROFILE%\Downloads\LMT60_1.7B_HOME_DOWNLOADER\tools and \gguf
+
+For the current test computer, you do not need to copy the 1.28 GB model if the existing
+LMT60_1.7B_HOME_DOWNLOADER folder remains in Downloads.
+
+Translation path:
+Translation_Mode -> inbox -> translation_worker.py -> persistent llama-server -> /completion -> outbox -> NVDA speech worker.
+
+No OpenCC or glossary is used in this first-run build.
+On translation/server failure, the existing Translation_Mode ERR path speaks the original English.

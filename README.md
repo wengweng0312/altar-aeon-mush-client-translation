@@ -25,6 +25,28 @@
 
 ## 預定更新方式
 
-正式版本將透過 GitHub Releases 發布版本資訊、Only Patch、SHA-256 檢查碼與更新說明。更新器必須先下載與驗證，再備份和替換；任何失敗都不能破壞既有可運作版本。
+Mush-Z 本體由使用者自行下載與安裝。本專案的 **Full** 僅代表「完整翻譯套件」：包含翻譯 plugin、模型、必要 runtime、NVDA 附加元件、空白設定範本與 updater，不包含 Mush-Z 本體。
+
+正式版本將透過 GitHub Releases 發布版本資訊、Only Patch、SHA-256 檢查碼與更新說明。第一次安裝下載 Full；後續 updater 只下載 Only Patch。更新器必須先下載與驗證，再備份和替換；任何失敗都不能破壞既有可運作版本。
 
 目前 repository 尚在安全整理階段，尚未提供自動更新。
+
+## 原始碼配置
+
+- `src/mush-z/`：MUSHclient plugins、翻譯 worker、結構化規則與打包工具。
+- `src/nvda-addon/`：NVDA 中文檢閱附加元件的可閱讀原始內容。
+- `tools/validate_source.py`：不啟動模型的靜態安全與語法檢查。
+- `update/latest.json`：updater 使用的公開版本資訊；尚未發布時保持 `published: false`。
+
+本機實際使用的 `cloud_translation_config.txt` 不受版本控制。第一次部署時，請複製
+`cloud_translation_config.example.txt`，再於玩家自己的電腦填入金鑰。
+
+## 開發驗證
+
+在 repository 根目錄執行：
+
+```text
+python tools/validate_source.py
+```
+
+驗證包括 Python 語法、XML、JSON、worker `.py`／`.pyw` 同步，以及秘密與私人檔案防護。

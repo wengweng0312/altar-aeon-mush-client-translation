@@ -1,0 +1,1049 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE muclient>
+<muclient>
+<plugin name="Translation_Mode" author="Mush-Z translation prototype" id="c7b37d98c8e34df68f4e50a1" language="Lua" purpose="Asynchronous contextual translation bridge for Mush-Z" save_state="y" requires="4.92" version="0.81" sequence="9999"></plugin>
+<include name="constants.lua"/>
+<aliases>
+ <alias match="translation_toggle" enabled="y" script="ToggleTranslation" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_previous" enabled="y" script="TranslationHistoryPrevious" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_next" enabled="y" script="TranslationHistoryNext" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_top" enabled="y" script="TranslationHistoryTop" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_bottom" enabled="y" script="TranslationHistoryBottom" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_previous_review" enabled="y" script="TranslationHistoryPreviousReview" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_next_review" enabled="y" script="TranslationHistoryNextReview" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_top_review" enabled="y" script="TranslationHistoryTopReview" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_history_bottom_review" enabled="y" script="TranslationHistoryBottomReview" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_block_diagnostic" enabled="y" script="SpeakBlockDiagnostic" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_cache_clear_recent" enabled="y" script="ClearRecentTranslationCache" omit_from_output="y" omit_from_command_history="y" />
+
+</aliases>
+<timers>
+ <timer name="translation_tick" enabled="y" second="0.10" script="TranslationTick" active_closed="y" />
+ <timer name="translation_recovery_tick" enabled="y" second="1.00" script="TranslationRecoveryTick" active_closed="y" />
+</timers>
+<script><![CDATA[
+local function tm_debug(msg) end
+
+PLUGIN_ID = "c7b37d98c8e34df68f4e50a1"
+MUSHREADER_ID = "925cdd0331023d9f0b8f05a7"
+enabled = false
+review_mode = false
+pending = {}
+pending_ticks = 0
+pending_target_ticks = 3
+seq = 0
+requests = {}
+recovery_requested = false
+base = (GetInfo(67):gsub("[/\\]+$", ""):match("^(.*)[/\\][^/\\]+$") or GetInfo(67)) .. "/plugins/translation_bridge"
+inbox = base .. "/inbox"
+outbox = base .. "/outbox"
+worker = base .. "/translation_worker.py"
+logfile = GetInfo(67) .. "/translation_plugin.log"
+configfile = base .. "/translation_config.json"
+debug_logging = false
+accessible_history_mode = "all"
+
+local unicode_history = {}
+local unicode_history_pos = 0
+local unicode_history_limit = 1000
+local unicode_history_seq = 0
+local history_follow_tail = true
+local block_starts = {
+  ["You know the following skills:"] = "skills",
+  ["You are carrying:"] = "inventory",
+  ["The following items are available for sale at this time:"] = "shop_items",
+  ["The following spell castings may be purchased for a small fee:"] = "shop_spells",
+  ["The following items are currently up for grabs:"] = "free_items"
+}
+local active_block = nil
+local pending_categories = {}
+local block_diag = {starts=0,skills=0,inventory=0,carried_container=0,ground_container=0,shop_items=0,shop_spells=0,free_items=0,history=0}
+
+local function block_category_for_line(line)
+  local exact = block_starts[line]
+  if exact then return exact end
+  if line:find("carried contains:", 1, true) then return "carried_container" end
+  if line:find("on ground contains:", 1, true) then return "ground_container" end
+  return nil
+end
+
+local function load_debug_setting()
+  local f = io.open(configfile, "rb")
+  if not f then return false end
+  local text = f:read("*a") or ""
+  f:close()
+  return text:match('"debug_logging"%s*:%s*true') ~= nil
+end
+
+local function load_accessible_history_mode()
+  local f = io.open(configfile, "rb")
+  if not f then return "all" end
+  local text = f:read("*a") or ""
+  f:close()
+  local mode = text:match('"accessible_history_mode"%s*:%s*"([^"]+)"')
+  if mode == "off" or mode == "skills" or mode == "all" then return mode end
+  return "all"
+end
+
+local function cloud_api_candidate_status()
+  local paths = {base .. "/translate_api.txt", base .. "/translate api.txt"}
+  for _, path in ipairs(paths) do
+    local f = io.open(path, "rb")
+    if f then
+      local text = f:read("*a") or ""
+      f:close()
+      text = text:gsub("^\239\187\191", "")
+      local value = nil
+      local count = 0
+      for line in text:gmatch("[^\r\n]+") do
+        line = line:gsub("^%s+", ""):gsub("%s+$", "")
+        if line ~= "" and not line:find("^#") then
+          count = count + 1
+          local label, candidate = line:match("^([%w_]+)%s*=%s*(.-)%s*$")
+          if label then
+            label = label:upper()
+            if label ~= "GOOGLE_CLOUD_API_KEY" and label ~= "API_KEY" then
+              return "invalid", path
+            end
+            value = candidate
+          else
+            value = line
+          end
+        end
+      end
+      if count == 1 and value and #value >= 20 and #value <= 200 and
+         not value:find("[^%w_%-]") then
+        return "candidate", path
+      end
+      return "invalid", path
+    end
+  end
+  return "missing", nil
+end
+
+local function log(msg, critical)
+  if not debug_logging and not critical then return end
+  local f = io.open(logfile, "ab")
+  if f then
+    f:write(os.date("%Y-%m-%d %H:%M:%S") .. " [PLUGIN] " .. tostring(msg) .. "\r\n")
+    f:close()
+  end
+end
+local function clean(s)
+  s = tostring(s or "")
+  s = s:gsub("\r", " "):gsub("\n", " ")
+  return s
+end
+local speech_seq = 0
+local session_id = string.format("%010d_%010d", os.time(), math.floor(os.clock() * 1000000) % 10000000000)
+local session_file = base .. "\\mush_session_" .. session_id .. ".alive"
+local review_state_file = (os.getenv("TEMP") or base) .. "\\mushz_translation_review_mode.txt"
+local review_entry_file = (os.getenv("TEMP") or base) .. "\\mushz_translation_review_entry.txt"
+local function touch_session_file()
+  local f = io.open(session_file, "wb")
+  if f then f:write(tostring(os.time())); f:close() end
+end
+local function remove_session_file()
+  os.remove(session_file)
+end
+local function set_review_mode_state(active)
+  review_mode = active and true or false
+  if not review_mode then
+    os.remove(review_state_file)
+    os.remove(review_entry_file)
+    os.remove(review_entry_file .. ".tmp")
+    return
+  end
+  local tmp = review_state_file .. ".tmp"
+  local f = io.open(tmp, "wb")
+  if not f then return end
+  f:write(session_file .. "\r\n")
+  f:close()
+  os.remove(review_state_file)
+  os.rename(tmp, review_state_file)
+end
+local function write_review_entry(entry)
+  if not review_mode then return end
+  local text = type(entry) == "table" and entry.text or entry
+  if type(text) ~= "string" or text == "" then return end
+  local tmp = review_entry_file .. ".tmp"
+  local f = io.open(tmp, "wb")
+  if not f then return end
+  f:write(text); f:close()
+  os.remove(review_entry_file)
+  os.rename(tmp, review_entry_file)
+end
+local function speak(text, order_id)
+  if not text or text == "" then return end
+  speech_seq = speech_seq + 1
+  local hex = (text:gsub(".", function(c) return string.format("%02X", string.byte(c)) end))
+  local world_dir = GetInfo(67) or ""
+  local worlds_dir = world_dir:gsub("[/\\]+$", ""):match("^(.*)[/\\][^/\\]+$") or world_dir
+  local inbox = worlds_dir .. "\\plugins\\translation_bridge\\speech_inbox"
+  local name = order_id or string.format("%s_%06d", session_id, speech_seq)
+  local tmp, final = inbox .. "\\" .. name .. ".tmp", inbox .. "\\" .. name .. ".txt"
+  local f = io.open(tmp, "wb")
+  if not f then return end
+  f:write(hex); f:close(); os.rename(tmp, final)
+end
+
+local function history_trim()
+  while #unicode_history > unicode_history_limit do
+    table.remove(unicode_history, 1)
+    unicode_history_pos = math.max(0, unicode_history_pos - 1)
+  end
+end
+local function history_add(text)
+  if type(text) ~= "string" or text == "" then return end
+  local follow = history_follow_tail or #unicode_history == 0
+  unicode_history_seq = unicode_history_seq + 1
+  local entry = {id=unicode_history_seq, text=text}
+  unicode_history[#unicode_history + 1] = entry
+  history_trim()
+  if follow then unicode_history_pos = #unicode_history end
+  return entry.id
+end
+local function history_insert_before(anchor_id, texts)
+  if type(texts) ~= "table" or #texts == 0 then return end
+  local selected_id = unicode_history[unicode_history_pos] and unicode_history[unicode_history_pos].id or nil
+  local at = nil
+  for i, entry in ipairs(unicode_history) do if entry.id == anchor_id then at = i; break end end
+  if not at then
+    for _, text in ipairs(texts) do history_add(text) end
+    return
+  end
+  for offset, text in ipairs(texts) do
+    unicode_history_seq = unicode_history_seq + 1
+    table.insert(unicode_history, at + offset - 1, {id=unicode_history_seq, text=text})
+  end
+  history_trim()
+  if selected_id then
+    for i, entry in ipairs(unicode_history) do
+      if entry.id == selected_id then unicode_history_pos = i; return end
+    end
+  end
+  unicode_history_pos = #unicode_history
+end
+local function history_speak(entry)
+  local text = type(entry) == "table" and entry.text or entry
+  if text and text ~= "" then
+    write_review_entry(entry)
+    speak(text)
+  end
+end
+local function history_review(entry)
+  if entry then write_review_entry(entry) end
+end
+function TranslationHistoryPrevious()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos = math.max(1, unicode_history_pos - 1); history_follow_tail = false; history_speak(unicode_history[unicode_history_pos])
+end
+function TranslationHistoryNext()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos = math.min(#unicode_history, unicode_history_pos + 1); history_follow_tail = unicode_history_pos == #unicode_history; history_speak(unicode_history[unicode_history_pos])
+end
+function TranslationHistoryTop()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos=1; history_follow_tail = false; history_speak(unicode_history[1])
+end
+function TranslationHistoryBottom()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos=#unicode_history; history_follow_tail = true; history_speak(unicode_history[unicode_history_pos])
+end
+function TranslationHistoryPreviousReview()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos = math.max(1, unicode_history_pos - 1); history_follow_tail = false; history_review(unicode_history[unicode_history_pos])
+end
+function TranslationHistoryNextReview()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos = math.min(#unicode_history, unicode_history_pos + 1); history_follow_tail = unicode_history_pos == #unicode_history; history_review(unicode_history[unicode_history_pos])
+end
+function TranslationHistoryTopReview()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos=1; history_follow_tail = false; history_review(unicode_history[1])
+end
+function TranslationHistoryBottomReview()
+  if #unicode_history == 0 then speak("No translation history."); return end
+  unicode_history_pos=#unicode_history; history_follow_tail = true; history_review(unicode_history[unicode_history_pos])
+end
+function SpeakBlockDiagnostic()
+  speak("block diagnostic. starts "..block_diag.starts..", skills "..block_diag.skills..", inventory "..block_diag.inventory..
+    ", carried "..block_diag.carried_container..", ground "..block_diag.ground_container..", shop items "..block_diag.shop_items..
+    ", shop spells "..block_diag.shop_spells..", free items "..block_diag.free_items..", history "..block_diag.history..
+    ", active "..tostring(active_block or "none"))
+end
+
+local function b64(data)
+  local chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  return ((data:gsub('.', function(x)
+    local r,bits='',x:byte()
+    for i=8,1,-1 do r=r..(bits%2^i-bits%2^(i-1)>0 and '1' or '0') end
+    return r
+  end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+    if #x < 6 then return '' end
+    local c=0
+    for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+    return chars:sub(c+1,c+1)
+  end)..({ '', '==', '=' })[#data%3+1])
+end
+
+function ClearRecentTranslationCache()
+  if not enabled then
+    speak("Translation mode is off.")
+    return
+  end
+  seq = seq + 1
+  local request_id = string.format("%s_%06d", session_id, seq)
+  local command = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:5"
+  local tmp = inbox .. "/req_" .. request_id .. ".tmp"
+  local final = inbox .. "/req_" .. request_id .. ".txt"
+  local f = io.open(tmp, "wb")
+  if not f then
+    speak("Unable to request cache cleanup.")
+    return
+  end
+  f:write(b64(command)); f:close()
+  if not os.rename(tmp, final) then
+    os.remove(tmp)
+    speak("Unable to request cache cleanup.")
+    return
+  end
+  requests[request_id] = {original="Cache cleanup failed.", ticks=0, categories={}, skip_history=true}
+end
+
+
+local function file_exists(path)
+  local f = io.open(path, "rb")
+  if f then f:close(); return true end
+  return false
+end
+
+local function start_worker()
+  if not file_exists(worker) then
+    log("ERROR worker file not found=" .. tostring(worker), true)
+    return false
+  end
+
+  local pythonw = base .. "/runtime/python/pythonw.exe"
+  if not file_exists(pythonw) then
+    local localapp = os.getenv("LOCALAPPDATA") or ""
+    local candidates = {
+      localapp .. "\\Programs\\Python\\Python310\\pythonw.exe",
+      localapp .. "\\Programs\\Python\\Python311\\pythonw.exe",
+      localapp .. "\\Programs\\Python\\Python312\\pythonw.exe",
+      localapp .. "\\Programs\\Python\\Python313\\pythonw.exe"
+    }
+    for _, candidate in ipairs(candidates) do
+      if file_exists(candidate) then pythonw = candidate; break end
+    end
+  end
+  if not file_exists(pythonw) then
+    log("ERROR portable or installed pythonw.exe not found", true)
+    return false
+  end
+
+  local ok, err = utils.shellexecute(pythonw, '"' .. worker .. '" "' .. session_file .. '"', base, "open", 0)
+  if not ok then log("ERROR hidden worker launch failed=" .. tostring(err), true) end
+  return ok and true or false
+end
+local speech_worker_started = false
+local function start_speech_worker()
+  if speech_worker_started then return true end
+  local world_dir = GetInfo(67) or ""
+  local worlds_dir = world_dir:gsub("[/\\]+$", ""):match("^(.*)[/\\][^/\\]+$") or world_dir
+  local script = worlds_dir .. "\\plugins\\translation_bridge\\nvda_speech_worker.ps1"
+  local windir = os.getenv("WINDIR") or "C:\\Windows"
+  local powershell = windir .. "\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe"
+  if not file_exists(script) or not file_exists(powershell) then return false end
+  local params = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' .. script .. '"'
+  local ok, err = utils.shellexecute(powershell, params, base, "open", 0)
+  if not ok then
+    log("ERROR hidden speech worker launch failed=" .. tostring(err), true)
+    return false
+  end
+  speech_worker_started = true
+  return true
+end
+
+function OnPluginTick()
+  touch_session_file()
+end
+
+function OnPluginInstall()
+  set_review_mode_state(false)
+  touch_session_file()
+  debug_logging = load_debug_setting()
+  accessible_history_mode = load_accessible_history_mode()
+  log("Translation Mode 0.8.1 THREE MODE REVIEW installed", true)
+  log("base=" .. tostring(base))
+  log("worker=" .. tostring(worker))
+  Accelerator("ctrl+shift+t", "translation_toggle")
+  Accelerator("ctrl+shift+pageup", "translation_history_previous")
+  Accelerator("ctrl+shift+pagedown", "translation_history_next")
+  Accelerator("ctrl+shift+home", "translation_history_top")
+  Accelerator("ctrl+shift+end", "translation_history_bottom")
+  -- Private silent history commands used by the NVDA app module. Direct
+  -- Ctrl+Shift history hotkeys retain their original spoken behavior.
+  Accelerator("ctrl+alt+shift+pageup", "translation_history_previous_review")
+  Accelerator("ctrl+alt+shift+pagedown", "translation_history_next_review")
+  Accelerator("ctrl+alt+shift+home", "translation_history_top_review")
+  Accelerator("ctrl+alt+shift+end", "translation_history_bottom_review")
+  Accelerator("ctrl+shift+f8", "translation_block_diagnostic")
+  Accelerator("ctrl+shift+delete", "translation_cache_clear_recent")
+  tm_debug("TM DEBUG INSTALL: Translation Mode 0.6.0 loaded")
+end
+
+function ToggleTranslation()
+  tm_debug("TM DEBUG 1: toggle entered")
+
+  if not enabled then
+    accessible_history_mode = load_accessible_history_mode()
+    local api_status = cloud_api_candidate_status()
+    if api_status == "candidate" then
+      Execute("tts_note Google Cloud API candidate found.")
+    elseif api_status == "invalid" then
+      log("Google Cloud API candidate file is invalid; using prototype fallback", true)
+      Execute("tts_note Google Cloud API file invalid. Using standard translation.")
+    end
+    if not start_speech_worker() then
+      log("ERROR speech worker launcher not found or failed", true)
+      Execute("tts_note Translation speech worker failed to start. Translation remains off.")
+      return
+    end
+    -- Starting is idempotent: the worker lock rejects a duplicate process and
+    -- recovers immediately when its previous owner crashed.
+    do
+      local ok, result = pcall(start_worker)
+      if not ok then
+        tm_debug("TM DEBUG ERROR: start_worker Lua error: " .. tostring(result))
+        log("ERROR start_worker Lua error=" .. tostring(result), true)
+        Execute("tts_note Translation worker failed to start. Translation remains off.")
+        return
+      end
+      if not result then
+        Execute("tts_note Translation worker failed to start. Translation remains off.")
+        return
+      end
+    end
+    enabled = true
+    -- Enabling always enters Chinese-screen review mode. The NVDA app module
+    -- redirects numpad review to bilingual Translation Mode history.
+    set_review_mode_state(true)
+    if #unicode_history > 0 then write_review_entry(unicode_history[unicode_history_pos]) end
+    pending = {}; pending_ticks = 0; pending_target_ticks = 3
+    log("toggle enabled=true review_mode=true")
+    Execute("tts_stop")
+    Execute("tts_note Chinese review mode on.")
+  else
+    -- The only other state is off. Keep the old standard/English-screen
+    -- translation mode out of the user-facing cycle.
+    enabled = false
+    set_review_mode_state(false)
+    log("toggle enabled=false")
+    pending = {}; pending_ticks = 0; pending_target_ticks = 3
+    for request_id,r in pairs(requests) do if r.original then speak(r.original, request_id) end end
+    requests = {}
+    Execute("tts_stop")
+    Execute("tts_note Translation mode off.")
+  end
+end
+
+local exit_words = {
+  n=true, s=true, e=true, w=true, u=true, d=true,
+  ne=true, nw=true, se=true, sw=true,
+  north=true, south=true, east=true, west=true, up=true, down=true,
+  northeast=true, northwest=true, southeast=true, southwest=true,
+  none=true
+}
+
+local function strip_exit_heading(text)
+  local patterns = {
+    {"^exits%s*:%s*", "exit"}, {"^exit%s*:%s*", "exit"},
+    {"^doors%s*:%s*", "door"}, {"^door%s*:%s*", "door"},
+    {"^doors%s+", "door"}, {"^door%s+", "door"}
+  }
+  for _, item in ipairs(patterns) do
+    local stripped, count = text:gsub(item[1], "", 1)
+    if count > 0 then return stripped, item[2] end
+  end
+  return text, nil
+end
+
+local function is_exit_line(line)
+  local text = clean(line):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  local heading
+  text, heading = strip_exit_heading(text)
+  if text == "" then return false end
+  -- A labelled exit/door may have a world-specific name such as portal,
+  -- hatch or trail. Preserve it immediately instead of asking the model to
+  -- guess or silently omit it.
+  if heading then return true end
+  local count = 0
+  for word in text:gmatch("%S+") do
+    word = word:gsub("^[%[%(%{]+", ""):gsub("[%]%)%},%.]+$", "")
+    if not exit_words[word] then return false end
+    count = count + 1
+  end
+  return count > 0
+end
+
+local exit_labels = {
+  n="北", s="南", e="東", w="西", u="上", d="下",
+  ne="東北", nw="西北", se="東南", sw="西南",
+  north="北", south="南", east="東", west="西",
+  up="上", down="下", northeast="東北",
+  northwest="西北", southeast="東南", southwest="西南",
+  none="無"
+}
+
+local function exit_history_text(line)
+  local original = clean(line):gsub("^%s+", ""):gsub("%s+$", "")
+  local value = original:lower()
+  local heading = "出口："
+  local heading_kind
+  value, heading_kind = strip_exit_heading(value)
+  if heading_kind == "door" then heading = "門：" end
+  local chinese_parts = {}
+  local english_parts = {}
+  for word in value:gmatch("%S+") do
+    local key = word:gsub("^[%[%(%{]+", ""):gsub("[%]%)%},%.]+$", "")
+    chinese_parts[#chinese_parts + 1] = exit_labels[key] or "特殊出口"
+    english_parts[#english_parts + 1] = key
+  end
+  return heading .. table.concat(chinese_parts, "，") ..
+         "，" .. table.concat(english_parts, "，")
+end
+
+local flush_pending
+
+local function queue_buffered(line, target_ticks)
+  if not enabled then return "0" end
+  line = clean(line)
+  if line:find("^%s*$") then return "0" end
+  -- Navigation remains under Mush-Z's existing English speech behavior.
+  if is_exit_line(line) then
+    local request_id = nil
+    if #pending > 0 and flush_pending then request_id = flush_pending() end
+    local anchor_id = history_add(exit_history_text(line))
+    if request_id and requests[request_id] then requests[request_id].history_anchor_id = anchor_id end
+    return "0"
+  end
+  local category = block_category_for_line(line)
+  if category then
+    active_block = category
+    block_diag.starts = block_diag.starts + 1
+    block_diag[category] = (block_diag[category] or 0) + 1
+  end
+  table.insert(pending, line)
+  table.insert(pending_categories, active_block or false)
+  pending_ticks = 0
+  pending_target_ticks = math.min(pending_target_ticks or 3, target_ticks)
+  return "1"
+end
+
+-- Called synchronously by MushReader. Never do network/model work here.
+function QueueLine(line)
+  return queue_buffered(line, 3)
+end
+
+-- Plugin-generated Note() output gets a short 100 ms buffer.
+function QueueNote(line)
+  return queue_buffered(line, 1)
+end
+
+flush_pending = function()
+  if #pending == 0 then return nil end
+  seq = seq + 1
+  local request_id = string.format("%s_%06d", session_id, seq)
+  local original = table.concat(pending, "\n")
+  log("flush request=" .. tostring(seq) .. " lines=" .. tostring(#pending) .. " chars=" .. tostring(#original))
+  local tmp = inbox .. "/req_" .. request_id .. ".tmp"
+  local final = inbox .. "/req_" .. request_id .. ".txt"
+  local f = io.open(tmp, "wb")
+  if not f then
+    log("ERROR cannot open inbox tmp=" .. tmp, true)
+    speak(original, request_id); pending = {}; pending_ticks = 0; pending_target_ticks = 3; return nil
+  end
+  f:write(b64(original)); f:close()
+  local ok = os.rename(tmp, final)
+  if not ok then
+    os.remove(tmp); speak(original, request_id)
+  else
+    requests[request_id] = {original=original, ticks=0, categories=pending_categories}
+    log("request written=" .. final)
+  end
+  pending = {}; pending_categories = {}; pending_ticks = 0; pending_target_ticks = 3; active_block = nil
+  return request_id
+end
+
+-- tts_interrupt output is already classified as urgent by the originating
+-- Mush-Z plugin. Flush it immediately without waiting for TranslationTick.
+function QueueUrgent(line)
+  if not enabled then return "0" end
+  line = clean(line)
+  if line:find("^%s*$") then return "0" end
+  if is_exit_line(line) then history_add(exit_history_text(line)); return "0" end
+  if #pending > 0 then flush_pending() end
+  table.insert(pending, line)
+  flush_pending()
+  return "1"
+end
+
+local skill_ratings = {
+  "very bad", "very good", "exceptional", "moderate", "average",
+  "perfect", "poor", "fair", "good", "bad"
+}
+
+local function is_skill_line(line)
+  local text = clean(line):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  for _, rating in ipairs(skill_ratings) do
+    local pattern = rating:gsub(" ", "%%s+")
+    local name = text:match("^(.-)%s+" .. pattern .. "%s+%d+%%%s*$")
+    if name and name:find("%S") then return true end
+  end
+  return false
+end
+
+local function split_lines(text)
+  text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
+local function to_hex(text)
+  return (text:gsub(".", function(c) return string.format("%02X", string.byte(c)) end))
+end
+
+local function translated_sentence_parts(text)
+  local value = tostring(text or ""):gsub("\r\n", " "):gsub("[\r\n]", " ")
+  local parts, start = {}, 1
+  local delimiters = {"。", "！", "？", "!", "?"}
+  while start <= #value do
+    local nearest_start, nearest_end = nil, nil
+    for _, delimiter in ipairs(delimiters) do
+      local a, b = value:find(delimiter, start, true)
+      if a and (not nearest_start or a < nearest_start) then nearest_start, nearest_end = a, b end
+    end
+    if not nearest_start then break end
+    local finish = nearest_end
+    while finish < #value do
+      local next_byte = value:sub(finish + 1, finish + 1)
+      if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end
+    end
+    local part = value:sub(start, finish):gsub("^%s+", ""):gsub("%s+$", "")
+    if part ~= "" then parts[#parts + 1] = part end
+    start = finish + 1
+  end
+  local tail = value:sub(start):gsub("^%s+", ""):gsub("%s+$", "")
+  if tail ~= "" then parts[#parts + 1] = tail end
+  return parts
+end
+
+local function independent_source_events(lines)
+  local output = {}
+  for _, line in ipairs(lines) do
+    local value = line:gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      if not value:match("[%.%!%?][\"']?%s*$") then return nil end
+      output[#output + 1] = value
+    end
+  end
+  if #output < 2 then return nil end
+  return output
+end
+
+local function trailing_independent_row_start(lines)
+  local function complete(line)
+    local value = tostring(line or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return #value >= 12 and value:match("[%.%!%?][\"'%)%]]*$") ~= nil
+  end
+  if #lines < 2 then return nil end
+  local start = #lines + 1
+  for i = #lines, 2, -1 do
+    if not complete(lines[i]) or not complete(lines[i - 1]) then break end
+    start = i
+  end
+  if start <= #lines then return start end
+  return nil
+end
+
+-- Quest descriptions are display-wrapped by the game, while the worker
+-- deliberately joins each prose section before translating it. Rebuild the
+-- same semantic rows here so NVDA history can retain one bilingual entry per
+-- label or paragraph instead of collapsing the entire quest into one entry.
+local function quest_semantic_source_lines(lines)
+  local output, field = {}, {}
+  local function flush_field()
+    if #field == 0 then return end
+    output[#output + 1] = table.concat(field, " ")
+    field = {}
+  end
+  local function is_quest_label(value)
+    return value:match("^Quest Name:%s*")
+      or value:match("^Location:%s*")
+      or value:match("^Area Level:%s*")
+      or value:match("^Creator:%s*")
+      or value:match("^Editors:%s*")
+      or value:match("^Approximate difficulty %(scale from 1 to 10%):%s*")
+      or value:match("^General Quest Info:%s*")
+      or value:match("^Previous goal short description:%s*")
+      or value:match("^Previous goal long description:%s*")
+      or value:match("^Current goal short description:%s*")
+      or value:match("^Current goal long description:%s*")
+  end
+  if not tostring(lines[1] or ""):match("^%s*Quest Name:%s*") then return nil end
+  for _, line in ipairs(lines) do
+    local value = tostring(line or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      if is_quest_label(value) then
+        flush_field()
+        field[1] = value
+      else
+        field[#field + 1] = value
+      end
+    end
+  end
+  flush_field()
+  return output
+end
+
+-- Cloud providers may return several physical Chinese lines for one quest
+-- field even though the source field is one semantic paragraph.  Group the
+-- translated text by its deterministic Chinese field labels before pairing
+-- it with quest_semantic_source_lines.  Without this, a harmless line-count
+-- difference makes the history layer collapse the entire quest into one row.
+local function quest_semantic_translated_lines(lines)
+  local output, field = {}, {}
+  local function flush_field()
+    if #field == 0 then return end
+    output[#output + 1] = table.concat(field, " ")
+    field = {}
+  end
+  local function is_quest_label(value)
+    return value:match("^任務名稱：")
+      or value:match("^魔法任務名稱：")
+      or value:match("^地點：")
+      or value:match("^區域等級：")
+      or value:match("^作者：")
+      or value:match("^編輯者：")
+      or value:match("^大約難度（1 到 10）：")
+      or value:match("^任務概述：")
+      or value:match("^一般任務資訊：")
+      or value:match("^一般任務信息：")
+      or value:match("^之前目標簡述：")
+      or value:match("^之前目標詳細說明：")
+      or value:match("^之前的任務簡述：")
+      or value:match("^之前的任務詳細描述：")
+      or value:match("^之前的支線任務簡述：")
+      or value:match("^之前的支線任務詳細描述：")
+      or value:match("^目前目標簡述：")
+      or value:match("^目前目標詳細說明：")
+      or value:match("^目前的目標簡述：")
+      or value:match("^當前目標簡短描述：")
+      or value:match("^當前目標詳細描述：")
+      or value:match("^當前目標長描述：")
+  end
+  if not tostring(lines[1] or ""):match("^%s*任務名稱：") then return nil end
+  for _, line in ipairs(lines) do
+    local value = tostring(line or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      if is_quest_label(value) then
+        flush_field()
+        field[1] = value
+      else
+        field[#field + 1] = value
+      end
+    end
+  end
+  flush_field()
+  return output
+end
+
+-- Dialogue is often display-wrapped to a different number of physical lines
+-- than its translation.  Keep the complete quoted utterance together before
+-- any generic line-count or trailing-row pairing can split it.
+local function is_quoted_dialogue(value)
+  local text = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  local starts = text:match("^[^\r\n]- says,%s*['\"]") ~= nil
+    or text:match("^[^\r\n]- asks,%s*['\"]") ~= nil
+    or text:match("^[^\r\n]- tells? [^\r\n]-,%s*['\"]") ~= nil
+  return starts and (text:match("['\"]%s*$") ~= nil)
+end
+
+local function collect_accessible_history(original, translated)
+  local entries = {}
+  if is_quoted_dialogue(original) then
+    local zh = tostring(translated or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local en = tostring(original or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if zh ~= "" and en ~= "" then entries[1] = zh .. " | " .. en end
+    return entries
+  end
+  local source_lines = split_lines(original)
+  local translated_text = tostring(translated or "")
+  -- Some older cached translations contain a valid quest label immediately
+  -- after prose on the same physical line. Recover that semantic boundary
+  -- before grouping, so old cache and cloud output follow the same layout.
+  local quest_labels_zh = {
+    "任務名稱：", "魔法任務名稱：", "地點：", "區域等級：", "作者：", "編輯者：",
+    "大約難度（1 到 10）：", "任務概述：", "一般任務資訊：", "一般任務信息：",
+    "之前目標簡述：", "之前目標詳細說明：", "之前的任務簡述：",
+    "之前的任務詳細描述：", "之前的支線任務簡述：", "之前的支線任務詳細描述：",
+    "目前目標簡述：", "目前目標詳細說明：", "目前的目標簡述：",
+    "當前目標簡短描述：", "當前目標詳細描述：", "當前目標長描述："
+  }
+  if tostring(original or ""):match("^%s*Quest Name:%s*") then
+    for _, label in ipairs(quest_labels_zh) do
+      translated_text = translated_text:gsub("([^\r\n])(" .. label .. ")", "%1\n%2")
+    end
+  end
+  local translated_lines = split_lines(translated_text)
+  local quest_source = quest_semantic_source_lines(source_lines)
+  if quest_source then
+    local quest_translated = quest_semantic_translated_lines(translated_lines)
+    if quest_translated and #quest_source == #quest_translated then
+      for i, en in ipairs(quest_source) do
+        entries[#entries + 1] = quest_translated[i] .. " | " .. en
+      end
+      return entries
+    end
+  end
+  if #source_lines ~= #translated_lines then
+    -- The worker deliberately renders display-wrapped room prose as one entry
+    -- and each trailing NPC/object as its own line. Pair those trailing rows
+    -- from the end so NVDA review does not merge them back into the room.
+    local row_start = trailing_independent_row_start(source_lines)
+    local row_count = row_start and (#source_lines - row_start + 1) or 0
+    if row_start and #translated_lines == row_count + 1 then
+      local narrative = {}
+      for i = 1, row_start - 1 do
+        local value = source_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+        if value ~= "" then narrative[#narrative + 1] = value end
+      end
+      local zh = translated_lines[1]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" and #narrative > 0 then
+        -- Preserve source display boundaries until the presentation expander
+        -- has separated the room title.  The expander then flattens English.
+        entries[#entries + 1] = zh .. " | " .. table.concat(narrative, "\n")
+      end
+      for offset = 0, row_count - 1 do
+        local en = source_lines[row_start + offset]:gsub("^%s+", ""):gsub("%s+$", "")
+        local row_zh = translated_lines[2 + offset]:gsub("^%s+", ""):gsub("%s+$", "")
+        if en ~= "" and row_zh ~= "" then entries[#entries + 1] = row_zh .. " | " .. en end
+      end
+      return entries
+    end
+    -- Split only when every source line is a complete event and the translated
+    -- sentence count agrees exactly. Display-wrapped room prose stays grouped.
+    local source_events = independent_source_events(source_lines)
+    local translated_events = source_events and translated_sentence_parts(translated) or nil
+    if source_events and #source_events == #translated_events then
+      for i, en in ipairs(source_events) do
+        entries[#entries + 1] = translated_events[i] .. " | " .. en
+      end
+      return entries
+    end
+    local zh = tostring(translated or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local en = tostring(original or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if zh ~= "" and en ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    return entries
+  end
+  for i, source in ipairs(source_lines) do
+    local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+    local en = source:gsub("^%s+", ""):gsub("%s+$", "")
+    if zh ~= "" and en ~= "" and not en:match("^%-+$") then
+      entries[#entries + 1] = zh .. " | " .. en
+    end
+  end
+  return entries
+end
+
+-- Expand every bilingual entry into real history rows.  This is
+-- presentation-only: translation output and cache stay untouched.  Rows are
+-- always stored top-to-bottom as one-line English followed by Chinese.  This
+-- gives numpad 7/9 one consistent path for single sentences, rooms and dialog.
+local function expand_accessible_history_entries(entries)
+  local output = {}
+  for _, entry in ipairs(entries) do
+    local zh, en = tostring(entry or ""):match("^(.-)%s+|%s+([%s%S]*)$")
+    if not zh or not en then
+      output[#output + 1] = entry
+    else
+      local dialogue = is_quoted_dialogue(en)
+      if dialogue then
+        local english_line = en:gsub("[\r\n]+", " "):gsub("%s+", " ")
+          :gsub("^%s+", ""):gsub("%s+$", "")
+        local chinese_line = zh:gsub("[\r\n]+", " "):gsub("%s+", " ")
+          :gsub("^%s+", ""):gsub("%s+$", "")
+        if english_line ~= "" then output[#output + 1] = english_line end
+        if chinese_line ~= "" then output[#output + 1] = chinese_line end
+      else
+        local parts = translated_sentence_parts(zh)
+        local wrapped = en:find("[\r\n]") ~= nil
+        if wrapped then
+          local first_en = en:match("^%s*([^\r\n]+)") or ""
+          first_en = first_en:gsub("^%s+", ""):gsub("%s+$", "")
+          local first_zh = parts[1] or ""
+          local space_start, space_end = first_zh:find("%s+")
+          if #first_en > 0 and #first_en <= 80
+            and not first_en:match("[%.%!%?%:%;]$")
+            and space_start and space_start > 1 and space_start <= 120 then
+            local title = first_zh:sub(1, space_start - 1):gsub("%s+$", "")
+            local remainder = first_zh:sub(space_end + 1):gsub("^%s+", "")
+            if title ~= "" and remainder ~= "" then
+              table.remove(parts, 1)
+              table.insert(parts, 1, remainder)
+              table.insert(parts, 1, title)
+            end
+          end
+        end
+        local english_line = en:gsub("[\r\n]+", " "):gsub("%s+", " ")
+          :gsub("^%s+", ""):gsub("%s+$", "")
+        if english_line ~= "" then output[#output + 1] = english_line end
+        for _, part in ipairs(parts) do
+          local line = part:gsub("^%s+", ""):gsub("%s+$", "")
+          if line ~= "" then output[#output + 1] = line end
+        end
+      end
+    end
+  end
+  return output
+end
+
+local function write_accessible_history(original, translated, categories, anchor_id)
+  if accessible_history_mode == "off" then return end
+  local entries = collect_accessible_history(original, translated)
+  -- Quest output is already split deterministically into semantic rows. Store
+  -- every English field above the matching set of Chinese fields. Class skill
+  -- tables deliberately continue through the ordinary expander below so each
+  -- English skill row stays immediately above its matching Chinese row.
+  local source_text = tostring(original or "")
+  local grouped_rows = source_text:match("^%s*Quest Name:%s*")
+  if grouped_rows then
+    local english_entries, chinese_entries = {}, {}
+    for _, entry in ipairs(entries) do
+      local zh, en = tostring(entry or ""):match("^(.-)%s+|%s+([%s%S]*)$")
+      zh = tostring(zh or ""):gsub("[\r\n]+", " "):gsub("%s+", " ")
+        :gsub("^%s+", ""):gsub("%s+$", "")
+      en = tostring(en or ""):gsub("[\r\n]+", " "):gsub("%s+", " ")
+        :gsub("^%s+", ""):gsub("%s+$", "")
+      if en ~= "" then english_entries[#english_entries + 1] = en end
+      if zh ~= "" then chinese_entries[#chinese_entries + 1] = zh end
+    end
+    entries = {}
+    for _, en in ipairs(english_entries) do entries[#entries + 1] = en end
+    for _, zh in ipairs(chinese_entries) do entries[#entries + 1] = zh end
+  else
+    entries = expand_accessible_history_entries(entries)
+  end
+  if anchor_id then history_insert_before(anchor_id, entries)
+  else for _, entry in ipairs(entries) do history_add(entry) end end
+  block_diag.history = block_diag.history + #entries
+end
+
+local function write_fallback_history(req)
+  if not req or not req.original or req.skip_history or accessible_history_mode == "off" then return end
+  local entry = "English fallback: " .. tostring(req.original)
+  if req.history_anchor_id then history_insert_before(req.history_anchor_id, {entry})
+  else history_add(entry) end
+  block_diag.history = block_diag.history + 1
+end
+
+local function poll_results()
+  -- Poll each outstanding request independently. A lost result must not block
+  -- every later translation.
+  for request_id, req in pairs(requests) do
+    local path = outbox .. "/res_" .. request_id .. ".txt"
+    local f = io.open(path, "rb")
+    if f then
+
+    tm_debug("TM RESULT 2: Lua found response " .. tostring(request_id))
+    local text = f:read("*a") or ""
+    f:close()
+    tm_debug("TM RESULT 3A: response bytes=" .. tostring(#text) ..
+         " prefix=" .. tostring(text:sub(1,12):gsub("\r","<CR>"):gsub("\n","<LF>")))
+    os.remove(path)
+
+    requests[request_id] = nil
+
+    if enabled then
+      local translated = nil
+      if text:sub(1,4) == "OK\r\n" then
+        translated = text:sub(5)
+      elseif text:sub(1,3) == "OK\n" then
+        translated = text:sub(4)
+      end
+      if translated then
+        tm_debug("TM RESULT 3B: response OK; translated chars/bytes=" .. tostring(#translated))
+        tm_debug("TM RESULT 4: calling speak()")
+        if req and req.original and not req.skip_history then
+          local history_ok, history_err = pcall(write_accessible_history, req.original, translated, req.categories, req.history_anchor_id)
+          if not history_ok then
+            log("ERROR accessible history Lua failure=" .. tostring(history_err), true)
+          end
+        end
+        local ok, err = pcall(speak, translated, request_id)
+        if ok then
+          tm_debug("TM RESULT 5: speak() returned")
+        else
+          tm_debug("TM RESULT ERROR: speak() failed: " .. tostring(err))
+          log("ERROR speech queue write failed request=" .. tostring(request_id) .. " error=" .. tostring(err), true)
+          if req and req.original then speak(req.original, request_id) end
+        end
+      else
+        tm_debug("TM RESULT ERROR: response is not OK; falling back to English")
+        log("ERROR malformed or failed translation response request=" .. tostring(request_id), true)
+        if req and req.original then
+          pcall(write_fallback_history, req)
+          speak(req.original, request_id)
+        end
+      end
+    else
+      tm_debug("TM RESULT: response arrived while translation mode disabled")
+    end
+    end
+  end
+end
+local function expire_requests()
+  for n,r in pairs(requests) do
+    r.ticks = (r.ticks or 0) + 1
+    -- 35 seconds at a 100 ms timer. Worker has its own 25-second timeout and returns ERR for English fallback.
+    if r.ticks >= 350 then
+      log("TIMEOUT request=" .. tostring(n), true)
+      if enabled and r.original then pcall(write_fallback_history, r); speak(r.original, n) end
+      requests[n] = nil
+      -- Keep process launch out of the 100 ms TranslationTick.
+      recovery_requested = true
+    end
+  end
+end
+
+function TranslationTick()
+  touch_session_file()
+  if enabled and #pending > 0 then
+    pending_ticks = pending_ticks + 1
+    -- Narrative uses 300 ms; plugin Notes use a short 100 ms buffer.
+    if pending_ticks >= pending_target_ticks then flush_pending() end
+  end
+  poll_results()
+  expire_requests()
+end
+
+function TranslationRecoveryTick()
+  if not recovery_requested then return end
+  recovery_requested = false
+  local ok, result = pcall(start_worker)
+  if not ok or not result then
+    log("ERROR worker recovery launch failed=" .. tostring(result), true)
+  end
+end
+
+
+function OnPluginClose()
+  set_review_mode_state(false)
+  remove_session_file()
+end
+]]></script>
+</muclient>

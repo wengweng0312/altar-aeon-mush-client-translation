@@ -1,0 +1,32 @@
+持久翻譯快取
+============
+
+檔案
+----
+translation_cache.sqlite3
+
+行為
+----
+- 相同原文、來源語言、目標語言與 cache version 會直接重用本機翻譯。
+- cache hit 不會呼叫 Google prototype 或 Google Cloud API。
+- 只有成功取得的翻譯才會寫入；錯誤及英文 fallback 不會寫入。
+- 預設最多保留 10,000 筆，定期移除最久未使用的項目。
+- 關閉 Mush-Z 或重啟 worker 後仍會保留。
+
+設定
+----
+translation_cache_enabled：true/false，預設 true。
+translation_cache_max_entries：最大筆數，預設 10000，最低視為 100。
+translation_cache_version：變更數字可建立新的邏輯命名空間，不需立刻刪除舊資料。
+
+清除
+----
+先關閉 Mush-Z 並停止 translation worker，再刪除
+translation_cache.sqlite3。下次啟動會自動建立空資料庫。
+
+隱私
+----
+資料庫會以明文保存送去翻譯的遊戲文字及翻譯結果，包括可能出現在玩家頻道
+或私人訊息中的內容。請勿把 translation_cache.sqlite3 放進公開測試包、Git 或
+問題回報。API key 不會寫入此資料庫。
+

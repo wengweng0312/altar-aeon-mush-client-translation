@@ -17,6 +17,7 @@ accessible_history*
 llama_server.log
 launch_debug.txt
 cloud_translation_probe_report.json
+translation_update.log
 
 # Runtime state and caches
 *.sqlite
@@ -50,6 +51,7 @@ backup_*
 *.bak
 *.un~
 *~
+.test-tmp/
 
 # Sanitized, intentionally versioned examples may use these names
 !cloud_translation_config.example.txt
