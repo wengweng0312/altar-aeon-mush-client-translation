@@ -1403,36 +1403,17 @@ def parse_numbered_room_translation(text, expected_count):
 
 
 def translate_room_units_once(chunks, c):
-    """Translate uncached room units in one request and verify every boundary."""
-    marked = "\n".join("[[ROOM_%d]] %s" % (index, chunk) for index, chunk in enumerate(chunks))
-    prompt = (
-        "Translate every numbered English segment into Chinese. Preserve every "
-        "[[ROOM_n]] marker exactly, preserve order, and output [[ROOM_END]] after "
-        "the final translation. Do not omit, summarize, repeat, or explain.\n"
-        "English:\n%s\n[[ROOM_END]]\nChinese:" % marked
-    )
-    mark_translation_engine("lmt_q4")
-    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
-    response = http_post("/v1/chat/completions", {
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 512,
-        "temperature": 0.0,
-        "repeat_penalty": 1.1,
-        "stream": False,
-    }, timeout)
-    choices = response.get("choices") or []
-    if not choices:
-        raise RuntimeError("ROOM_UNIT_NO_CHOICES")
-    translated = ((choices[0].get("message") or {}).get("content") or "").strip()
-    parsed = parse_numbered_room_translation(translated, len(chunks))
-    if parsed is None:
-        raise RuntimeError("ROOM_UNIT_MARKERS_MISSING")
-    for source, result in zip(chunks, parsed):
+    """Translate each room unit independently; LMT does not reliably retain markers."""
+    parsed = []
+    for source in chunks:
+        result = completion_once(source, c, 256, len(source) >= 180, True)
+        result = " ".join(result.splitlines()).strip()
         ok, reason = translation_sanity_ok(source, result)
         if not ok:
             raise RuntimeError("ROOM_UNIT_SANITY_" + reason)
         if not any("\u3400" <= char <= "\u9fff" for char in result):
             raise RuntimeError("ROOM_UNIT_UNTRANSLATED")
+        parsed.append(result)
     return parsed
 
 
@@ -1671,10 +1652,18 @@ def translate_mixed_deterministic_block(text, c):
         try:
             output.append(translate_piece(block, c, force_robust=len(block) >= 180))
         except Exception as error:
-            # A failed semantic fragment falls back to its complete English
-            # source without discarding deterministic rewards around it.
             log("mixed fragment fallback: %r" % error, True)
-            output.append(block)
+            repaired = []
+            for chunk in semantic_display_chunks(block):
+                try:
+                    repaired.append(translate_piece(
+                        chunk, c, depth=1, force_robust=len(chunk) >= 180,
+                        force_simple=True, allow_cloud=False,
+                    ))
+                except Exception as chunk_error:
+                    log("mixed unit fallback: %r source=%r" % (chunk_error, chunk[:160]), True)
+                    repaired.append(chunk)
+            output.append("\n".join(repaired))
         model_buffer[:] = []
 
     for line in lines:

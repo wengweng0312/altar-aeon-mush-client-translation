@@ -74,6 +74,9 @@ def main() -> None:
         "[[ROOM_0]] 標題\n[[ROOM_2]] 少了一段", 3
     ) is None
     worker_source = WORKER.read_text(encoding="utf-8-sig")
+    assert "LMT does not reliably retain markers" in worker_source
+    assert "for source in chunks:" in worker_source
+    assert 'output.append("\\n".join(repaired))' in worker_source
     assert 'output = [" ".join(prefix_translation.splitlines()).strip()]' not in worker_source
     assert "output = [line.strip() for line in prefix_translation.splitlines() if line.strip()]" in worker_source
     print("ROOM_ALIGNMENT_OK units=4 malformed_marker_safe=yes")
