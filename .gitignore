@@ -1,0 +1,56 @@
+# Secrets and user-specific configuration
+*api_key*
+*token*
+translate_api.txt
+cloud_translation_config.txt
+backend_choice.json
+
+# Private player data and generated logs
+logs/
+**/logs/
+inbox/
+outbox/
+speech_inbox/
+accessible_history*
+*translation_trace*.log
+*worker*.log
+llama_server.log
+launch_debug.txt
+cloud_translation_probe_report.json
+
+# Runtime state and caches
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+worker.lock
+mush_session_*.alive
+__pycache__/
+*.py[cod]
+
+# Models, runtimes, generated packages, and binaries
+*.gguf
+lmt_runtime/
+runtime/
+runtime_madlad/
+release/
+*.zip
+*.7z
+*.exe
+*.dll
+
+# Local MUSHclient state
+*.mcl
+*-state.xml
+MUSHclient.ini
+
+# Backups and editor leftovers
+backup_*
+*.backup_*
+*.bak
+*.un~
+*~
+
+# Sanitized, intentionally versioned examples may use these names
+!cloud_translation_config.example.txt
+!translation_config.example.json
