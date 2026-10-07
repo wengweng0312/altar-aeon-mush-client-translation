@@ -13,8 +13,10 @@
  <alias match="translation_history_next_review" enabled="y" script="TranslationHistoryNextReview" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_top_review" enabled="y" script="TranslationHistoryTopReview" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_bottom_review" enabled="y" script="TranslationHistoryBottomReview" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_reveal_current_original" enabled="y" script="TranslationRevealCurrentOriginal" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_block_diagnostic" enabled="y" script="SpeakBlockDiagnostic" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_cache_clear_recent" enabled="y" script="ClearRecentTranslationCache" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_update_test" enabled="y" script="TestAutomaticUpdatePrompt" omit_from_output="y" omit_from_command_history="y" />
 
 </aliases>
 <timers>
@@ -171,6 +173,9 @@ local function write_review_entry(entry)
   local tmp = review_entry_file .. ".tmp"
   local f = io.open(tmp, "wb")
   if not f then return end
+  if type(entry) == "table" and (entry.review_kind == "quest" or entry.review_kind == "job" or entry.review_kind == "skills") then
+    f:write(string.char(30) .. "TMREVIEW:" .. entry.review_kind .. string.char(30))
+  end
   f:write(text); f:close()
   os.remove(review_entry_file)
   os.rename(tmp, review_entry_file)
@@ -195,28 +200,28 @@ local function history_trim()
     unicode_history_pos = math.max(0, unicode_history_pos - 1)
   end
 end
-local function history_add(text)
+local function history_add(text, review_kind)
   if type(text) ~= "string" or text == "" then return end
   local follow = history_follow_tail or #unicode_history == 0
   unicode_history_seq = unicode_history_seq + 1
-  local entry = {id=unicode_history_seq, text=text}
+  local entry = {id=unicode_history_seq, text=text, review_kind=review_kind}
   unicode_history[#unicode_history + 1] = entry
   history_trim()
   if follow then unicode_history_pos = #unicode_history end
   return entry.id
 end
-local function history_insert_before(anchor_id, texts)
+local function history_insert_before(anchor_id, texts, review_kind)
   if type(texts) ~= "table" or #texts == 0 then return end
   local selected_id = unicode_history[unicode_history_pos] and unicode_history[unicode_history_pos].id or nil
   local at = nil
   for i, entry in ipairs(unicode_history) do if entry.id == anchor_id then at = i; break end end
   if not at then
-    for _, text in ipairs(texts) do history_add(text) end
+    for _, text in ipairs(texts) do history_add(text, review_kind) end
     return
   end
   for offset, text in ipairs(texts) do
     unicode_history_seq = unicode_history_seq + 1
-    table.insert(unicode_history, at + offset - 1, {id=unicode_history_seq, text=text})
+    table.insert(unicode_history, at + offset - 1, {id=unicode_history_seq, text=text, review_kind=review_kind})
   end
   history_trim()
   if selected_id then
@@ -267,6 +272,59 @@ end
 function TranslationHistoryBottomReview()
   if #unicode_history == 0 then speak("No translation history."); return end
   unicode_history_pos=#unicode_history; history_follow_tail = true; history_review(unicode_history[unicode_history_pos])
+end
+
+local function remove_revealed_originals()
+  local selected_id = unicode_history[unicode_history_pos] and unicode_history[unicode_history_pos].id or nil
+  for i = #unicode_history, 1, -1 do
+    if unicode_history[i].revealed_original then
+      table.remove(unicode_history, i)
+      if unicode_history_pos > i then unicode_history_pos = unicode_history_pos - 1 end
+    end
+  end
+  if selected_id then
+    for i, entry in ipairs(unicode_history) do
+      if entry.id == selected_id then unicode_history_pos = i; break end
+    end
+  end
+end
+
+function TranslationRevealCurrentOriginal()
+  if not review_mode or #unicode_history == 0 then return end
+  local current = unicode_history[unicode_history_pos]
+  if not current or current.revealed_original then return end
+  local _, english = tostring(current.text or ""):match("^(.-)%s+|%s+([%s%S]*)$")
+  english = tostring(english or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if english == "" then return end
+  local source_id = current.id
+  remove_revealed_originals()
+  local source_pos = nil
+  for i, entry in ipairs(unicode_history) do
+    if entry.id == source_id then source_pos = i; break end
+  end
+  if not source_pos then return end
+  local insert_at = source_pos + 1
+  for i = source_pos + 1, #unicode_history do
+    local value = tostring(unicode_history[i].text or "")
+    if value:match("^出口：") or value:match("^門：") then
+      insert_at = i
+      break
+    end
+  end
+  unicode_history_seq = unicode_history_seq + 1
+  local revealed = {
+    id=unicode_history_seq,
+    text=english:gsub("[\r\n]+", " "):gsub("%s+", " "),
+    revealed_original=true,
+    source_id=source_id
+  }
+  table.insert(unicode_history, insert_at, revealed)
+  history_trim()
+  for i, entry in ipairs(unicode_history) do
+    if entry.id == revealed.id then unicode_history_pos = i; break end
+  end
+  history_follow_tail = false
+  write_review_entry(revealed)
 end
 function SpeakBlockDiagnostic()
   speak("block diagnostic. starts "..block_diag.starts..", skills "..block_diag.skills..", inventory "..block_diag.inventory..
@@ -334,6 +392,48 @@ local function start_update_check()
   return ok and true or false
 end
 
+local function start_automatic_update(test_only)
+  local helper = base .. "\\translation_update_helper.ps1"
+  local windir = os.getenv("WINDIR") or "C:\\Windows"
+  local powershell = windir .. "\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe"
+  if not file_exists(helper) or not file_exists(powershell) then
+    utils.msgbox(
+      "The automatic update helper was not found. Run translation_bridge\\update_translation.cmd manually.",
+      "Translation Update",
+      "ok",
+      "!",
+      1
+    )
+    return false
+  end
+  local params = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' .. helper .. '"'
+  if test_only then params = params .. ' -TestOnly' end
+  -- Keep the entire automatic update in the background so no console window
+  -- can steal focus before or after ExitClient runs.
+  local ok, err = utils.shellexecute(powershell, params, base, "open", 0)
+  if not ok then
+    log("automatic update helper launch failed=" .. tostring(err), true)
+    utils.msgbox("The automatic update helper could not be started. MUSHclient will remain open.", "Translation Update", "ok", "!", 1)
+    return false
+  end
+  speak("The update helper has started. Closing MUSHclient.")
+  DoCommand("ExitClient")
+  return true
+end
+
+function TestAutomaticUpdatePrompt()
+  local answer = utils.msgbox(
+    "This tests the automatic update handoff.\r\n\r\n" ..
+    "Choosing Yes will close MUSHclient normally and open the current NVDA add-on package. " ..
+    "The test will not download or replace translation files.\r\n\r\nStart the test?",
+    "Translation Update Test",
+    "yesno",
+    "?",
+    2
+  )
+  if answer == "yes" then start_automatic_update(true) end
+end
+
 local function poll_update_notice()
   if update_notice_spoken then return end
   local f = io.open(update_status_file, "rb")
@@ -344,14 +444,16 @@ local function poll_update_notice()
   if status == "update" then
     local version = text:match("version=([^\r\n]+)") or "new"
     update_notice_spoken = true
-    utils.msgbox(
-      "發現翻譯更新版本 " .. version .. "。\r\n\r\n" ..
-      "請先關閉 MUSHclient，再執行 worlds\\plugins\\translation_bridge\\update_translation.cmd。",
-      "翻譯更新",
-      "ok",
-      "!",
-      1
+    local answer = utils.msgbox(
+      "Translation update " .. version .. " is available.\r\n\r\n" ..
+      "Close MUSHclient now and install the update automatically?\r\n\r\n" ..
+      "Choose No to keep the current version and update manually later.",
+      "Translation Update",
+      "yesno",
+      "?",
+      2
     )
+    if answer == "yes" then start_automatic_update(false) end
   elseif status == "current" or status == "error" then
     update_notice_spoken = true
   end
@@ -428,6 +530,7 @@ function OnPluginInstall()
   Accelerator("ctrl+alt+shift+pagedown", "translation_history_next_review")
   Accelerator("ctrl+alt+shift+home", "translation_history_top_review")
   Accelerator("ctrl+alt+shift+end", "translation_history_bottom_review")
+  Accelerator("ctrl+alt+shift+y", "translation_reveal_current_original")
   Accelerator("ctrl+shift+f8", "translation_block_diagnostic")
   Accelerator("ctrl+shift+delete", "translation_cache_clear_recent")
   tm_debug("TM DEBUG INSTALL: Translation Mode 0.6.0 loaded")
@@ -955,39 +1058,65 @@ end
 local function write_accessible_history(original, translated, categories, anchor_id)
   if accessible_history_mode == "off" then return end
   local entries = collect_accessible_history(original, translated)
-  -- Quest output is already split deterministically into semantic rows. Store
-  -- every English field above the matching set of Chinese fields. Class skill
-  -- tables deliberately continue through the ordinary expander below so each
-  -- English skill row stays immediately above its matching Chinese row.
-  local source_text = tostring(original or "")
-  local grouped_rows = source_text:match("^%s*Quest Name:%s*")
-  if grouped_rows then
-    local english_entries, chinese_entries = {}, {}
-    for _, entry in ipairs(entries) do
-      local zh, en = tostring(entry or ""):match("^(.-)%s+|%s+([%s%S]*)$")
-      zh = tostring(zh or ""):gsub("[\r\n]+", " "):gsub("%s+", " ")
-        :gsub("^%s+", ""):gsub("%s+$", "")
-      en = tostring(en or ""):gsub("[\r\n]+", " "):gsub("%s+", " ")
-        :gsub("^%s+", ""):gsub("%s+$", "")
-      if en ~= "" then english_entries[#english_entries + 1] = en end
-      if zh ~= "" then chinese_entries[#chinese_entries + 1] = zh end
+  local function review_kind_for(value, request_categories)
+    value = tostring(value or "")
+    if value:match("^%s*Quest Name:%s*")
+      or value:match("^%s*Magic Quest Name:%s*")
+      or value:match("^%s*Information for quest%s+%d+:%s*")
+      or value:match("^%s*You have discovered or been given the following quests:%s*")
+      or value:match("^%s*There are the following unfinished quests nearby:%s*")
+      or value:match("^%s*.-following quests are available to you at this time:%s*")
+      or value:match("^%s*Sorry, unknown option for 'quest' command%.") then
+      return "quest"
     end
-    entries = {}
-    for _, en in ipairs(english_entries) do entries[#entries + 1] = en end
-    for _, zh in ipairs(chinese_entries) do entries[#entries + 1] = zh end
-  else
-    entries = expand_accessible_history_entries(entries)
+    if value:match("^%s*Currently accepted jobs:%s*")
+      or value:match("^%s*Information for job%s+%d+:%s*")
+      or value:match("^%s*Job Name:%s*") then
+      return "job"
+    end
+    if value:match("^%s*You know the following skills:")
+      or value:match("^%s*You have%s+%d+%s+practices?%s+left%.") then
+      return "skills"
+    end
+    for _, category in ipairs(request_categories or {}) do
+      if category == "skills" then return "skills" end
+    end
+    return nil
   end
-  if anchor_id then history_insert_before(anchor_id, entries)
-  else for _, entry in ipairs(entries) do history_add(entry) end end
+  local review_kind = review_kind_for(original, categories)
+  -- Keep every semantic row bilingual in storage.  The NVDA presentation
+  -- layer exposes only the Chinese half and Ctrl+Shift+Y retrieves the hidden
+  -- English half.  Expanding this into separate English and Chinese history
+  -- rows destroys that relationship and makes pure-English rows visible.
+  if anchor_id then history_insert_before(anchor_id, entries, review_kind)
+  else for _, entry in ipairs(entries) do history_add(entry, review_kind) end end
   block_diag.history = block_diag.history + #entries
 end
 
 local function write_fallback_history(req)
   if not req or not req.original or req.skip_history or accessible_history_mode == "off" then return end
   local entry = "English fallback: " .. tostring(req.original)
-  if req.history_anchor_id then history_insert_before(req.history_anchor_id, {entry})
-  else history_add(entry) end
+  local review_kind = nil
+  local value = tostring(req.original or "")
+  if value:match("^%s*Quest Name:%s*") or value:match("^%s*Magic Quest Name:%s*")
+    or value:match("^%s*Information for quest%s+%d+:%s*")
+    or value:match("^%s*You have discovered or been given the following quests:%s*")
+    or value:match("^%s*There are the following unfinished quests nearby:%s*") then
+    review_kind = "quest"
+  elseif value:match("^%s*Currently accepted jobs:%s*")
+    or value:match("^%s*Information for job%s+%d+:%s*")
+    or value:match("^%s*Job Name:%s*") then
+    review_kind = "job"
+  elseif value:match("^%s*You know the following skills:")
+    or value:match("^%s*You have%s+%d+%s+practices?%s+left%.") then
+    review_kind = "skills"
+  else
+    for _, category in ipairs(req.categories or {}) do
+      if category == "skills" then review_kind = "skills"; break end
+    end
+  end
+  if req.history_anchor_id then history_insert_before(req.history_anchor_id, {entry}, review_kind)
+  else history_add(entry, review_kind) end
   block_diag.history = block_diag.history + 1
 end
 

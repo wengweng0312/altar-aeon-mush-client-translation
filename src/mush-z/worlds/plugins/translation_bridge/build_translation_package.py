@@ -44,6 +44,7 @@ TOP_FILES = (
     "ONLY_PATCH_README_zh-TW.txt",
     "update_translation.cmd",
     "update_translation.ps1",
+    "translation_update_helper.ps1",
     "translation_version.json",
     "check_translation_update.ps1",
 )
@@ -63,6 +64,7 @@ PATCH_FILES = (
     "ONLY_PATCH_README_zh-TW.txt",
     "update_translation.cmd",
     "update_translation.ps1",
+    "translation_update_helper.ps1",
     "translation_version.json",
     "check_translation_update.ps1",
 )

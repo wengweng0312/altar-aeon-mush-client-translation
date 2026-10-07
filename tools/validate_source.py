@@ -58,6 +58,9 @@ def validate_python() -> None:
     updater = BRIDGE / "update_translation.ps1"
     if not updater.read_bytes().startswith(b"\xef\xbb\xbf"):
         fail("update_translation.ps1 must use UTF-8 BOM for Windows PowerShell 5")
+    helper = BRIDGE / "translation_update_helper.ps1"
+    if not helper.read_bytes().startswith(b"\xef\xbb\xbf"):
+        fail("translation_update_helper.ps1 must use UTF-8 BOM for Windows PowerShell 5")
     checker = BRIDGE / "check_translation_update.ps1"
     if not checker.read_bytes().startswith(b"\xef\xbb\xbf"):
         fail("check_translation_update.ps1 must use UTF-8 BOM for Windows PowerShell 5")
