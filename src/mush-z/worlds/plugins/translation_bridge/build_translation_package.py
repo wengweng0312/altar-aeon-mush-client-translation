@@ -45,6 +45,7 @@ TOP_FILES = (
     "update_translation.cmd",
     "update_translation.ps1",
     "translation_version.json",
+    "check_translation_update.ps1",
 )
 PATCH_FILES = (
     "translation_worker.py",
@@ -63,6 +64,7 @@ PATCH_FILES = (
     "update_translation.cmd",
     "update_translation.ps1",
     "translation_version.json",
+    "check_translation_update.ps1",
 )
 TREE_DIRS = ("runtime", "lmt_runtime")
 BANNED_PARTS = (

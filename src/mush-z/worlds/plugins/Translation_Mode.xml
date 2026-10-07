@@ -40,8 +40,10 @@ outbox = base .. "/outbox"
 worker = base .. "/translation_worker.py"
 logfile = GetInfo(67) .. "/translation_plugin.log"
 configfile = base .. "/translation_config.json"
+update_status_file = base .. "/translation_update_status.txt"
 debug_logging = false
 accessible_history_mode = "all"
+update_notice_spoken = false
 
 local unicode_history = {}
 local unicode_history_pos = 0
@@ -318,6 +320,36 @@ local function file_exists(path)
   return false
 end
 
+local function start_update_check()
+  os.remove(update_status_file)
+  local script = base .. "\\check_translation_update.ps1"
+  local version = base .. "\\translation_version.json"
+  local windir = os.getenv("WINDIR") or "C:\\Windows"
+  local powershell = windir .. "\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe"
+  if not file_exists(script) or not file_exists(version) or not file_exists(powershell) then return false end
+  local params = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' ..
+    script .. '" -VersionFile "' .. version .. '" -StatusFile "' .. update_status_file .. '"'
+  local ok, err = utils.shellexecute(powershell, params, base, "open", 0)
+  if not ok then log("update check launch failed=" .. tostring(err)) end
+  return ok and true or false
+end
+
+local function poll_update_notice()
+  if update_notice_spoken then return end
+  local f = io.open(update_status_file, "rb")
+  if not f then return end
+  local text = f:read("*a") or ""
+  f:close()
+  local status = text:match("status=([^\r\n]+)")
+  if status == "update" then
+    local version = text:match("version=([^\r\n]+)") or "new"
+    update_notice_spoken = true
+    Execute("tts_note Translation update " .. version .. " is available. Close MUSHclient, then run update translation dot c m d.")
+  elseif status == "current" or status == "error" then
+    update_notice_spoken = true
+  end
+end
+
 local function start_worker()
   if not file_exists(worker) then
     log("ERROR worker file not found=" .. tostring(worker), true)
@@ -374,6 +406,7 @@ function OnPluginInstall()
   touch_session_file()
   debug_logging = load_debug_setting()
   accessible_history_mode = load_accessible_history_mode()
+  start_update_check()
   log("Translation Mode 0.8.1 THREE MODE REVIEW installed", true)
   log("base=" .. tostring(base))
   log("worker=" .. tostring(worker))
@@ -1032,6 +1065,7 @@ function TranslationTick()
 end
 
 function TranslationRecoveryTick()
+  poll_update_notice()
   if not recovery_requested then return end
   recovery_requested = false
   local ok, result = pcall(start_worker)

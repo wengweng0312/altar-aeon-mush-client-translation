@@ -18,6 +18,8 @@ llama_server.log
 launch_debug.txt
 cloud_translation_probe_report.json
 translation_update.log
+translation_update_status.txt
+translation_update_status.txt.tmp
 
 # Runtime state and caches
 *.sqlite

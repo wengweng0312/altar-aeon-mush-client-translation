@@ -33,3 +33,19 @@ jobs:
         run: |
           $version = "${{ inputs.version }}".TrimStart("v")
           gh release create "v$version" dist/* --title "Mush-Z Translation Mode v$version" --generate-notes
+
+      - name: Publish updater manifest
+        shell: powershell
+        run: |
+          $version = "${{ inputs.version }}".TrimStart("v")
+          Copy-Item -LiteralPath "dist\update_manifest.json" -Destination "update\latest.json" -Force
+          git checkout -- "src/mush-z/worlds/plugins/translation_bridge/translation_version.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "update/latest.json"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Publish updater manifest for v$version"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          }
