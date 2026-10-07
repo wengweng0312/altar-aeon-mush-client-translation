@@ -344,7 +344,14 @@ local function poll_update_notice()
   if status == "update" then
     local version = text:match("version=([^\r\n]+)") or "new"
     update_notice_spoken = true
-    Execute("tts_note Translation update " .. version .. " is available. Close MUSHclient, then run update translation dot c m d.")
+    utils.msgbox(
+      "發現翻譯更新版本 " .. version .. "。\r\n\r\n" ..
+      "請先關閉 MUSHclient，再執行 worlds\\plugins\\translation_bridge\\update_translation.cmd。",
+      "翻譯更新",
+      "ok",
+      "!",
+      1
+    )
   elseif status == "current" or status == "error" then
     update_notice_spoken = true
   end
