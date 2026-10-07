@@ -36,7 +36,8 @@ Mush-Z 本體由使用者自行下載與安裝。本專案的 **Full** 僅代表
 - `src/mush-z/`：MUSHclient plugins、翻譯 worker、結構化規則與打包工具。
 - `src/nvda-addon/`：NVDA 中文檢閱附加元件的可閱讀原始內容。
 - `tools/validate_source.py`：不啟動模型的靜態安全與語法檢查。
-- `update/latest.json`：updater 使用的公開版本資訊；尚未發布時保持 `published: false`。
+- `update/manifest.example.json`：updater 版本資訊格式範例。正式發布時會把
+  `update_manifest.json` 與 Only Patch 一起放進 GitHub Release。
 
 本機實際使用的 `cloud_translation_config.txt` 不受版本控制。第一次部署時，請複製
 `cloud_translation_config.example.txt`，再於玩家自己的電腦填入金鑰。

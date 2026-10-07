@@ -37,8 +37,10 @@ runtime_madlad/
 release/
 *.zip
 *.7z
+*.nvda-addon
 *.exe
 *.dll
+dist/
 
 # Local MUSHclient state
 *.mcl

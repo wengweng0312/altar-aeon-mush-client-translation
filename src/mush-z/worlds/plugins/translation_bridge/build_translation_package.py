@@ -122,37 +122,39 @@ bad = [name for name in names if banned(name)]
 if bad:
     raise SystemExit("Banned private/generated path selected: %s" % bad[0])
 
-config = json.loads((BRIDGE / "translation_config.json").read_text(encoding="utf-8"))
-config["translation_cache_version"] = 13
-config.pop("backend", None)
-config.pop("scores_tokens_per_second", None)
-config_bytes = (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+config_bytes = cloud_config_bytes = glossary_bytes = None
+if MODE == "full":
+    config = json.loads((BRIDGE / "translation_config.json").read_text(encoding="utf-8"))
+    config["translation_cache_version"] = 13
+    config.pop("backend", None)
+    config.pop("scores_tokens_per_second", None)
+    config_bytes = (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
-# Never package a user's live API key. Every release archive starts offline and
-# asks its recipient to provide their own credentials locally.
-cloud_lines = []
-for line in (BRIDGE / "cloud_translation_config.txt").read_text(encoding="utf-8-sig").splitlines():
-    stripped = line.strip().lower()
-    if stripped.startswith("service="):
-        cloud_lines.append("service=0")
-    elif stripped.startswith(("api_key=", "azure_api_key=", "google_api_key=", "deepl_api_key=")):
-        cloud_lines.append(line.split("=", 1)[0] + "=")
-    elif stripped.startswith("azure_region="):
-        cloud_lines.append("azure_region=global")
-    elif stripped.startswith("allow_private_messages="):
-        cloud_lines.append("allow_private_messages=0")
+    # Never package a user's live API key. Every Full archive starts offline
+    # and asks its recipient to provide their own credentials locally.
+    cloud_lines = []
+    for line in (BRIDGE / "cloud_translation_config.txt").read_text(encoding="utf-8-sig").splitlines():
+        stripped = line.strip().lower()
+        if stripped.startswith("service="):
+            cloud_lines.append("service=0")
+        elif stripped.startswith(("api_key=", "azure_api_key=", "google_api_key=", "deepl_api_key=")):
+            cloud_lines.append(line.split("=", 1)[0] + "=")
+        elif stripped.startswith("azure_region="):
+            cloud_lines.append("azure_region=global")
+        elif stripped.startswith("allow_private_messages="):
+            cloud_lines.append("allow_private_messages=0")
+        else:
+            cloud_lines.append(line)
+    cloud_config_bytes = ("\n".join(cloud_lines).rstrip() + "\n").encode("utf-8")
+
+    glossary_path = BRIDGE / "skill_glossary_zh_tw.json"
+    if glossary_path.is_file():
+        glossary = json.loads(glossary_path.read_text(encoding="utf-8"))
+        if not isinstance(glossary, dict):
+            raise SystemExit("skill_glossary_zh_tw.json must contain a JSON object")
     else:
-        cloud_lines.append(line)
-cloud_config_bytes = ("\n".join(cloud_lines).rstrip() + "\n").encode("utf-8")
-
-glossary_path = BRIDGE / "skill_glossary_zh_tw.json"
-if glossary_path.is_file():
-    glossary = json.loads(glossary_path.read_text(encoding="utf-8"))
-    if not isinstance(glossary, dict):
-        raise SystemExit("skill_glossary_zh_tw.json must contain a JSON object")
-else:
-    glossary = {}
-glossary_bytes = (json.dumps(glossary, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        glossary = {}
+    glossary_bytes = (json.dumps(glossary, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 manifest = []

@@ -1,0 +1,35 @@
+name: Release Only Patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version number, for example 1.0.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build and validate Only Patch
+        run: python tools/build_release.py --version "${{ inputs.version }}"
+
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ inputs.version }}".TrimStart("v")
+          gh release create "v$version" dist/* --title "Mush-Z Translation Mode v$version" --generate-notes

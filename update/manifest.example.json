@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "published": true,
+  "version": "1.0.0",
+  "patch_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/download/v1.0.0/Mush-Z_Translation_Mode_Only_Patch_v1.0.0.zip",
+  "sha256": "replace-with-the-64-character-sha256-of-the-patch-zip",
+  "release_notes_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/tag/v1.0.0"
+}
