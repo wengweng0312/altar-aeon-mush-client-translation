@@ -48,8 +48,9 @@ def main() -> int:
                 archive.write(path, path.relative_to(ADDON_SOURCE).as_posix())
 
     version_path = BRIDGE / "translation_version.json"
+    channel = "beta" if "-" in version else "stable"
     version_path.write_text(
-        json.dumps({"version": version, "channel": "stable"}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps({"version": version, "channel": channel}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     asset_name = f"Mush-Z_Translation_Mode_Only_Patch_v{version}.zip"
