@@ -1,0 +1,8256 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-10-08T14:31:59.492601+00:00",
+  "source": "Official Alter Aeon class spell and skill lists",
+  "source_base_url": "https://alteraeon.com:8081/spells/",
+  "entry_count": 434,
+  "reviewed_translation_count": 434,
+  "entries": [
+    {
+      "english": "advanced antidotes",
+      "traditional_chinese": "進階解毒劑",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=advanced+antidotes"
+      ]
+    },
+    {
+      "english": "advanced poisons",
+      "traditional_chinese": "進階毒藥學",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=advanced+poisons"
+      ]
+    },
+    {
+      "english": "advanced tactics",
+      "traditional_chinese": "進階戰術",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=advanced+tactics"
+      ]
+    },
+    {
+      "english": "afflict",
+      "traditional_chinese": "降災",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 1
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=afflict"
+      ]
+    },
+    {
+      "english": "agility",
+      "traditional_chinese": "靈巧",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=agility"
+      ]
+    },
+    {
+      "english": "ancient oak",
+      "traditional_chinese": "遠古橡樹",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ancient+oak"
+      ]
+    },
+    {
+      "english": "angel ravage",
+      "traditional_chinese": "天使浩劫",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 34
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=angel+ravage"
+      ]
+    },
+    {
+      "english": "animal lore",
+      "traditional_chinese": "動物知識",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=animal+lore"
+      ]
+    },
+    {
+      "english": "animate dead",
+      "traditional_chinese": "操控死者",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=animate+dead"
+      ]
+    },
+    {
+      "english": "area heal",
+      "traditional_chinese": "群體治療",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 33
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=area+heal"
+      ]
+    },
+    {
+      "english": "area refresh",
+      "traditional_chinese": "群體恢復",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 22
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=area+refresh"
+      ]
+    },
+    {
+      "english": "armor aegis",
+      "traditional_chinese": "護甲神盾",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 3
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=armor+aegis"
+      ]
+    },
+    {
+      "english": "armored skin",
+      "traditional_chinese": "護甲皮膚",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=armored+skin"
+      ]
+    },
+    {
+      "english": "attract",
+      "traditional_chinese": "吸引",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=attract"
+      ]
+    },
+    {
+      "english": "backstab",
+      "traditional_chinese": "背刺",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=backstab"
+      ]
+    },
+    {
+      "english": "ball lightning",
+      "traditional_chinese": "球狀閃電",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 25
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ball+lightning"
+      ]
+    },
+    {
+      "english": "bash",
+      "traditional_chinese": "猛擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bash"
+      ]
+    },
+    {
+      "english": "battle tactics",
+      "traditional_chinese": "戰鬥戰術",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=battle+tactics"
+      ]
+    },
+    {
+      "english": "berserking",
+      "traditional_chinese": "狂暴",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=berserking"
+      ]
+    },
+    {
+      "english": "bind alignment",
+      "traditional_chinese": "束縛陣營",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 28
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bind+alignment"
+      ]
+    },
+    {
+      "english": "bind demon",
+      "traditional_chinese": "束縛惡魔",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 40
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bind+demon"
+      ]
+    },
+    {
+      "english": "biological salves",
+      "traditional_chinese": "生物藥膏",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=biological+salves"
+      ]
+    },
+    {
+      "english": "bird call",
+      "traditional_chinese": "鳥鳴召喚",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bird+call"
+      ]
+    },
+    {
+      "english": "blaze",
+      "traditional_chinese": "烈焰",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 38
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=blaze"
+      ]
+    },
+    {
+      "english": "bless",
+      "traditional_chinese": "祝福",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 6
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bless"
+      ]
+    },
+    {
+      "english": "blizzard",
+      "traditional_chinese": "暴風雪",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=blizzard"
+      ]
+    },
+    {
+      "english": "blood bottling",
+      "traditional_chinese": "血液裝瓶",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=blood+bottling"
+      ]
+    },
+    {
+      "english": "blood rage",
+      "traditional_chinese": "血之狂怒",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=blood+rage"
+      ]
+    },
+    {
+      "english": "blood sacrifice",
+      "traditional_chinese": "血祭",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 3
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=blood+sacrifice"
+      ]
+    },
+    {
+      "english": "bloodbond",
+      "traditional_chinese": "血之契約",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bloodbond"
+      ]
+    },
+    {
+      "english": "bloodcasting",
+      "traditional_chinese": "血魔法",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bloodcasting"
+      ]
+    },
+    {
+      "english": "bloodletting stab",
+      "traditional_chinese": "放血刺擊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bloodletting+stab"
+      ]
+    },
+    {
+      "english": "bloodmist",
+      "traditional_chinese": "血霧",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bloodmist"
+      ]
+    },
+    {
+      "english": "bloom",
+      "traditional_chinese": "綻放",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bloom"
+      ]
+    },
+    {
+      "english": "bolster",
+      "traditional_chinese": "鼓舞",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 9
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bolster"
+      ]
+    },
+    {
+      "english": "bone armor",
+      "traditional_chinese": "骨甲",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+armor"
+      ]
+    },
+    {
+      "english": "bone arrow",
+      "traditional_chinese": "骨箭",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+arrow"
+      ]
+    },
+    {
+      "english": "bone blade",
+      "traditional_chinese": "骨刃",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+blade"
+      ]
+    },
+    {
+      "english": "bone dragon",
+      "traditional_chinese": "骨龍",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+dragon"
+      ]
+    },
+    {
+      "english": "bone fortress",
+      "traditional_chinese": "骨之堡壘",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+fortress"
+      ]
+    },
+    {
+      "english": "bone guardian",
+      "traditional_chinese": "骸骨守衛",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+guardian"
+      ]
+    },
+    {
+      "english": "bone prison",
+      "traditional_chinese": "骨牢",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+prison"
+      ]
+    },
+    {
+      "english": "bone shield",
+      "traditional_chinese": "骨盾",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bone+shield"
+      ]
+    },
+    {
+      "english": "bravery",
+      "traditional_chinese": "勇氣",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 12
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=bravery"
+      ]
+    },
+    {
+      "english": "brawn",
+      "traditional_chinese": "強健",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brawn"
+      ]
+    },
+    {
+      "english": "breath of life",
+      "traditional_chinese": "生命氣息",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 31
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=breath+of+life"
+      ]
+    },
+    {
+      "english": "brew antidote",
+      "traditional_chinese": "調製解毒劑",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+antidote"
+      ]
+    },
+    {
+      "english": "brew focus",
+      "traditional_chinese": "調製專注藥劑",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage alchemy"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+focus"
+      ]
+    },
+    {
+      "english": "brew infusion",
+      "traditional_chinese": "調製浸劑",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+infusion"
+      ]
+    },
+    {
+      "english": "brew poison",
+      "traditional_chinese": "調製毒藥",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+poison"
+      ]
+    },
+    {
+      "english": "brew potion",
+      "traditional_chinese": "調製藥水",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage alchemy"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+potion"
+      ]
+    },
+    {
+      "english": "brew salve",
+      "traditional_chinese": "調製藥膏",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+salve"
+      ]
+    },
+    {
+      "english": "brew unguent",
+      "traditional_chinese": "調製軟膏",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 12
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+unguent"
+      ]
+    },
+    {
+      "english": "brew warpaint",
+      "traditional_chinese": "調製戰妝",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=brew+warpaint"
+      ]
+    },
+    {
+      "english": "burning hands",
+      "traditional_chinese": "燃燒之手",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 6
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=burning+hands"
+      ]
+    },
+    {
+      "english": "call animal",
+      "traditional_chinese": "召喚動物",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+animal"
+      ]
+    },
+    {
+      "english": "call legendary raptor",
+      "traditional_chinese": "召喚傳奇猛禽",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 40
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+legendary+raptor"
+      ]
+    },
+    {
+      "english": "call lightning",
+      "traditional_chinese": "召喚閃電",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+lightning"
+      ]
+    },
+    {
+      "english": "call squirrel",
+      "traditional_chinese": "召喚松鼠",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+squirrel"
+      ]
+    },
+    {
+      "english": "call thunder",
+      "traditional_chinese": "召喚雷霆",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+thunder"
+      ]
+    },
+    {
+      "english": "call waterborn",
+      "traditional_chinese": "召喚水生者",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=call+waterborn"
+      ]
+    },
+    {
+      "english": "calm animal",
+      "traditional_chinese": "安撫動物",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=calm+animal"
+      ]
+    },
+    {
+      "english": "carve fetish",
+      "traditional_chinese": "雕刻法器",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=carve+fetish"
+      ]
+    },
+    {
+      "english": "carve runes",
+      "traditional_chinese": "雕刻符文",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 5
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=carve+runes"
+      ]
+    },
+    {
+      "english": "carve totem",
+      "traditional_chinese": "雕刻圖騰",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 3
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=carve+totem"
+      ]
+    },
+    {
+      "english": "carve weapon",
+      "traditional_chinese": "雕刻武器",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=carve+weapon"
+      ]
+    },
+    {
+      "english": "case",
+      "traditional_chinese": "踩點",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=case"
+      ]
+    },
+    {
+      "english": "celestial audience",
+      "traditional_chinese": "天界謁見",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 30
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=celestial+audience"
+      ]
+    },
+    {
+      "english": "censure demon",
+      "traditional_chinese": "斥責惡魔",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 35
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=censure+demon"
+      ]
+    },
+    {
+      "english": "center",
+      "traditional_chinese": "凝神",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=center"
+      ]
+    },
+    {
+      "english": "chain lightning",
+      "traditional_chinese": "連鎖閃電",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 31
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=chain+lightning"
+      ]
+    },
+    {
+      "english": "chaos hammer",
+      "traditional_chinese": "混沌之錘",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 40
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=chaos+hammer"
+      ]
+    },
+    {
+      "english": "charge",
+      "traditional_chinese": "衝鋒",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=charge"
+      ]
+    },
+    {
+      "english": "chasten",
+      "traditional_chinese": "懲戒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 7
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=chasten"
+      ]
+    },
+    {
+      "english": "chill touch",
+      "traditional_chinese": "寒冷之觸",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 3
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=chill+touch"
+      ]
+    },
+    {
+      "english": "choking cloud",
+      "traditional_chinese": "窒息毒雲",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=choking+cloud"
+      ]
+    },
+    {
+      "english": "clasp of corruption",
+      "traditional_chinese": "腐化之握",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 28
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=clasp+of+corruption"
+      ]
+    },
+    {
+      "english": "clay man",
+      "traditional_chinese": "黏土人",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=clay+man"
+      ]
+    },
+    {
+      "english": "cleave",
+      "traditional_chinese": "順劈",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cleave"
+      ]
+    },
+    {
+      "english": "cloak of darkness",
+      "traditional_chinese": "黑暗斗篷",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cloak+of+darkness"
+      ]
+    },
+    {
+      "english": "cloak of fear",
+      "traditional_chinese": "恐懼斗篷",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cloak+of+fear"
+      ]
+    },
+    {
+      "english": "clobber",
+      "traditional_chinese": "痛擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=clobber"
+      ]
+    },
+    {
+      "english": "clumsiness",
+      "traditional_chinese": "笨拙",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 8
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=clumsiness"
+      ]
+    },
+    {
+      "english": "coffin",
+      "traditional_chinese": "棺木",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=coffin"
+      ]
+    },
+    {
+      "english": "coldfire",
+      "traditional_chinese": "冷焰",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=coldfire"
+      ]
+    },
+    {
+      "english": "color spray",
+      "traditional_chinese": "七彩噴射",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 10
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=color+spray"
+      ]
+    },
+    {
+      "english": "condemnation",
+      "traditional_chinese": "定罪",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 32
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=condemnation"
+      ]
+    },
+    {
+      "english": "cone of cold",
+      "traditional_chinese": "寒冰錐",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 27
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cone+of+cold"
+      ]
+    },
+    {
+      "english": "confusion",
+      "traditional_chinese": "混亂",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 22
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=confusion"
+      ]
+    },
+    {
+      "english": "consecrate armor",
+      "traditional_chinese": "祝聖護甲",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 11
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=consecrate+armor"
+      ]
+    },
+    {
+      "english": "consult demon",
+      "traditional_chinese": "諮詢惡魔",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=consult+demon"
+      ]
+    },
+    {
+      "english": "consume",
+      "traditional_chinese": "吞噬",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=consume"
+      ]
+    },
+    {
+      "english": "continual light",
+      "traditional_chinese": "恆久之光",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 2
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=continual+light"
+      ]
+    },
+    {
+      "english": "contortionism",
+      "traditional_chinese": "柔身術",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief defensive fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=contortionism"
+      ]
+    },
+    {
+      "english": "control weather",
+      "traditional_chinese": "操控天氣",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=control+weather"
+      ]
+    },
+    {
+      "english": "corpsecutter",
+      "traditional_chinese": "屍體切割",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=corpsecutter"
+      ]
+    },
+    {
+      "english": "create tactic",
+      "traditional_chinese": "創建戰術",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=create+tactic"
+      ]
+    },
+    {
+      "english": "crippling strike",
+      "traditional_chinese": "致殘打擊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crippling+strike"
+      ]
+    },
+    {
+      "english": "cross class tactics",
+      "traditional_chinese": "跨職業戰術",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cross+class+tactics"
+      ]
+    },
+    {
+      "english": "cry of victory",
+      "traditional_chinese": "勝利吶喊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cry+of+victory"
+      ]
+    },
+    {
+      "english": "crystal coat",
+      "traditional_chinese": "水晶外衣",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 16
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+coat"
+      ]
+    },
+    {
+      "english": "crystal elemental",
+      "traditional_chinese": "水晶元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 37
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+elemental"
+      ]
+    },
+    {
+      "english": "crystal focusing",
+      "traditional_chinese": "水晶專注",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 24
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+focusing"
+      ]
+    },
+    {
+      "english": "crystal light",
+      "traditional_chinese": "水晶之光",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 2
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+light"
+      ]
+    },
+    {
+      "english": "crystal prison",
+      "traditional_chinese": "水晶監牢",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 33
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+prison"
+      ]
+    },
+    {
+      "english": "crystal shield",
+      "traditional_chinese": "水晶盾",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 20
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+shield"
+      ]
+    },
+    {
+      "english": "crystal skull",
+      "traditional_chinese": "水晶頭骨",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 39
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+skull"
+      ]
+    },
+    {
+      "english": "crystal spear",
+      "traditional_chinese": "水晶長矛",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=crystal+spear"
+      ]
+    },
+    {
+      "english": "cure poison",
+      "traditional_chinese": "治癒中毒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 24
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cure+poison"
+      ]
+    },
+    {
+      "english": "curse ward",
+      "traditional_chinese": "詛咒防護",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 34
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=curse+ward"
+      ]
+    },
+    {
+      "english": "cursebreaker",
+      "traditional_chinese": "破咒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 24
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=cursebreaker"
+      ]
+    },
+    {
+      "english": "customize weapon",
+      "traditional_chinese": "改造武器",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=customize+weapon"
+      ]
+    },
+    {
+      "english": "dancing lights",
+      "traditional_chinese": "舞光術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 5
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dancing+lights"
+      ]
+    },
+    {
+      "english": "darken",
+      "traditional_chinese": "黑暗化",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 16
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=darken"
+      ]
+    },
+    {
+      "english": "deadoak",
+      "traditional_chinese": "枯死橡樹",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=deadoak"
+      ]
+    },
+    {
+      "english": "deanimate",
+      "traditional_chinese": "解除操控",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=deanimate"
+      ]
+    },
+    {
+      "english": "death and decay",
+      "traditional_chinese": "死亡與腐朽",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 37
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=death+and+decay"
+      ]
+    },
+    {
+      "english": "deathly sleep",
+      "traditional_chinese": "死亡沉眠",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=deathly+sleep"
+      ]
+    },
+    {
+      "english": "deathwalker",
+      "traditional_chinese": "死亡行者",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 32
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=deathwalker"
+      ]
+    },
+    {
+      "english": "defensive fighting",
+      "traditional_chinese": "防禦戰鬥",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=defensive+fighting"
+      ]
+    },
+    {
+      "english": "defile",
+      "traditional_chinese": "褻瀆",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=defile"
+      ]
+    },
+    {
+      "english": "demon familiar",
+      "traditional_chinese": "惡魔魔寵",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demon+familiar"
+      ]
+    },
+    {
+      "english": "demon lore",
+      "traditional_chinese": "惡魔知識",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demon+lore"
+      ]
+    },
+    {
+      "english": "demon teeth",
+      "traditional_chinese": "惡魔之牙",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demon+teeth"
+      ]
+    },
+    {
+      "english": "demonfire",
+      "traditional_chinese": "惡魔之火",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 36
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demonfire"
+      ]
+    },
+    {
+      "english": "demonic favor",
+      "traditional_chinese": "惡魔恩惠",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demonic+favor"
+      ]
+    },
+    {
+      "english": "demonic tutor",
+      "traditional_chinese": "惡魔導師",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=demonic+tutor"
+      ]
+    },
+    {
+      "english": "detect invisibility",
+      "traditional_chinese": "偵測隱形",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 15
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=detect+invisibility"
+      ]
+    },
+    {
+      "english": "detect magic",
+      "traditional_chinese": "偵測魔法",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=detect+magic"
+      ]
+    },
+    {
+      "english": "devil ill",
+      "traditional_chinese": "惡魔疫病",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 26
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=devil+ill"
+      ]
+    },
+    {
+      "english": "dirt throwing",
+      "traditional_chinese": "投擲泥沙",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief ranged fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dirt+throwing"
+      ]
+    },
+    {
+      "english": "disarm",
+      "traditional_chinese": "卸除武器",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=disarm"
+      ]
+    },
+    {
+      "english": "disenchant",
+      "traditional_chinese": "解除附魔",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 36
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Soulbind"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=disenchant"
+      ]
+    },
+    {
+      "english": "dispel magic",
+      "traditional_chinese": "驅散魔法",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dispel+magic"
+      ]
+    },
+    {
+      "english": "displacement",
+      "traditional_chinese": "移位術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 19
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=displacement"
+      ]
+    },
+    {
+      "english": "disrupt magic",
+      "traditional_chinese": "擾亂魔法",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 39
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=disrupt+magic"
+      ]
+    },
+    {
+      "english": "distract",
+      "traditional_chinese": "分散注意",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=distract"
+      ]
+    },
+    {
+      "english": "dodge",
+      "traditional_chinese": "閃避",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief defensive fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dodge"
+      ]
+    },
+    {
+      "english": "dominate animal",
+      "traditional_chinese": "支配動物",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dominate+animal"
+      ]
+    },
+    {
+      "english": "double attack",
+      "traditional_chinese": "雙重攻擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=double+attack"
+      ]
+    },
+    {
+      "english": "dragon lore",
+      "traditional_chinese": "龍族知識",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dragon+lore"
+      ]
+    },
+    {
+      "english": "dragonbreath defense",
+      "traditional_chinese": "龍息防禦",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dragonbreath+defense"
+      ]
+    },
+    {
+      "english": "dragonscale armor",
+      "traditional_chinese": "龍鱗護甲",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dragonscale+armor"
+      ]
+    },
+    {
+      "english": "dragonslayer",
+      "traditional_chinese": "屠龍者",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 36
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dragonslayer"
+      ]
+    },
+    {
+      "english": "dread portent",
+      "traditional_chinese": "恐怖預兆",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spiritlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dread+portent"
+      ]
+    },
+    {
+      "english": "dust devil",
+      "traditional_chinese": "塵旋風",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dust+devil"
+      ]
+    },
+    {
+      "english": "dying breath",
+      "traditional_chinese": "垂死之息",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=dying+breath"
+      ]
+    },
+    {
+      "english": "earth wall",
+      "traditional_chinese": "土牆",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=earth+wall"
+      ]
+    },
+    {
+      "english": "earthquake",
+      "traditional_chinese": "地震",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=earthquake"
+      ]
+    },
+    {
+      "english": "elemental collapse",
+      "traditional_chinese": "元素崩解",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=elemental+collapse"
+      ]
+    },
+    {
+      "english": "elemental lore",
+      "traditional_chinese": "元素知識",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "General mage spells and skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=elemental+lore"
+      ]
+    },
+    {
+      "english": "enchant deflection",
+      "traditional_chinese": "偏轉附魔",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=enchant+deflection"
+      ]
+    },
+    {
+      "english": "enrage",
+      "traditional_chinese": "激怒",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=enrage"
+      ]
+    },
+    {
+      "english": "entangling roots",
+      "traditional_chinese": "纏繞根鬚",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=entangling+roots"
+      ]
+    },
+    {
+      "english": "evasion",
+      "traditional_chinese": "迴避",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief defensive fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=evasion"
+      ]
+    },
+    {
+      "english": "examine lock",
+      "traditional_chinese": "檢查鎖具",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=examine+lock"
+      ]
+    },
+    {
+      "english": "expiation",
+      "traditional_chinese": "贖罪",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 36
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=expiation"
+      ]
+    },
+    {
+      "english": "explosives",
+      "traditional_chinese": "爆裂物",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=explosives"
+      ]
+    },
+    {
+      "english": "eyebite",
+      "traditional_chinese": "邪眼噬咬",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 38
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=eyebite"
+      ]
+    },
+    {
+      "english": "faerie fire",
+      "traditional_chinese": "妖火",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 3
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=faerie+fire"
+      ]
+    },
+    {
+      "english": "fairy fog",
+      "traditional_chinese": "妖精迷霧",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 21
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fairy+fog"
+      ]
+    },
+    {
+      "english": "faith shield",
+      "traditional_chinese": "信仰之盾",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 5
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=faith+shield"
+      ]
+    },
+    {
+      "english": "fast talking",
+      "traditional_chinese": "巧言",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fast+talking"
+      ]
+    },
+    {
+      "english": "fear",
+      "traditional_chinese": "恐懼",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spiritlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fear"
+      ]
+    },
+    {
+      "english": "feeble mind",
+      "traditional_chinese": "弱智術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 19
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=feeble+mind"
+      ]
+    },
+    {
+      "english": "feint",
+      "traditional_chinese": "佯攻",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=feint"
+      ]
+    },
+    {
+      "english": "fey woe",
+      "traditional_chinese": "妖精之禍",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 39
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fey+woe"
+      ]
+    },
+    {
+      "english": "field of the grasping dead",
+      "traditional_chinese": "攫取亡者之域",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=field+of+the+grasping+dead"
+      ]
+    },
+    {
+      "english": "fire elemental",
+      "traditional_chinese": "火元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 32
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fire+elemental"
+      ]
+    },
+    {
+      "english": "fire focusing",
+      "traditional_chinese": "火焰專注",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 19
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fire+focusing"
+      ]
+    },
+    {
+      "english": "fire shield",
+      "traditional_chinese": "火焰盾",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 11
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fire+shield"
+      ]
+    },
+    {
+      "english": "fireball",
+      "traditional_chinese": "火球術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 21
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fireball"
+      ]
+    },
+    {
+      "english": "firebrand",
+      "traditional_chinese": "火焰烙印",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=firebrand"
+      ]
+    },
+    {
+      "english": "firefield",
+      "traditional_chinese": "火焰力場",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 26
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=firefield"
+      ]
+    },
+    {
+      "english": "fireweb",
+      "traditional_chinese": "火焰蛛網",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 29
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fireweb"
+      ]
+    },
+    {
+      "english": "fist of the earth",
+      "traditional_chinese": "大地之拳",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fist+of+the+earth"
+      ]
+    },
+    {
+      "english": "flame blade",
+      "traditional_chinese": "火焰之刃",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 13
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flame+blade"
+      ]
+    },
+    {
+      "english": "flamestrike",
+      "traditional_chinese": "焰擊術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 13
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flamestrike"
+      ]
+    },
+    {
+      "english": "flanking attack",
+      "traditional_chinese": "側翼攻擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flanking+attack"
+      ]
+    },
+    {
+      "english": "flashbombs",
+      "traditional_chinese": "閃光彈",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flashbombs"
+      ]
+    },
+    {
+      "english": "flesh beast",
+      "traditional_chinese": "血肉獸",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flesh+beast"
+      ]
+    },
+    {
+      "english": "flick",
+      "traditional_chinese": "迅擊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flick"
+      ]
+    },
+    {
+      "english": "flood",
+      "traditional_chinese": "洪水",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flood"
+      ]
+    },
+    {
+      "english": "flourish",
+      "traditional_chinese": "花式攻擊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=flourish"
+      ]
+    },
+    {
+      "english": "fly",
+      "traditional_chinese": "飛行術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fly"
+      ]
+    },
+    {
+      "english": "force shield",
+      "traditional_chinese": "力場盾",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=force+shield"
+      ]
+    },
+    {
+      "english": "forgetfulness",
+      "traditional_chinese": "遺忘術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 25
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=forgetfulness"
+      ]
+    },
+    {
+      "english": "fortitude",
+      "traditional_chinese": "堅韌",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=fortitude"
+      ]
+    },
+    {
+      "english": "foulblood",
+      "traditional_chinese": "污血",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=foulblood"
+      ]
+    },
+    {
+      "english": "free spirit",
+      "traditional_chinese": "釋放靈魂",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spiritlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=free+spirit"
+      ]
+    },
+    {
+      "english": "frost bite",
+      "traditional_chinese": "霜凍噬咬",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=frost+bite"
+      ]
+    },
+    {
+      "english": "frostflower",
+      "traditional_chinese": "霜花",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 8
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=frostflower"
+      ]
+    },
+    {
+      "english": "frostworks",
+      "traditional_chinese": "寒霜工藝",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=frostworks"
+      ]
+    },
+    {
+      "english": "gasbomb",
+      "traditional_chinese": "毒氣彈",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 36
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=gasbomb"
+      ]
+    },
+    {
+      "english": "giscos giblet grenade",
+      "traditional_chinese": "Gisco 的碎肉手榴彈",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=giscos+giblet+grenade"
+      ]
+    },
+    {
+      "english": "graft undead",
+      "traditional_chinese": "嫁接亡靈",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=graft+undead"
+      ]
+    },
+    {
+      "english": "greater crystal elemental",
+      "traditional_chinese": "高等水晶元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 40
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=greater+crystal+elemental"
+      ]
+    },
+    {
+      "english": "greater fire elemental",
+      "traditional_chinese": "高等火元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 35
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=greater+fire+elemental"
+      ]
+    },
+    {
+      "english": "greater ice elemental",
+      "traditional_chinese": "高等冰元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 39
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=greater+ice+elemental"
+      ]
+    },
+    {
+      "english": "greater lightning elemental",
+      "traditional_chinese": "高等閃電元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 37
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=greater+lightning+elemental"
+      ]
+    },
+    {
+      "english": "grenadier",
+      "traditional_chinese": "擲彈專家",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 39
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief ranged fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=grenadier"
+      ]
+    },
+    {
+      "english": "ground",
+      "traditional_chinese": "接地",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 12
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ground"
+      ]
+    },
+    {
+      "english": "ground strike",
+      "traditional_chinese": "地面打擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ground+strike"
+      ]
+    },
+    {
+      "english": "group recall",
+      "traditional_chinese": "隊伍召回",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 26
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=group+recall"
+      ]
+    },
+    {
+      "english": "group waypoint",
+      "traditional_chinese": "隊伍航點",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 32
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=group+waypoint"
+      ]
+    },
+    {
+      "english": "groupcasting",
+      "traditional_chinese": "群體施法",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 24
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=groupcasting"
+      ]
+    },
+    {
+      "english": "gust of wind",
+      "traditional_chinese": "強風",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=gust+of+wind"
+      ]
+    },
+    {
+      "english": "hailstone",
+      "traditional_chinese": "冰雹石",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=hailstone"
+      ]
+    },
+    {
+      "english": "hailstorm",
+      "traditional_chinese": "冰雹風暴",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=hailstorm"
+      ]
+    },
+    {
+      "english": "hallowed ground",
+      "traditional_chinese": "聖化之地",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 35
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=hallowed+ground"
+      ]
+    },
+    {
+      "english": "harm",
+      "traditional_chinese": "傷害術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 21
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=harm"
+      ]
+    },
+    {
+      "english": "harvest teeth",
+      "traditional_chinese": "採集牙齒",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=harvest+teeth"
+      ]
+    },
+    {
+      "english": "haste",
+      "traditional_chinese": "加速術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 17
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=haste"
+      ]
+    },
+    {
+      "english": "haven",
+      "traditional_chinese": "避難所",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 29
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=haven"
+      ]
+    },
+    {
+      "english": "heal",
+      "traditional_chinese": "治療術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 17
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=heal"
+      ]
+    },
+    {
+      "english": "healing touch",
+      "traditional_chinese": "治療之觸",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 27
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=healing+touch"
+      ]
+    },
+    {
+      "english": "hide",
+      "traditional_chinese": "躲藏",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=hide"
+      ]
+    },
+    {
+      "english": "hold undead",
+      "traditional_chinese": "定身亡靈",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 20
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=hold+undead"
+      ]
+    },
+    {
+      "english": "holy weapon",
+      "traditional_chinese": "神聖武器",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 26
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=holy+weapon"
+      ]
+    },
+    {
+      "english": "ice elemental",
+      "traditional_chinese": "冰元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 36
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ice+elemental"
+      ]
+    },
+    {
+      "english": "ice focusing",
+      "traditional_chinese": "寒冰專注",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ice+focusing"
+      ]
+    },
+    {
+      "english": "ice fog",
+      "traditional_chinese": "冰霧",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ice+fog"
+      ]
+    },
+    {
+      "english": "ice imprison",
+      "traditional_chinese": "寒冰禁錮",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 32
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ice+imprison"
+      ]
+    },
+    {
+      "english": "ice shield",
+      "traditional_chinese": "寒冰盾",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 13
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ice+shield"
+      ]
+    },
+    {
+      "english": "icebolt",
+      "traditional_chinese": "冰箭術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 17
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=icebolt"
+      ]
+    },
+    {
+      "english": "impale",
+      "traditional_chinese": "穿刺",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 39
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=impale"
+      ]
+    },
+    {
+      "english": "improvise tactic",
+      "traditional_chinese": "臨場戰術",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior fighting styles"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=improvise+tactic"
+      ]
+    },
+    {
+      "english": "incendiaries",
+      "traditional_chinese": "燃燒彈",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 32
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=incendiaries"
+      ]
+    },
+    {
+      "english": "increased stamina",
+      "traditional_chinese": "耐力強化",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=increased+stamina"
+      ]
+    },
+    {
+      "english": "indomitable will",
+      "traditional_chinese": "不屈意志",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=indomitable+will"
+      ]
+    },
+    {
+      "english": "infernal visage",
+      "traditional_chinese": "煉獄面容",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=infernal+visage"
+      ]
+    },
+    {
+      "english": "inflict suffering",
+      "traditional_chinese": "施加痛苦",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 15
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=inflict+suffering"
+      ]
+    },
+    {
+      "english": "inflict wounds",
+      "traditional_chinese": "造成傷口",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 2
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine might spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=inflict+wounds"
+      ]
+    },
+    {
+      "english": "infravision",
+      "traditional_chinese": "夜視術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 8
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=infravision"
+      ]
+    },
+    {
+      "english": "infuse element",
+      "traditional_chinese": "灌注元素",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=infuse+element"
+      ]
+    },
+    {
+      "english": "inlay runes",
+      "traditional_chinese": "鑲嵌符文",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=inlay+runes"
+      ]
+    },
+    {
+      "english": "intimidate",
+      "traditional_chinese": "威嚇",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=intimidate"
+      ]
+    },
+    {
+      "english": "iron claw",
+      "traditional_chinese": "鐵爪",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=iron+claw"
+      ]
+    },
+    {
+      "english": "ironblood",
+      "traditional_chinese": "鐵血",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ironblood"
+      ]
+    },
+    {
+      "english": "jab",
+      "traditional_chinese": "刺拳",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=jab"
+      ]
+    },
+    {
+      "english": "kaleidoscope",
+      "traditional_chinese": "萬花筒",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 36
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=kaleidoscope"
+      ]
+    },
+    {
+      "english": "kick",
+      "traditional_chinese": "踢擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=kick"
+      ]
+    },
+    {
+      "english": "knife throwing",
+      "traditional_chinese": "飛刀投擲",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief ranged fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=knife+throwing"
+      ]
+    },
+    {
+      "english": "knock",
+      "traditional_chinese": "敲擊開鎖",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=knock"
+      ]
+    },
+    {
+      "english": "knockback",
+      "traditional_chinese": "擊退",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=knockback"
+      ]
+    },
+    {
+      "english": "landslide",
+      "traditional_chinese": "山崩",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=landslide"
+      ]
+    },
+    {
+      "english": "last stand",
+      "traditional_chinese": "背水一戰",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=last+stand"
+      ]
+    },
+    {
+      "english": "leadfoot",
+      "traditional_chinese": "沉重腳步",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 29
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=leadfoot"
+      ]
+    },
+    {
+      "english": "leap attack",
+      "traditional_chinese": "飛躍攻擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=leap+attack"
+      ]
+    },
+    {
+      "english": "leech life",
+      "traditional_chinese": "汲取生命",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=leech+life"
+      ]
+    },
+    {
+      "english": "lesser crystal elemental",
+      "traditional_chinese": "次級水晶元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 25
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lesser+crystal+elemental"
+      ]
+    },
+    {
+      "english": "lesser fire elemental",
+      "traditional_chinese": "次級火元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 20
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lesser+fire+elemental"
+      ]
+    },
+    {
+      "english": "lesser ice elemental",
+      "traditional_chinese": "次級冰元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 24
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lesser+ice+elemental"
+      ]
+    },
+    {
+      "english": "lesser lightning elemental",
+      "traditional_chinese": "次級閃電元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 22
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lesser+lightning+elemental"
+      ]
+    },
+    {
+      "english": "lethargy",
+      "traditional_chinese": "倦怠",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 25
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lethargy"
+      ]
+    },
+    {
+      "english": "life tap",
+      "traditional_chinese": "生命汲取",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=life+tap"
+      ]
+    },
+    {
+      "english": "lift curse",
+      "traditional_chinese": "解除詛咒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 10
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lift+curse"
+      ]
+    },
+    {
+      "english": "lightning bolt",
+      "traditional_chinese": "閃電箭",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 19
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lightning+bolt"
+      ]
+    },
+    {
+      "english": "lightning elemental",
+      "traditional_chinese": "閃電元素",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 34
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lightning+elemental"
+      ]
+    },
+    {
+      "english": "lightning flash",
+      "traditional_chinese": "閃電爆光",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 14
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lightning+flash"
+      ]
+    },
+    {
+      "english": "lightning focusing",
+      "traditional_chinese": "閃電專注",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 21
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lightning+focusing"
+      ]
+    },
+    {
+      "english": "liveoak",
+      "traditional_chinese": "活化橡樹",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=liveoak"
+      ]
+    },
+    {
+      "english": "lock picking",
+      "traditional_chinese": "開鎖",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lock+picking"
+      ]
+    },
+    {
+      "english": "lunge",
+      "traditional_chinese": "猛刺",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 3
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=lunge"
+      ]
+    },
+    {
+      "english": "maelstrom",
+      "traditional_chinese": "大漩渦",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=maelstrom"
+      ]
+    },
+    {
+      "english": "magic missile",
+      "traditional_chinese": "魔法飛彈",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=magic+missile"
+      ]
+    },
+    {
+      "english": "maintaining spells",
+      "traditional_chinese": "維持法術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=maintaining+spells"
+      ]
+    },
+    {
+      "english": "major heal",
+      "traditional_chinese": "強效治療",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=major+heal"
+      ]
+    },
+    {
+      "english": "mana shield",
+      "traditional_chinese": "法力護盾",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mana+shield"
+      ]
+    },
+    {
+      "english": "mechanical aptitude",
+      "traditional_chinese": "機械天賦",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mechanical+aptitude"
+      ]
+    },
+    {
+      "english": "meditate",
+      "traditional_chinese": "冥想",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 20
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=meditate"
+      ]
+    },
+    {
+      "english": "mend bones",
+      "traditional_chinese": "修補骨骼",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mend+bones"
+      ]
+    },
+    {
+      "english": "mesmerize animal",
+      "traditional_chinese": "催眠動物",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mesmerize+animal"
+      ]
+    },
+    {
+      "english": "metal construct",
+      "traditional_chinese": "金屬構裝體",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=metal+construct"
+      ]
+    },
+    {
+      "english": "miraculous vestment",
+      "traditional_chinese": "奇蹟法衣",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 10
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=miraculous+vestment"
+      ]
+    },
+    {
+      "english": "moulinet",
+      "traditional_chinese": "迴旋斬",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=moulinet"
+      ]
+    },
+    {
+      "english": "mudwalker",
+      "traditional_chinese": "泥地行者",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mudwalker"
+      ]
+    },
+    {
+      "english": "mystic armament",
+      "traditional_chinese": "秘法武裝",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 14
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=mystic+armament"
+      ]
+    },
+    {
+      "english": "noxious cloud",
+      "traditional_chinese": "毒霧",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 16
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=noxious+cloud"
+      ]
+    },
+    {
+      "english": "occult trapcraft",
+      "traditional_chinese": "秘法陷阱術",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=occult+trapcraft"
+      ]
+    },
+    {
+      "english": "olfactory salves",
+      "traditional_chinese": "嗅覺藥膏",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=olfactory+salves"
+      ]
+    },
+    {
+      "english": "open the heavens",
+      "traditional_chinese": "開啟天穹",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid sky"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=open+the+heavens"
+      ]
+    },
+    {
+      "english": "palm",
+      "traditional_chinese": "掌藏",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=palm"
+      ]
+    },
+    {
+      "english": "parry",
+      "traditional_chinese": "招架",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=parry"
+      ]
+    },
+    {
+      "english": "peace",
+      "traditional_chinese": "和平術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 12
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=peace"
+      ]
+    },
+    {
+      "english": "petition aspect",
+      "traditional_chinese": "祈求化身",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 37
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=petition+aspect"
+      ]
+    },
+    {
+      "english": "petition incarnate",
+      "traditional_chinese": "祈求降臨",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 25
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=petition+incarnate"
+      ]
+    },
+    {
+      "english": "petroglyph",
+      "traditional_chinese": "岩畫符文",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=petroglyph"
+      ]
+    },
+    {
+      "english": "pickpocket",
+      "traditional_chinese": "扒竊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=pickpocket"
+      ]
+    },
+    {
+      "english": "plant lore",
+      "traditional_chinese": "植物知識",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=plant+lore"
+      ]
+    },
+    {
+      "english": "poison cloud",
+      "traditional_chinese": "毒雲",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+cloud"
+      ]
+    },
+    {
+      "english": "poison handling",
+      "traditional_chinese": "毒藥處理",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+handling"
+      ]
+    },
+    {
+      "english": "poison ivy",
+      "traditional_chinese": "毒藤",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+ivy"
+      ]
+    },
+    {
+      "english": "poison lore",
+      "traditional_chinese": "毒藥知識",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+lore"
+      ]
+    },
+    {
+      "english": "poison resistance",
+      "traditional_chinese": "毒素抗性",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+resistance"
+      ]
+    },
+    {
+      "english": "poison weapon",
+      "traditional_chinese": "武器淬毒",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=poison+weapon"
+      ]
+    },
+    {
+      "english": "pommel strike",
+      "traditional_chinese": "劍柄打擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=pommel+strike"
+      ]
+    },
+    {
+      "english": "potion lore",
+      "traditional_chinese": "藥水知識",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage alchemy"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=potion+lore"
+      ]
+    },
+    {
+      "english": "potion throwing",
+      "traditional_chinese": "投擲藥水",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief ranged fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=potion+throwing"
+      ]
+    },
+    {
+      "english": "prayer for the dying",
+      "traditional_chinese": "臨終祈禱",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 32
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prayer+for+the+dying"
+      ]
+    },
+    {
+      "english": "prepare ghoul",
+      "traditional_chinese": "製備食屍鬼",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prepare+ghoul"
+      ]
+    },
+    {
+      "english": "prepare mummy",
+      "traditional_chinese": "製備木乃伊",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prepare+mummy"
+      ]
+    },
+    {
+      "english": "prepare vampire",
+      "traditional_chinese": "製備吸血鬼",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prepare+vampire"
+      ]
+    },
+    {
+      "english": "prepare zombie",
+      "traditional_chinese": "製備殭屍",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prepare+zombie"
+      ]
+    },
+    {
+      "english": "presence",
+      "traditional_chinese": "神聖威儀",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 13
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=presence"
+      ]
+    },
+    {
+      "english": "preservation",
+      "traditional_chinese": "防腐術",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=preservation"
+      ]
+    },
+    {
+      "english": "prism",
+      "traditional_chinese": "稜鏡術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 18
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage illusion spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=prism"
+      ]
+    },
+    {
+      "english": "protection from demons",
+      "traditional_chinese": "惡魔防護",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 19
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=protection+from+demons"
+      ]
+    },
+    {
+      "english": "protective salves",
+      "traditional_chinese": "防護藥膏",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 13
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=protective+salves"
+      ]
+    },
+    {
+      "english": "protector",
+      "traditional_chinese": "保護者",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=protector"
+      ]
+    },
+    {
+      "english": "purge blood",
+      "traditional_chinese": "淨化血液",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 33
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=purge+blood"
+      ]
+    },
+    {
+      "english": "radiant orbs",
+      "traditional_chinese": "光輝法球",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 4
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=radiant+orbs"
+      ]
+    },
+    {
+      "english": "raise undead",
+      "traditional_chinese": "喚起亡靈",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=raise+undead"
+      ]
+    },
+    {
+      "english": "rally",
+      "traditional_chinese": "振奮",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rally"
+      ]
+    },
+    {
+      "english": "rancid flesh",
+      "traditional_chinese": "腐臭血肉",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 20
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Blood Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rancid+flesh"
+      ]
+    },
+    {
+      "english": "reduce antidote",
+      "traditional_chinese": "濃縮解毒劑",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief poison skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=reduce+antidote"
+      ]
+    },
+    {
+      "english": "reduce decoction",
+      "traditional_chinese": "濃縮煎劑",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=reduce+decoction"
+      ]
+    },
+    {
+      "english": "reduce tincture",
+      "traditional_chinese": "濃縮酊劑",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid tonics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=reduce+tincture"
+      ]
+    },
+    {
+      "english": "refresh",
+      "traditional_chinese": "恢復術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 4
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=refresh"
+      ]
+    },
+    {
+      "english": "rejuvenate",
+      "traditional_chinese": "回春術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 36
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rejuvenate"
+      ]
+    },
+    {
+      "english": "release sunlight",
+      "traditional_chinese": "釋放陽光",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=release+sunlight"
+      ]
+    },
+    {
+      "english": "remove poison",
+      "traditional_chinese": "解除中毒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 6
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=remove+poison"
+      ]
+    },
+    {
+      "english": "rescue",
+      "traditional_chinese": "救援",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rescue"
+      ]
+    },
+    {
+      "english": "resurrect",
+      "traditional_chinese": "復活術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 21
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=resurrect"
+      ]
+    },
+    {
+      "english": "retreat",
+      "traditional_chinese": "撤退",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=retreat"
+      ]
+    },
+    {
+      "english": "reveal curse",
+      "traditional_chinese": "揭露詛咒",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 8
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=reveal+curse"
+      ]
+    },
+    {
+      "english": "revenge",
+      "traditional_chinese": "復仇",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=revenge"
+      ]
+    },
+    {
+      "english": "revocation",
+      "traditional_chinese": "撤銷術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 27
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=revocation"
+      ]
+    },
+    {
+      "english": "riposte",
+      "traditional_chinese": "反擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=riposte"
+      ]
+    },
+    {
+      "english": "riptide",
+      "traditional_chinese": "激流",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 24
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=riptide"
+      ]
+    },
+    {
+      "english": "roar",
+      "traditional_chinese": "怒吼",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=roar"
+      ]
+    },
+    {
+      "english": "rotting sphere",
+      "traditional_chinese": "腐爛法球",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rotting+sphere"
+      ]
+    },
+    {
+      "english": "rune enchant",
+      "traditional_chinese": "符文附魔",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=rune+enchant"
+      ]
+    },
+    {
+      "english": "sacred touch",
+      "traditional_chinese": "神聖之觸",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 7
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sacred+touch"
+      ]
+    },
+    {
+      "english": "salvage equipment",
+      "traditional_chinese": "回收裝備",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=salvage+equipment"
+      ]
+    },
+    {
+      "english": "sanctuary",
+      "traditional_chinese": "聖域",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 11
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sanctuary"
+      ]
+    },
+    {
+      "english": "scorch",
+      "traditional_chinese": "灼燒",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 14
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scorch"
+      ]
+    },
+    {
+      "english": "scout",
+      "traditional_chinese": "偵察",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 26
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scout"
+      ]
+    },
+    {
+      "english": "scrap equipment",
+      "traditional_chinese": "拆解裝備",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scrap+equipment"
+      ]
+    },
+    {
+      "english": "scribe scroll",
+      "traditional_chinese": "抄寫卷軸",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scribe+scroll"
+      ]
+    },
+    {
+      "english": "scrimshaw",
+      "traditional_chinese": "骨雕",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scrimshaw"
+      ]
+    },
+    {
+      "english": "scroll chaining",
+      "traditional_chinese": "卷軸串聯",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=scroll+chaining"
+      ]
+    },
+    {
+      "english": "searching",
+      "traditional_chinese": "搜尋",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=searching"
+      ]
+    },
+    {
+      "english": "second wind",
+      "traditional_chinese": "重振精神",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior iron body"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=second+wind"
+      ]
+    },
+    {
+      "english": "sense life",
+      "traditional_chinese": "生命感知",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 9
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sense+life"
+      ]
+    },
+    {
+      "english": "shadow asylum",
+      "traditional_chinese": "暗影庇護所",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+asylum"
+      ]
+    },
+    {
+      "english": "shadow bind",
+      "traditional_chinese": "暗影束縛",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+bind"
+      ]
+    },
+    {
+      "english": "shadow blades",
+      "traditional_chinese": "暗影之刃",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 17
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+blades"
+      ]
+    },
+    {
+      "english": "shadow decoy",
+      "traditional_chinese": "暗影誘餌",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+decoy"
+      ]
+    },
+    {
+      "english": "shadow fiend",
+      "traditional_chinese": "暗影邪魔",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Demonlore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+fiend"
+      ]
+    },
+    {
+      "english": "shadow mastery",
+      "traditional_chinese": "暗影精通",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+mastery"
+      ]
+    },
+    {
+      "english": "shadow strike",
+      "traditional_chinese": "暗影打擊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+strike"
+      ]
+    },
+    {
+      "english": "shadow walk",
+      "traditional_chinese": "暗影行走",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadow+walk"
+      ]
+    },
+    {
+      "english": "shadowworks",
+      "traditional_chinese": "暗影工藝",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shadowworks"
+      ]
+    },
+    {
+      "english": "shambling mound",
+      "traditional_chinese": "蹣跚土丘怪",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shambling+mound"
+      ]
+    },
+    {
+      "english": "shard storm",
+      "traditional_chinese": "碎片風暴",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 28
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shard+storm"
+      ]
+    },
+    {
+      "english": "shards",
+      "traditional_chinese": "碎片術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 7
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage crystal spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shards"
+      ]
+    },
+    {
+      "english": "shield block",
+      "traditional_chinese": "盾牌格擋",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shield+block"
+      ]
+    },
+    {
+      "english": "shield slam",
+      "traditional_chinese": "盾牌猛擊",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shield+slam"
+      ]
+    },
+    {
+      "english": "shocking grasp",
+      "traditional_chinese": "電擊之握",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 10
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shocking+grasp"
+      ]
+    },
+    {
+      "english": "shoplifting",
+      "traditional_chinese": "商店行竊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shoplifting"
+      ]
+    },
+    {
+      "english": "shower of sparks",
+      "traditional_chinese": "火花驟雨",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 1
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental fire spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=shower+of+sparks"
+      ]
+    },
+    {
+      "english": "sickening touch",
+      "traditional_chinese": "致病之觸",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 4
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sickening+touch"
+      ]
+    },
+    {
+      "english": "skeletal knight",
+      "traditional_chinese": "骸骨騎士",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skeletal+knight"
+      ]
+    },
+    {
+      "english": "skeletal lich",
+      "traditional_chinese": "骸骨巫妖",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 28
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skeletal+lich"
+      ]
+    },
+    {
+      "english": "skeletal mage",
+      "traditional_chinese": "骸骨法師",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skeletal+mage"
+      ]
+    },
+    {
+      "english": "skeletal spider",
+      "traditional_chinese": "骸骨蜘蛛",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 3
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skeletal+spider"
+      ]
+    },
+    {
+      "english": "skeletal warrior",
+      "traditional_chinese": "骸骨戰士",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Dragontooth Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skeletal+warrior"
+      ]
+    },
+    {
+      "english": "skirmish",
+      "traditional_chinese": "游擊戰",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=skirmish"
+      ]
+    },
+    {
+      "english": "slow poison",
+      "traditional_chinese": "延緩毒性",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 18
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=slow+poison"
+      ]
+    },
+    {
+      "english": "sneak",
+      "traditional_chinese": "潛行",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 5
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sneak"
+      ]
+    },
+    {
+      "english": "solace",
+      "traditional_chinese": "慰藉",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 30
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=solace"
+      ]
+    },
+    {
+      "english": "solar flare",
+      "traditional_chinese": "太陽閃焰",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=solar+flare"
+      ]
+    },
+    {
+      "english": "solar lance",
+      "traditional_chinese": "日光長槍",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 36
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=solar+lance"
+      ]
+    },
+    {
+      "english": "soothe wounds",
+      "traditional_chinese": "撫慰傷口",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 1
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric healing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=soothe+wounds"
+      ]
+    },
+    {
+      "english": "soulbind",
+      "traditional_chinese": "靈魂綁定",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 32
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Soulbind"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=soulbind"
+      ]
+    },
+    {
+      "english": "soulforge",
+      "traditional_chinese": "靈魂鍛造",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 15
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Soulbind"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=soulforge"
+      ]
+    },
+    {
+      "english": "soulsmith",
+      "traditional_chinese": "靈魂鐵匠",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Soulbind"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=soulsmith"
+      ]
+    },
+    {
+      "english": "soulsteal",
+      "traditional_chinese": "竊取靈魂",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 11
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Soulbind"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=soulsteal"
+      ]
+    },
+    {
+      "english": "spectral claw",
+      "traditional_chinese": "幽魂之爪",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 27
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spectral+claw"
+      ]
+    },
+    {
+      "english": "spell lore",
+      "traditional_chinese": "法術知識",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spell+lore"
+      ]
+    },
+    {
+      "english": "spellstaff",
+      "traditional_chinese": "法術杖",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spellstaff"
+      ]
+    },
+    {
+      "english": "spinning kick",
+      "traditional_chinese": "旋風踢",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 40
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spinning+kick"
+      ]
+    },
+    {
+      "english": "spirit buster",
+      "traditional_chinese": "驅靈者",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 40
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spirit+buster"
+      ]
+    },
+    {
+      "english": "spirit hammer",
+      "traditional_chinese": "靈魂之錘",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 5
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spirit+hammer"
+      ]
+    },
+    {
+      "english": "spirit totem",
+      "traditional_chinese": "靈魂圖騰",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 37
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=spirit+totem"
+      ]
+    },
+    {
+      "english": "static blast",
+      "traditional_chinese": "靜電爆破",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 2
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental lightning spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=static+blast"
+      ]
+    },
+    {
+      "english": "steal",
+      "traditional_chinese": "偷竊",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealing skill group"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=steal"
+      ]
+    },
+    {
+      "english": "stealthy movement",
+      "traditional_chinese": "隱密移動",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief stealth skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=stealthy+movement"
+      ]
+    },
+    {
+      "english": "still air",
+      "traditional_chinese": "靜止空氣",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 25
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=still+air"
+      ]
+    },
+    {
+      "english": "stomp",
+      "traditional_chinese": "重踏",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 5
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=stomp"
+      ]
+    },
+    {
+      "english": "store power",
+      "traditional_chinese": "儲存力量",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 35
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=store+power"
+      ]
+    },
+    {
+      "english": "storm of roses",
+      "traditional_chinese": "玫瑰風暴",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 39
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=storm+of+roses"
+      ]
+    },
+    {
+      "english": "sunbeam",
+      "traditional_chinese": "日光束",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 16
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine conjuration spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sunbeam"
+      ]
+    },
+    {
+      "english": "sunblind",
+      "traditional_chinese": "日盲術",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 34
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sunblind"
+      ]
+    },
+    {
+      "english": "suncatcher",
+      "traditional_chinese": "日光捕捉",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 23
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid rune magic"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=suncatcher"
+      ]
+    },
+    {
+      "english": "sunder",
+      "traditional_chinese": "破甲",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sunder"
+      ]
+    },
+    {
+      "english": "sunstorm",
+      "traditional_chinese": "太陽風暴",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 32
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=sunstorm"
+      ]
+    },
+    {
+      "english": "tanking",
+      "traditional_chinese": "承受傷害",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior group tactics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=tanking"
+      ]
+    },
+    {
+      "english": "tarrants spectral hand",
+      "traditional_chinese": "Tarrant 的幽魂之手",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Spectral Rot"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=tarrants+spectral+hand"
+      ]
+    },
+    {
+      "english": "taunt",
+      "traditional_chinese": "挑釁",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warcries"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=taunt"
+      ]
+    },
+    {
+      "english": "tempest",
+      "traditional_chinese": "暴風雨",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 16
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=tempest"
+      ]
+    },
+    {
+      "english": "tensors floating disc",
+      "traditional_chinese": "Tensor 的浮空圓盤",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage force fields"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=tensors+floating+disc"
+      ]
+    },
+    {
+      "english": "thistles",
+      "traditional_chinese": "薊刺",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 2
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=thistles"
+      ]
+    },
+    {
+      "english": "thorn armor",
+      "traditional_chinese": "荊棘護甲",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 30
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=thorn+armor"
+      ]
+    },
+    {
+      "english": "thrust",
+      "traditional_chinese": "突刺",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 1
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior power attacks"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=thrust"
+      ]
+    },
+    {
+      "english": "thunder seeds",
+      "traditional_chinese": "雷霆種子",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 7
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=thunder+seeds"
+      ]
+    },
+    {
+      "english": "trapmaking",
+      "traditional_chinese": "製作陷阱",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 33
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief tinkering"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=trapmaking"
+      ]
+    },
+    {
+      "english": "trip",
+      "traditional_chinese": "絆倒",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 3
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief melee fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=trip"
+      ]
+    },
+    {
+      "english": "turn undead",
+      "traditional_chinese": "驅散亡靈",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 14
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=turn+undead"
+      ]
+    },
+    {
+      "english": "umbral thrall",
+      "traditional_chinese": "暗影奴僕",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 40
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief shadow disciplines"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=umbral+thrall"
+      ]
+    },
+    {
+      "english": "unarmed combat",
+      "traditional_chinese": "徒手戰鬥",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 14
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior hand to hand combat"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=unarmed+combat"
+      ]
+    },
+    {
+      "english": "undead lore",
+      "traditional_chinese": "亡靈知識",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 9
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Undead Skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=undead+lore"
+      ]
+    },
+    {
+      "english": "undead scourge",
+      "traditional_chinese": "亡靈剋星",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 20
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric anointing spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=undead+scourge"
+      ]
+    },
+    {
+      "english": "undo",
+      "traditional_chinese": "逆轉術",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 22
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Mage basic magics"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=undo"
+      ]
+    },
+    {
+      "english": "unnatural spring",
+      "traditional_chinese": "異常湧泉",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 6
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=unnatural+spring"
+      ]
+    },
+    {
+      "english": "valor",
+      "traditional_chinese": "英勇",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 18
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Barbarian blood skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=valor"
+      ]
+    },
+    {
+      "english": "vampiric vines",
+      "traditional_chinese": "吸血藤蔓",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 31
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid plant lore"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=vampiric+vines"
+      ]
+    },
+    {
+      "english": "vigilance",
+      "traditional_chinese": "警戒",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 12
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief defensive fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=vigilance"
+      ]
+    },
+    {
+      "english": "vigor",
+      "traditional_chinese": "活力術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 15
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric divine aid spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=vigor"
+      ]
+    },
+    {
+      "english": "walk on water",
+      "traditional_chinese": "水上行走",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=walk+on+water"
+      ]
+    },
+    {
+      "english": "wall of ice",
+      "traditional_chinese": "冰牆",
+      "classes": [
+        "mage"
+      ],
+      "levels": {
+        "mage": 34
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Mage elemental cold spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=wall+of+ice"
+      ]
+    },
+    {
+      "english": "ward alignment",
+      "traditional_chinese": "陣營防護",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 23
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric inquisition spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=ward+alignment"
+      ]
+    },
+    {
+      "english": "water breathing",
+      "traditional_chinese": "水下呼吸",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 19
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid animal handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=water+breathing"
+      ]
+    },
+    {
+      "english": "water weird",
+      "traditional_chinese": "水怪",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 8
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid earth and water"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=water+weird"
+      ]
+    },
+    {
+      "english": "waypoint lore",
+      "traditional_chinese": "航點知識",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 31
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=waypoint+lore"
+      ]
+    },
+    {
+      "english": "weaken",
+      "traditional_chinese": "虛弱術",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 17
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tribulation spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=weaken"
+      ]
+    },
+    {
+      "english": "whirlwind",
+      "traditional_chinese": "旋風斬",
+      "classes": [
+        "warrior"
+      ],
+      "levels": {
+        "warrior": 32
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Warrior weapon handling"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=whirlwind"
+      ]
+    },
+    {
+      "english": "wicker effigy",
+      "traditional_chinese": "柳編塑像",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 38
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=wicker+effigy"
+      ]
+    },
+    {
+      "english": "wickercraft",
+      "traditional_chinese": "柳編工藝",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 21
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid talismans"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=wickercraft"
+      ]
+    },
+    {
+      "english": "windbreaker",
+      "traditional_chinese": "破風術",
+      "classes": [
+        "druid"
+      ],
+      "levels": {
+        "druid": 29
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Druid air"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=windbreaker"
+      ]
+    },
+    {
+      "english": "withdraw",
+      "traditional_chinese": "撤離",
+      "classes": [
+        "thief"
+      ],
+      "levels": {
+        "thief": 10
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Thief defensive fighting skills"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=withdraw"
+      ]
+    },
+    {
+      "english": "wood woad",
+      "traditional_chinese": "林木守衛",
+      "classes": [
+        "necromancer"
+      ],
+      "levels": {
+        "necromancer": 5
+      },
+      "types": [
+        "skill"
+      ],
+      "groups": [
+        "Necromancer Animation"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=wood+woad"
+      ]
+    },
+    {
+      "english": "word of recall",
+      "traditional_chinese": "召回真言",
+      "classes": [
+        "cleric"
+      ],
+      "levels": {
+        "cleric": 18
+      },
+      "types": [
+        "spell"
+      ],
+      "groups": [
+        "Cleric tranquility spellgroup"
+      ],
+      "help_urls": [
+        "https://alteraeon.com:8081/help?helpfile=word+of+recall"
+      ]
+    }
+  ]
+}

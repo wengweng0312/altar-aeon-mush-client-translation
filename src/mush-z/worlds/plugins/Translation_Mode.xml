@@ -5,6 +5,9 @@
 <include name="constants.lua"/>
 <aliases>
  <alias match="translation_toggle" enabled="y" script="ToggleTranslation" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_autostart *" enabled="y" script="SetTranslationAutoStart" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_benchmark_next_start" enabled="y" script="ScheduleTranslationBenchmark" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="lmt_test" enabled="y" script="ScheduleTranslationBenchmark" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_previous" enabled="y" script="TranslationHistoryPrevious" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_next" enabled="y" script="TranslationHistoryNext" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_top" enabled="y" script="TranslationHistoryTop" omit_from_output="y" omit_from_command_history="y" />
@@ -87,6 +90,17 @@ local function load_accessible_history_mode()
   local mode = text:match('"accessible_history_mode"%s*:%s*"([^"]+)"')
   if mode == "off" or mode == "skills" or mode == "all" then return mode end
   return "all"
+end
+
+local function translation_auto_start_enabled()
+  local value = GetVariable("translation_auto_start")
+  -- New installations start in Translation Mode automatically.  Once the
+  -- player chooses on or off, the plugin's saved state preserves that choice.
+  if value == nil or value == "" then
+    SetVariable("translation_auto_start", "1")
+    return true
+  end
+  return value ~= "0"
 end
 
 local function cloud_api_candidate_status()
@@ -534,24 +548,39 @@ function OnPluginInstall()
   Accelerator("ctrl+shift+f8", "translation_block_diagnostic")
   Accelerator("ctrl+shift+delete", "translation_cache_clear_recent")
   tm_debug("TM DEBUG INSTALL: Translation Mode 0.6.0 loaded")
+  if translation_auto_start_enabled() then
+    log("automatic startup armed; waiting for MUD connection")
+  end
 end
 
-function ToggleTranslation()
-  tm_debug("TM DEBUG 1: toggle entered")
+-- MUSHclient's own banner and plugin installation notes are emitted before a
+-- world connects.  Starting here keeps those local diagnostics out of the
+-- bilingual game history while still enabling capture before the server sends
+-- Alter Aeon's welcome and character prompts.
+function OnPluginConnect()
+  if translation_auto_start_enabled() and not enabled then
+    if EnableTranslation(false) then
+      log("automatic startup enabled translation mode on MUD connection")
+    else
+      log("ERROR automatic startup could not enable translation mode; English remains available", true)
+    end
+  end
+end
 
-  if not enabled then
+function EnableTranslation(announce)
+  if enabled then return true end
     accessible_history_mode = load_accessible_history_mode()
     local api_status = cloud_api_candidate_status()
-    if api_status == "candidate" then
+    if announce and api_status == "candidate" then
       Execute("tts_note Google Cloud API candidate found.")
     elseif api_status == "invalid" then
       log("Google Cloud API candidate file is invalid; using prototype fallback", true)
-      Execute("tts_note Google Cloud API file invalid. Using standard translation.")
+      if announce then Execute("tts_note Google Cloud API file invalid. Using standard translation.") end
     end
     if not start_speech_worker() then
       log("ERROR speech worker launcher not found or failed", true)
-      Execute("tts_note Translation speech worker failed to start. Translation remains off.")
-      return
+      if announce then Execute("tts_note Translation speech worker failed to start. Translation remains off.") end
+      return false
     end
     -- Starting is idempotent: the worker lock rejects a duplicate process and
     -- recovers immediately when its previous owner crashed.
@@ -560,12 +589,12 @@ function ToggleTranslation()
       if not ok then
         tm_debug("TM DEBUG ERROR: start_worker Lua error: " .. tostring(result))
         log("ERROR start_worker Lua error=" .. tostring(result), true)
-        Execute("tts_note Translation worker failed to start. Translation remains off.")
-        return
+        if announce then Execute("tts_note Translation worker failed to start. Translation remains off.") end
+        return false
       end
       if not result then
-        Execute("tts_note Translation worker failed to start. Translation remains off.")
-        return
+        if announce then Execute("tts_note Translation worker failed to start. Translation remains off.") end
+        return false
       end
     end
     enabled = true
@@ -575,8 +604,43 @@ function ToggleTranslation()
     if #unicode_history > 0 then write_review_entry(unicode_history[unicode_history_pos]) end
     pending = {}; pending_ticks = 0; pending_target_ticks = 3
     log("toggle enabled=true review_mode=true")
-    Execute("tts_stop")
-    Execute("tts_note Chinese review mode on.")
+    if announce then
+      Execute("tts_stop")
+      Execute("tts_note Chinese review mode on.")
+    end
+    return true
+end
+
+function SetTranslationAutoStart(name, line, wildcards)
+  local value = clean((wildcards and wildcards[1]) or ""):lower()
+  if value == "on" or value == "1" or value == "yes" then
+    SetVariable("translation_auto_start", "1")
+    Execute("tts_note Translation automatic startup on.")
+  elseif value == "off" or value == "0" or value == "no" then
+    SetVariable("translation_auto_start", "0")
+    Execute("tts_note Translation automatic startup off.")
+  else
+    Execute("tts_note Use translation underscore autostart on or off.")
+  end
+end
+
+function ScheduleTranslationBenchmark()
+  local path = base .. "/benchmark_lmt_next_start.flag"
+  local f = io.open(path, "wb")
+  if not f then
+    Execute("tts_note Unable to schedule L M T benchmark.")
+    return
+  end
+  f:write("Run the full LMT backend benchmark once on the next worker start.\r\n")
+  f:close()
+  Execute("tts_note L M T benchmark scheduled. Restart Mush client when ready.")
+end
+
+function ToggleTranslation()
+  tm_debug("TM DEBUG 1: toggle entered")
+
+  if not enabled then
+    EnableTranslation(true)
   else
     -- The only other state is off. Keep the old standard/English-screen
     -- translation mode out of the user-facing cycle.
@@ -995,6 +1059,148 @@ local function wrapped_semantic_source_lines(lines)
   return output
 end
 
+-- "In the next room you see:" blocks contain three different kinds of rows:
+-- a fixed header, an optional room title, display-wrapped prose, and trailing
+-- NPC/object rows.  The worker preserves those meanings, but the physical
+-- English wrapping is usually different from the translated line count.  Use
+-- the translated count to rebuild only the prose portion, while never merging
+-- the trailing NPC/object rows back into the room description.
+local function room_preview_semantic_source_lines(lines, expected_count)
+  local rows = {}
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then rows[#rows + 1] = value end
+  end
+  local preview_headers = {
+    ["In the next room you see:"] = true,
+    ["Nearby you see:"] = true
+  }
+  local header_index = nil
+  for i, value in ipairs(rows) do
+    if preview_headers[value] then header_index = i break end
+  end
+  if not header_index or #rows < 2 then return nil end
+
+  local output, prefix, payload = {}, {}, {}
+  for i = 1, header_index - 1 do prefix[#prefix + 1] = rows[i] end
+  if #prefix > 0 then
+    local semantic_prefix = wrapped_semantic_source_lines(prefix)
+    for _, value in ipairs(semantic_prefix) do output[#output + 1] = value end
+  end
+  output[#output + 1] = rows[header_index]
+  for i = header_index + 1, #rows do payload[#payload + 1] = rows[i] end
+  if #payload > 0 and #payload[1] <= 100
+      and not payload[1]:match("[%.%!%?%:%;]$") then
+    output[#output + 1] = payload[1]
+    table.remove(payload, 1)
+  end
+
+  local row_start = trailing_independent_row_start(payload)
+  local prose, trailing = {}, {}
+  local prose_end = row_start and (row_start - 1) or #payload
+  for i = 1, prose_end do prose[#prose + 1] = payload[i] end
+  if row_start then
+    for i = row_start, #payload do trailing[#trailing + 1] = payload[i] end
+  end
+
+  local prose_count = tonumber(expected_count or 0) - #output - #trailing
+  if prose_count < 0 then return nil end
+  if prose_count == 1 and #prose > 0 then
+    output[#output + 1] = table.concat(prose, " ")
+  elseif prose_count > 0 then
+    local semantic = wrapped_semantic_source_lines(prose)
+    if #semantic ~= prose_count then return nil end
+    for _, value in ipairs(semantic) do output[#output + 1] = value end
+  elseif #prose > 0 then
+    return nil
+  end
+  for _, value in ipairs(trailing) do output[#output + 1] = value end
+  if #output ~= tonumber(expected_count or 0) then return nil end
+  return output
+end
+
+local function item_detail_semantic_source_lines(lines)
+  local output, found = {}, false
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      if value:find(", Level:", 1, true) and value:find(", Type:", 1, true) then
+        found = true
+        for _, label in ipairs({"Level", "Comp", "Type", "Weight", "AC", "Damage", "Speed", "Damage Type", "Quality"}) do
+          value = value:gsub(",%s*(" .. label .. ":)", "\n%1")
+        end
+        value = value:gsub(",%s*(%d+%s+wield strength)", "\n%1")
+        local affects = {
+          "ATTACK_SPEED", "CLER_CAST_LEVEL", "CLERIC_CAST_LEVEL", "THIEF_SKILL_LEVEL",
+          "MAGE_CAST_LEVEL", "NECR_CAST_LEVEL", "WARR_SKILL_LEVEL", "WARRIOR_SKILL_LEVEL",
+          "DRUID_CAST_LEVEL", "SAVING_FIRE", "SAVING_COLD", "SAVING_ZAP", "SAVING_SPELL",
+          "SAVING_POISON", "SAVING_BREATH", "DAMROLL", "HITROLL", "MOV_REGEN", "MOVE_REGEN",
+          "HP_REGEN", "MANA_REGEN", "ALIGNMENT", "SPELL_RES", "ABSORB_MAGIC", "ABSORB_FIRE",
+          "ABSORB_ICE", "ABSORB_ZAP", "CAST_ABILITY", "HIT_POINTS", "HP", "MOVE", "MANA",
+          "WIS", "INT", "CON", "CHR", "STR", "DEX", "SHIELD_BLOCK", "PARRY", "DODGE",
+          "SNEAK", "HIDE", "AGE", "AGING", "SIZE", "LUCK", "ARMOR"
+        }
+        for _, affect in ipairs(affects) do
+          value = value:gsub(",%s*(" .. affect .. "%s+by)", "\n%1")
+        end
+        for _, wear in ipairs({"HELD", "WEAPON", "HEAD", "NECK", "ARMS", "WRIST", "HANDS", "FINGERS", "BODY", "ON_BODY", "ABOUT_BODY", "WAIST", "LEGS", "FEET", "SHIELD", "2_WIELD"}) do
+          value = value:gsub(",%s*(" .. wear .. ")([,%s])", "\n%1%2")
+        end
+        value = value:gsub(",%s*(This item)", "\n%1")
+        value = value:gsub(",%s*(Spells on wearer:)", "\n%1")
+        value = value:gsub(",%s*(Spell on wearer:)", "\n%1")
+        for field in (value .. "\n"):gmatch("(.-)\n") do
+          field = field:gsub("^%s+", ""):gsub("%s+$", ""):gsub(",%s*$", "")
+          if field ~= "" then output[#output + 1] = field end
+        end
+      else
+        output[#output + 1] = value
+      end
+    end
+  end
+  return found and output or nil
+end
+
+local function wrapped_dialogue_source_lines(lines)
+  local rows = {}
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then rows[#rows + 1] = value end
+  end
+  local first, last = nil, nil
+  for i, value in ipairs(rows) do
+    local starts = value:match("%f[%a]says,%s*['\"]")
+      or value:match("%f[%a]asks,%s*['\"]")
+      or value:match("%f[%a]exclaims,%s*['\"]")
+      or value:match("%f[%a]shouts,%s*['\"]")
+      or value:match("%f[%a]whispers,%s*['\"]")
+      or value:match("%f[%a]tells%s+.-,%s*['\"]")
+    if starts then first = i; break end
+  end
+  if not first then return nil end
+  for i = first, #rows do
+    if rows[i]:match("['\"]%s*$") then last = i; break end
+  end
+  if not last then return nil end
+  local output = {}
+  if first > 1 then
+    local before = {}
+    for i = 1, first - 1 do before[#before + 1] = rows[i] end
+    local semantic = wrapped_semantic_source_lines(before)
+    for _, value in ipairs(semantic) do output[#output + 1] = value end
+  end
+  local speech = {}
+  for i = first, last do speech[#speech + 1] = rows[i] end
+  output[#output + 1] = table.concat(speech, " ")
+  if last < #rows then
+    local after = {}
+    for i = last + 1, #rows do after[#after + 1] = rows[i] end
+    local semantic = wrapped_semantic_source_lines(after)
+    for _, value in ipairs(semantic) do output[#output + 1] = value end
+  end
+  return #output >= 2 and output or nil
+end
+
 local function collect_accessible_history(original, translated)
   local entries = {}
   if is_quoted_dialogue(original) then
@@ -1022,6 +1228,30 @@ local function collect_accessible_history(original, translated)
     end
   end
   local translated_lines = split_lines(translated_text)
+  local dialogue_source = wrapped_dialogue_source_lines(source_lines)
+  if dialogue_source and #dialogue_source == #translated_lines then
+    for i, en in ipairs(dialogue_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
+  local item_detail_source = item_detail_semantic_source_lines(source_lines)
+  if item_detail_source and #item_detail_source == #translated_lines then
+    for i, en in ipairs(item_detail_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
+  local room_preview_source = room_preview_semantic_source_lines(source_lines, #translated_lines)
+  if room_preview_source then
+    for i, en in ipairs(room_preview_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
   -- The worker emits an aligned room title and one complete sentence per
   -- output line. Recreate the same semantic units from the wrapped English so
   -- every NVDA history row becomes "corresponding Chinese | English".

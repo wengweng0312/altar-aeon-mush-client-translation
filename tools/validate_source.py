@@ -23,6 +23,9 @@ BANNED_NAMES = (
     "worker.lock",
     "cloud_translation_config.txt",
 )
+PUBLISHABLE_STRUCTURE_CATALOG = (
+    BRIDGE / "mush_structure_catalog.sqlite3"
+).resolve()
 
 SECRET_ASSIGNMENT = re.compile(
     r"(?im)^\s*(?:api_key|azure_api_key|google_api_key|deepl_api_key|token|password)"
@@ -39,7 +42,7 @@ def validate_names() -> None:
         lowered = path.name.lower()
         if lowered in BANNED_NAMES:
             fail(f"private/generated file present: {path.relative_to(ROOT)}")
-        if path.is_file() and (
+        if path.is_file() and path.resolve() != PUBLISHABLE_STRUCTURE_CATALOG and (
             lowered.endswith(".gguf")
             or lowered.startswith("backup_")
             or lowered.endswith((".sqlite", ".sqlite3", ".log", ".bak"))

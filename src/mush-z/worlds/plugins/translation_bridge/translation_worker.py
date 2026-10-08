@@ -1,6 +1,6 @@
 # Mush-Z asynchronous translation worker - LMT-60 1.7B Q4 live integration
 # Minimal first-run build: preserve inbox/outbox/cache protocol; replace MADLAD with persistent llama-server.
-import base64, ctypes, hashlib, importlib.util, json, os, platform, re, sqlite3, subprocess, sys, time, urllib.request
+import base64, ctypes, hashlib, importlib.util, json, os, platform, re, sqlite3, subprocess, sys, threading, time, urllib.request
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from statistics import median
@@ -24,8 +24,11 @@ TRACE_LOG_MAX_BYTES = 20 * 1024 * 1024
 WORKER_LOG_MAX_BYTES = 5 * 1024 * 1024
 SKILL_GLOSSARY_FILE = ROOT/"skill_glossary_zh_tw.json"
 LIBRARY_GLOSSARY_FILE = ROOT/"library_glossary_zh_tw.json"
+GAME_GLOSSARY_FILE = ROOT/"game_glossary_zh_tw.json"
+PHRASE_GLOSSARY_FILE = ROOT/"phrase_glossary_zh_tw.json"
 STRUCTURE_CATALOG_FILE = ROOT/"mush_structure_catalog.sqlite3"
 BACKEND_CHOICE_FILE = ROOT/"backend_choice.json"
+FORCE_BACKEND_BENCHMARK_FILE = ROOT/"benchmark_lmt_next_start.flag"
 SESSION_FILE = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 SESSION_MAX_AGE = 4.0
 CACHE_CONNECTION = None
@@ -33,18 +36,30 @@ CACHE_DISABLED = False
 SERVER_PROCESS = None
 SERVER_BACKEND = None
 SERVER_THREADS = None
+SERVER_READY = False
+SERVER_STARTING = False
+SERVER_START_ERROR = None
+SERVER_START_OWNER = None
+SERVER_START_THREAD = None
+SERVER_START_EVENT = threading.Event()
+SERVER_START_LOCK = threading.Lock()
+SERVER_SHUTTING_DOWN = False
+SERVER_ALLOW_AUTOTUNE = False
+ACTIVE_CANDIDATE = None
 CLOUD_FAILURE_COUNT = {1: 0, 2: 0, 3: 0}
 CLOUD_DISABLED_UNTIL = {1: 0.0, 2: 0.0, 3: 0.0}
 CLOUD_DISABLED_FOR_SESSION = set()
 TRANSLATION_ENGINES_USED = set()
 SKILL_GLOSSARY = None
 LIBRARY_GLOSSARY = None
+GAME_GLOSSARY = None
+PHRASE_GLOSSARY = None
 DETERMINISTIC_TEMPLATES = None
 DETERMINISTIC_FIELD_GLOSSARY = None
 PORT = 18082
 CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
 CPU_AUTOTUNE_VERSION = 1
-STRUCTURED_FIELD_CACHE_VERSION = 1
+STRUCTURED_FIELD_CACHE_VERSION = 2
 CPU_AUTOTUNE_MIN_GAIN = 1.05
 CLOUD_FAILURE_LIMIT = 3
 CLOUD_COOLDOWN_SECONDS = 300
@@ -77,7 +92,7 @@ PROMPT_SUFFIX = "\nTraditional Chinese:"
 OFFICIAL_PROMPT_TEMPLATE = "Translate the following text from English into Chinese:\nEnglish: {text}\nChinese:"
 
 STRUCTURED_EXACT_HEADERS = {
-    "You are carrying:": "你攜帶著：",
+    "You are carrying:": "你正攜帶著：",
     "The following items are available for sale at this time:": "目前有以下物品可供出售：",
     "The following spell castings may be purchased for a small fee:": "支付少量費用即可購買以下法術施放服務：",
     "The following items are currently up for grabs:": "目前可免費取用以下物品：",
@@ -152,7 +167,7 @@ SCAN_DOOR_STATES = {
     "closed": "緊閉", "open": "敞開", "locked": "上鎖",
 }
 BONUS_FIELD_ZH = {
-    "movement": "移動力", "hitpoints": "生命值", "hit points": "生命值",
+    "movement": "體力", "hitpoints": "血量", "hit points": "血量",
     "mana": "法力", "morale": "士氣", "armor": "護甲",
     "warrior skill level": "戰士技能等級", "thief skill level": "盜賊技能等級",
     "mage cast level": "法師施法等級", "cleric cast level": "牧師施法等級",
@@ -236,6 +251,12 @@ SEMANTIC_EVENT_PATTERNS = (
     ("unique_item", re.compile(r"^(\s*)(.+?) \(unique\)(\s*)$", re.I)),
     ("actor_puts", re.compile(r"^(\s*)(.+?) puts (.+?) in (.+)\.(\s*)$", re.I)),
     ("equipment", re.compile(r"^(\s*)You are (wearing|holding|wielding|carrying) (.+)\.(\s*)$", re.I)),
+    ("sniffs_air", re.compile(r"^(\s*)(.+?) sniffs the air, as though catching a nearby scent\.(\s*)$", re.I)),
+    ("actor_dead", re.compile(r"^(\s*)(.+?) is DEAD!(\s*)$", re.I)),
+    ("actor_arrived", re.compile(r"^(\s*)(.+?) has arrived\.(\s*)$", re.I)),
+    ("throw_shadow", re.compile(r"^(\s*)You throw (.+?) at (.+?)(, but miss)?!(\s*)$", re.I)),
+    ("no_loot", re.compile(r"^(\s*)You see nothing left to loot from the corpse of (.+?)\.(\s*)$", re.I)),
+    ("block_attack", re.compile(r"^(\s*)You block (?:his|her|its|their) attack\.(\s*)$", re.I)),
     ("door_action", re.compile(r"^(\s*)You (open|close|lock|unlock) (.+)\.(\s*)$", re.I)),
     ("door_closed", re.compile(r"^(\s*)The (.+) is closed\.(\s*)$", re.I)),
     ("sacrifice_gold", re.compile(r"^(\s*)You receive (\d[\d,]*) gold coins? for your sacrifice of (.+)\.(\s*)$", re.I)),
@@ -600,6 +621,16 @@ def deterministic_translate(text):
     source = str(text)
     if "\n" in source or "\r" in source:
         return None
+    global GAME_GLOSSARY
+    if GAME_GLOSSARY is None:
+        try:
+            raw = json.loads(GAME_GLOSSARY_FILE.read_text(encoding="utf-8-sig"))
+            GAME_GLOSSARY = {str(key): str(value).strip() for key, value in raw.items() if str(value).strip()}
+        except Exception as error:
+            log("game glossary unavailable: %r" % error, True)
+            GAME_GLOSSARY = {}
+    if source.strip() in GAME_GLOSSARY:
+        return GAME_GLOSSARY[source.strip()]
     fixed_events = {
         # Mush-Z emits these compact health-condition labels from the prompt.
         # They are status values, not ordinary adjective fragments.
@@ -614,6 +645,7 @@ def deterministic_translate(text):
         "You receive a combat point!": "你獲得 1 點戰鬥點數！",
         "You receive a profession point!": "你獲得 1 點職業點數！",
         "You have become more renowned!": "你的聲望提高了！",
+        "You are full.": "你完全恢復了。",
         "The white aura around your body fades.": "你身旁的白色光環消退了。",
         "The black aura about your body fades.": "你身旁的黑色光環消退了。",
         "Your ice shield fades and is gone.": "你的冰盾消退並消失了。",
@@ -627,9 +659,59 @@ def deterministic_translate(text):
         "You slowly float down as your fly spell wears off.": "飛行法術消退，你緩緩飄落地面。",
         "You feel less aware of your surroundings.": "你對周遭環境的感知變弱了。",
         "Your body is still too exhausted from last time.": "你的身體仍未從上一次的消耗中恢復。",
+        "A shadow decoy melts back into the shadows.": "影子誘餌融回陰影之中。",
+        "Your shield of faith dissipates, and you no longer feel as protected by your god.": "你的信仰護盾消散了，你不再感受到神祇的庇護。",
+        "You scout out a hiding spot...": "你尋找適合藏身的位置……",
+        "Stealth mode on.": "隱密模式已開啟。",
+        "You wake up.": "你醒了過來。",
+        "You feel as though Shift is watching over you.": "你感覺 Shift 正守護著你。",
+        "You do not seem to have that item.": "你似乎沒有那件物品。",
+        "Huh?": "什麼？",
+        "Thrust at who?": "要刺擊誰？",
+        "No-one by that name found.": "找不到那個名字的對象。",
+        "You feel slightly sick.": "你感到有些不適。",
+        "You gather darkness around yourself.": "你將黑暗聚集在自己周圍。",
+        "You wait for an appropriate moment to turn and run, but it never comes...": "你等待轉身逃跑的適當時機，但時機始終沒有出現……",
+        "You go to sleep in your hiding place.": "你在藏身處睡下。",
+        "The shadows here are not sharp enough for you to target your enemy.": "這裡的陰影不夠鮮明，無法讓你鎖定敵人。",
+        "You are already awake...": "你已經醒著了……",
+        "You recover your morale!": "你的士氣恢復了！",
+        "Your vision slowly returns.": "你的視力逐漸恢復。",
+        "It becomes bright enough to see clearly.": "周圍變得明亮，已經可以清楚看見。",
+        "Nothing matching those arguments found.": "找不到符合那些條件的項目。",
+        "You are too exhausted!": "你太疲憊了！",
+        "You begin to recover your morale!": "你的士氣開始恢復！",
+        "You sit down and rest your tired bones.": "你坐下來休息疲憊的身體。",
     }
     if source.strip() in fixed_events:
         return fixed_events[source.strip()]
+    resource_names = {
+        "hp": "血量", "hit": "血量", "hit point": "血量", "hit points": "血量",
+        "mana": "法力", "m": "法力",
+        "movement": "體力", "move": "體力", "mv": "體力",
+    }
+    full = re.fullmatch(
+        r"(hp|mana|movement)(?:\s+and\s+(hp|mana|movement))?\s+(?:is|are)\s+full\.",
+        source, re.I,
+    )
+    if full:
+        names = [resource_names[full.group(1).lower()]]
+        if full.group(2):
+            names.append(resource_names[full.group(2).lower()])
+        return "和".join(names) + "已完全恢復。"
+    gain = re.fullmatch(r"([+-]\d+)\s+(hp|hit points?|mana|movement|move|mv)\.", source, re.I)
+    if gain:
+        return "%s %s。" % (gain.group(1), resource_names[gain.group(2).lower()])
+    regen = re.fullmatch(r"You'll need about (.+?) to regen (hp|mana|movement)\.", source, re.I)
+    if regen:
+        duration = regen.group(1)
+        duration = re.sub(r"\b(\d+)\s+hours?\b", r"\1 小時", duration, flags=re.I)
+        duration = re.sub(r"\b(\d+)\s+minutes?\b", r"\1 分", duration, flags=re.I)
+        duration = re.sub(r"\b(\d+)\s+seconds?\b", r"\1 秒", duration, flags=re.I)
+        duration = re.sub(r"\s+and\s+", " ", duration, flags=re.I)
+        return "你大約還需要 %s 才能完全恢復%s。" % (
+            duration.strip(), resource_names[regen.group(2).lower()],
+        )
     combo = translate_combo_line(source)
     if combo is not None:
         return combo
@@ -643,10 +725,17 @@ def deterministic_translate(text):
     if match:
         # Keep the compact unit suffixes because the general numeric guard
         # interprets m as a multiplier; labels make the prompt readable.
-        return "<生命 %shp 法力 %sm 移動 %smv>" % match.groups()
+        return "<血量 %shp 法力 %sm 體力 %smv>" % match.groups()
     match = re.fullmatch(r"You have (\d+) practices? remaining\.", source, re.I)
     if match:
         return "你還有 %s 點練習點數。" % match.group(1)
+    match = re.fullmatch(r"You have (\d+) practices? left\.", source, re.I)
+    if match:
+        return "你還有 %s 點練習點數。" % match.group(1)
+    match = re.fullmatch(r"Armor:\s*([-+]?\d+)\s*\(you are wearing (light|medium|heavy) armor\)", source, re.I)
+    if match:
+        armor_kind = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[match.group(2).lower()]
+        return "護甲：%s（你穿著%s）。" % (match.group(1), armor_kind)
     match = re.fullmatch(r"(\d{1,2})\s+(am|pm)", source, re.I)
     if match:
         period = "上午" if match.group(2).lower() == "am" else "下午"
@@ -922,6 +1011,8 @@ def http_get(path,timeout=1):
     with urllib.request.urlopen("http://127.0.0.1:%d%s"%(PORT,path),timeout=timeout) as r:return r.read()
 
 def http_post(path,obj,timeout):
+    if path in ("/completion", "/v1/chat/completions") and not SERVER_READY:
+        start_server()
     data=json.dumps(obj,ensure_ascii=False).encode("utf-8")
     req=urllib.request.Request("http://127.0.0.1:%d%s"%(PORT,path),data=data,headers={"Content-Type":"application/json"})
     with urllib.request.urlopen(req,timeout=timeout) as r:return json.loads(r.read().decode("utf-8","replace"))
@@ -969,13 +1060,19 @@ def save_backend_choice(candidates,selection,scores,metrics=None):
     except Exception as e:log("backend choice save failed: %r"%e,True)
 
 def stop_candidate(candidate):
+    global ACTIVE_CANDIDATE
     if candidate is None:return
     try:candidate.terminate();candidate.wait(timeout=3)
     except Exception:
         try:candidate.kill();candidate.wait(timeout=2)
         except Exception:pass
+    if ACTIVE_CANDIDATE is candidate:
+        ACTIVE_CANDIDATE = None
 
 def launch_candidate(item,sf,threads=None,threads_batch=None):
+    global ACTIVE_CANDIDATE
+    if SERVER_SHUTTING_DOWN:
+        raise RuntimeError("worker shutdown requested")
     backend,server,model,gpu_layers=item
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0)
     profile=("default" if threads is None else "t%d-tb%d"%(threads,threads_batch or threads))
@@ -987,8 +1084,12 @@ def launch_candidate(item,sf,threads=None,threads_batch=None):
     if threads is not None:
         cmd.extend(["--threads",str(threads),"--threads-batch",str(threads_batch or threads)])
     candidate=subprocess.Popen(cmd,stdout=sf,stderr=subprocess.STDOUT,creationflags=flags)
+    ACTIVE_CANDIDATE = candidate
     deadline=time.time()+15
     while time.time()<deadline:
+        if SERVER_SHUTTING_DOWN:
+            stop_candidate(candidate)
+            raise RuntimeError("worker shutdown requested")
         if candidate.poll() is not None:raise RuntimeError("process exited during startup")
         try:http_get("/health",1);break
         except Exception:time.sleep(.15)
@@ -997,6 +1098,7 @@ def launch_candidate(item,sf,threads=None,threads_batch=None):
         "prompt":"Translate English to Chinese.\nEnglish: Ready\nChinese:",
         "n_predict":8,"temperature":0.0,"stream":False},20)
     if not (warm.get("content") or "").strip():raise RuntimeError("warm-up returned blank output")
+    ACTIVE_CANDIDATE = None
     return candidate
 
 def benchmark_candidate(runs=2):
@@ -1039,17 +1141,33 @@ def benchmark_profile(item,sf,threads=None,threads_batch=None):
     finally:
         stop_candidate(candidate);time.sleep(.15)
 
-def start_server():
+def _start_server_impl():
     global SERVER_PROCESS, SERVER_BACKEND, SERVER_THREADS
     # Reuse a server already answering on our private port.
     try:
         http_get("/health",.5); log("reusing llama-server on port %d"%PORT,True); return
     except Exception: pass
     sf=open(SERVER_LOG,"w",encoding="utf-8",errors="replace")
-    candidates=find_runtime_candidates();selection=load_backend_choice(candidates)
-    if selection is None:
+    candidates=find_runtime_candidates()
+    force_benchmark = FORCE_BACKEND_BENCHMARK_FILE.is_file()
+    if force_benchmark:
+        try: FORCE_BACKEND_BENCHMARK_FILE.unlink()
+        except OSError: pass
+    selection=None if force_benchmark else load_backend_choice(candidates)
+    allow_autotune = SERVER_ALLOW_AUTOTUNE or force_benchmark
+    if selection is None and not allow_autotune:
+        # Offline-first users must be able to translate immediately even on a
+        # very slow computer.  Prefer the portable CPU backend and let
+        # llama.cpp choose its own conservative thread defaults.
+        safe_item=next((item for item in candidates if item[0] == "cpu"),candidates[0])
+        selection={"backend":safe_item[0],"threads":None,"threads_batch":None}
+        save_backend_choice(candidates,selection,{},
+                            {"startup_mode":"safe_default_no_benchmark"})
+        log("no backend profile; using safe %s default without benchmark"%safe_item[0],True)
+    elif selection is None:
         scores={};metrics={};base_metrics={}
         for item in candidates:
+            if SERVER_SHUTTING_DOWN: raise RuntimeError("worker shutdown requested")
             try:
                 result=benchmark_profile(item,sf)
                 base_metrics[item[0]]=result;metrics[item[0]]=result
@@ -1065,6 +1183,7 @@ def start_server():
             if cpu_item and (not vulkan_score or cpu_default >= vulkan_score*.5):
                 logical=max(1,os.cpu_count() or 1)
                 for threads in cpu_thread_profiles():
+                    if SERVER_SHUTTING_DOWN: raise RuntimeError("worker shutdown requested")
                     key=profile_key("cpu",threads)
                     try:
                         result=benchmark_profile(cpu_item,sf,threads,logical)
@@ -1090,6 +1209,7 @@ def start_server():
     ordered=sorted(candidates,key=lambda item:0 if item[0] == selected_backend else 1)
     errors=[]
     for item in ordered:
+        if SERVER_SHUTTING_DOWN: raise RuntimeError("worker shutdown requested")
         candidate=None
         try:
             threads=selection.get("threads") if selection and item[0] == selected_backend else None
@@ -1115,6 +1235,55 @@ def start_server():
                     log("CPU default profile unavailable: %r"%fallback_error,True)
                     stop_candidate(candidate)
     raise RuntimeError("all llama-server backends failed: " + "; ".join(errors))
+
+
+def start_server():
+    """Start LMT once; other threads wait while background tuning is active."""
+    global SERVER_READY, SERVER_STARTING, SERVER_START_ERROR, SERVER_START_OWNER
+    if SERVER_READY:
+        return
+    current_thread = threading.get_ident()
+    with SERVER_START_LOCK:
+        if SERVER_READY:
+            return
+        if SERVER_STARTING:
+            starter = False
+        else:
+            SERVER_STARTING = True
+            SERVER_START_ERROR = None
+            SERVER_START_OWNER = current_thread
+            SERVER_START_EVENT.clear()
+            starter = True
+    if not starter:
+        # Completion calls made by the tuning thread itself must reach the
+        # candidate server instead of waiting on their own startup event.
+        if SERVER_START_OWNER == current_thread:
+            return
+        while not SERVER_START_EVENT.wait(0.1):
+            if SERVER_SHUTTING_DOWN:
+                raise RuntimeError("worker shutdown requested")
+        if SERVER_START_ERROR is not None:
+            raise RuntimeError("LMT startup failed: %s" % SERVER_START_ERROR)
+        return
+    try:
+        _start_server_impl()
+        SERVER_READY = True
+    except Exception as error:
+        SERVER_START_ERROR = error
+        raise
+    finally:
+        SERVER_STARTING = False
+        SERVER_START_OWNER = None
+        SERVER_START_EVENT.set()
+
+
+def start_server_in_background():
+    try:
+        start_server()
+        log("background LMT startup ready", True)
+    except Exception as error:
+        if not SERVER_SHUTTING_DOWN:
+            log("background LMT startup failed: %r" % error, True)
 
 NUMERIC_MULTIPLIERS = {
     "": Decimal(1), "k": Decimal(1000), "m": Decimal(1000000), "b": Decimal(1000000000),
@@ -1582,7 +1751,24 @@ def translate_room_prose_cached(text, c):
     return result
 
 
+def reviewed_phrase_translation(text):
+    """Return a reviewed reusable game phrase without consulting any model."""
+    global PHRASE_GLOSSARY
+    if PHRASE_GLOSSARY is None:
+        try:
+            raw = json.loads(PHRASE_GLOSSARY_FILE.read_text(encoding="utf-8-sig"))
+            PHRASE_GLOSSARY = {str(key).strip().lower(): str(value).strip()
+                               for key, value in raw.items() if str(value).strip()}
+        except Exception as error:
+            log("phrase glossary unavailable: %r" % error, True)
+            PHRASE_GLOSSARY = {}
+    return PHRASE_GLOSSARY.get(str(text).strip().lower())
+
+
 def translate_piece(text, c, depth=0, force_robust=False, force_simple=False, allow_cloud=True):
+    reviewed_phrase = reviewed_phrase_translation(text)
+    if reviewed_phrase:
+        return reviewed_phrase
     deterministic = deterministic_translate(text)
     if deterministic is not None:
         return deterministic
@@ -1780,11 +1966,124 @@ def translate_mixed_deterministic_block(text, c):
 def is_numeric_report_block(text):
     """Recognize item comparison/detail reports by stable shape, not names."""
     lines = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    if len(lines) < 2:
+    if not lines:
         return False
-    if lines[0].startswith("Comparing objects "):
+    if len(lines) >= 2 and lines[0].startswith("Comparing objects "):
         return True
     return any(", Level:" in line and ", Type:" in line for line in lines)
+
+
+ITEM_AFFECT_CODES = (
+    "ATTACK_SPEED", "CLER_CAST_LEVEL", "CLERIC_CAST_LEVEL", "THIEF_SKILL_LEVEL",
+    "MAGE_CAST_LEVEL", "NECR_CAST_LEVEL", "WARR_SKILL_LEVEL", "WARRIOR_SKILL_LEVEL",
+    "DRUID_CAST_LEVEL", "SAVING_FIRE", "SAVING_COLD", "SAVING_ZAP",
+    "SAVING_SPELL", "SAVING_POISON", "SAVING_BREATH", "DAMROLL", "HITROLL",
+    "MOV_REGEN", "MOVE_REGEN", "HP_REGEN", "MANA_REGEN", "ALIGNMENT",
+    "SPELL_RES", "ABSORB_MAGIC", "ABSORB_FIRE", "ABSORB_ICE", "ABSORB_ZAP",
+    "CAST_ABILITY", "HIT_POINTS", "HP", "MOVE", "MV", "MOVEMENT", "MANA", "WIS", "INT", "CON",
+    "CHR", "STR", "DEX", "SHIELD_BLOCK", "PARRY", "DODGE", "SNEAK", "HIDE",
+    "AGE", "AGING", "SIZE", "LUCK", "ARMOR",
+)
+ITEM_WEAR_CODES = (
+    "HELD", "WEAPON", "HEAD", "NECK", "ARMS", "WRIST", "HANDS", "FINGERS",
+    "BODY", "ON_BODY", "ABOUT_BODY", "WAIST", "LEGS", "FEET", "SHIELD", "2_WIELD",
+)
+ITEM_DETAIL_FIELD_BOUNDARY = re.compile(
+    r",\s*(?=(?:Level|Comp|Type|Weight|AC|Damage|Speed|Damage Type|Quality):"
+    r"|\d+\s+wield strength(?:\b|$)|(?:" + "|".join(ITEM_AFFECT_CODES) + r")\s+by\b"
+    r"|(?:" + "|".join(ITEM_WEAR_CODES) + r")(?:\b|$)|This item\b|Spells? on wearer:)",
+    re.I,
+)
+
+ITEM_FIELD_LABELS_ZH = {
+    "level": "等級", "comp": "材質", "type": "類型", "weight": "重量",
+    "ac": "護甲值", "damage": "傷害", "speed": "速度",
+    "damage type": "傷害類型", "quality": "品質",
+}
+ITEM_DAMAGE_WORDS_ZH = {
+    "nonorm": "非標準", "toxic": "毒性", "ice": "寒冰", "acidic": "酸性",
+    "fire": "火焰", "zapping": "電擊", "slash": "斬擊", "slice": "切割",
+    "stab": "刺擊", "pierce": "穿刺", "crush": "壓碎", "pound": "重擊",
+    "claw": "爪擊", "bite": "咬擊", "chop": "劈砍",
+}
+
+
+def split_item_detail_fields(line):
+    """Split a dense identify row only at known field boundaries."""
+    value = str(line).strip()
+    if ", Level:" not in value or ", Type:" not in value:
+        return None
+    fields = [field.strip(" ,") for field in ITEM_DETAIL_FIELD_BOUNDARY.split(value)]
+    fields = [field for field in fields if field]
+    return fields if len(fields) >= 4 else None
+
+
+def item_glossary_value(field, value):
+    load_deterministic_templates()
+    return DETERMINISTIC_FIELD_GLOSSARY.get((field.lower(), str(value).strip().upper()))
+
+
+def translate_item_detail_field(field, c):
+    source = str(field).strip(" ,")
+    affect = re.fullmatch(
+        r"(" + "|".join(ITEM_AFFECT_CODES) + r")\s+by\s+(minus\s+)?([-+]?\d+(?:\.\d+)?%?)",
+        source,
+        re.I,
+    )
+    if affect:
+        code, minus, value = affect.groups()
+        name = item_glossary_value("affect", code) or code
+        return "%s：%s %s" % (name, "減少" if minus else "增加", value)
+    wield = re.fullmatch(r"(\d+)\s+wield strength", source, re.I)
+    if wield:
+        return "持握力量需求：%s" % wield.group(1)
+    wear = item_glossary_value("wear", source)
+    if wear:
+        return "穿戴部位：%s" % wear
+    label = re.fullmatch(r"([A-Za-z ]+):\s*(.*)", source)
+    if label:
+        raw_label, value = label.groups()
+        key = raw_label.lower()
+        zh_label = ITEM_FIELD_LABELS_ZH.get(key, raw_label)
+        if key == "comp":
+            parts = [item_glossary_value("composition", token) or token for token in value.split(",")]
+            value = "、".join(part.strip() for part in parts)
+        elif key == "type":
+            value = item_glossary_value("item_type", value) or value
+        elif key == "speed":
+            value = item_glossary_value("speed", value) or value
+        elif key == "quality":
+            value = item_glossary_value("quality", value) or value
+        elif key == "damage type":
+            value = " ".join(ITEM_DAMAGE_WORDS_ZH.get(token.lower(), token) for token in value.split())
+        elif key == "weight":
+            match = re.fullmatch(r"([-+]?\d+(?:\.\d+)?)\s*(.*)", value)
+            if match and match.group(2):
+                flags = [item_glossary_value("flag", token) or token for token in match.group(2).split()]
+                value = "%s；旗標：%s" % (match.group(1), "、".join(flags))
+        return "%s：%s" % (zh_label, value)
+    fixed = deterministic_translate(source)
+    if fixed is not None:
+        return fixed
+    return translate_piece(source, c, force_robust=True)
+
+
+def translate_item_detail_line(line, c):
+    fields = split_item_detail_fields(line)
+    if not fields:
+        return None
+    output = []
+    for field in fields:
+        cache_source = "ITEM_FIELD_V%d:%s" % (STRUCTURED_FIELD_CACHE_VERSION, field)
+        translated = cache_get(cache_source, c)
+        if translated is None:
+            translated = translate_item_detail_field(field, c)
+            cache_put(cache_source, translated, c)
+        output.append(translated)
+    result = "\n".join(output)
+    if not numeric_items_preserved(line, result):
+        raise RuntimeError("ITEM_DETAIL_NUMERIC_ITEMS_MISSING")
+    return result
 
 
 def translate_numeric_report_block(text, c):
@@ -1796,6 +2095,14 @@ def translate_numeric_report_block(text, c):
         indent = line[:len(line) - len(line.lstrip())]
         if not stripped:
             output.append("")
+            continue
+        item_detail = translate_item_detail_line(stripped, c)
+        if item_detail is not None:
+            output.append(indent + item_detail)
+            continue
+        semantic = translate_semantic_event_line(stripped, c)
+        if semantic is not None:
+            output.append(indent + semantic.strip())
             continue
         deterministic = deterministic_translate(stripped)
         if deterministic is not None:
@@ -1813,8 +2120,6 @@ def translate_numeric_report_block(text, c):
                 translated = line
         output.append(indent + translated)
     result = "\n".join(output)
-    if len(result.split("\n")) != len(lines):
-        raise RuntimeError("NUMERIC_REPORT_LINE_COUNT_MISMATCH")
     if not numeric_items_preserved(text, result):
         raise RuntimeError("NUMERIC_REPORT_FINAL_NUMERIC_ITEMS_MISSING")
     return result
@@ -1848,6 +2153,9 @@ def is_put_item_block(text):
 
 def translate_cached_phrase(text, c):
     """Translate one complete semantic field; never split it into reusable words."""
+    reviewed = reviewed_phrase_translation(text)
+    if reviewed:
+        return reviewed
     field_config = dict(c)
     field_config["translation_cache_version"] = (
         int(c.get("translation_cache_version", 12)) * 1000 + STRUCTURED_FIELD_CACHE_VERSION
@@ -1907,6 +2215,34 @@ def is_login_menu(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     return bool(rows and rows[0] == "Welcome to Alter Aeon!" and
                 sum(bool(re.match(r"^\d+\)\s+", line)) for line in rows) >= 3)
+
+
+def is_character_creation_welcome(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    joined = " ".join(rows)
+    return (joined.startswith("Welcome to Alter Aeon, a fantasy adventure game set in a world ") and
+            "If you already have a character, enter the name now." in joined and
+            "Would you like to create a new character?" in joined)
+
+
+def translate_character_creation_welcome(text):
+    fixed = {
+        "Welcome to Alter Aeon, a fantasy adventure game set in a world":
+            "歡迎來到 Alter Aeon，這是一款設定在奇幻世界中的冒險遊戲，",
+        "of swords and sorcery, magic and dragons!":
+            "充滿刀劍、巫術、魔法與巨龍！",
+        "If you already have a character, enter the name now.":
+            "如果你已經有角色，請立即輸入角色名稱。",
+        "If you are new, you must create and name a new character.":
+            "如果你是新玩家，必須建立一個新角色並為其命名。",
+        "Would you like to create a new character?":
+            "你想建立新角色嗎？",
+    }
+    output = []
+    for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        value = line.strip()
+        output.append(fixed.get(value, value) if value else "")
+    return "\n".join(output)
 
 
 def translate_login_menu(text, c):
@@ -2082,23 +2418,74 @@ def translate_skill_help_detail(text, c):
     return translate_semantic_units(units, c, "help")
 
 
-ROOM_PREVIEW_HEADER = "In the next room you see:"
+WRAPPED_DIALOGUE_START = re.compile(
+    r"\b(?:says|asks|exclaims|shouts|whispers),\s*['\"]"
+    r"|\btells\s+.+?,\s*['\"]",
+    re.I,
+)
+
+
+def parse_wrapped_dialogue_units(text):
+    """Group display-wrapped speech while keeping surrounding actions apart."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    start = next((index for index, row in enumerate(rows) if WRAPPED_DIALOGUE_START.search(row)), None)
+    if start is None:
+        return []
+    end = None
+    for index in range(start, len(rows)):
+        if re.search(r"['\"]\s*$", rows[index]):
+            end = index
+            break
+    if end is None:
+        return []
+    units = []
+    if start:
+        units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[:start])))
+    units.append(("translate", " ".join(rows[start:end + 1])))
+    if end + 1 < len(rows):
+        units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[end + 1:])))
+    return units if len(units) >= 2 else []
+
+
+def is_wrapped_dialogue_block(text):
+    return bool(parse_wrapped_dialogue_units(text))
+
+
+def translate_wrapped_dialogue_block(text, c):
+    return translate_semantic_units(parse_wrapped_dialogue_units(text), c, "wrapped_dialogue")
+
+
+ROOM_PREVIEW_HEADERS = {
+    "In the next room you see:": "在下一個房間，你可以看到：",
+    "Nearby you see:": "在附近你可以看到：",
+}
 QUEST_INFORMATION_HEADER = re.compile(r"^Information for quest\s+(\d+):\s*$", re.I)
 QUEST_INFORMATION_FOOTER = re.compile(
     r"^\(For more information, try 'quest extra\s+(\d+)'\.\)\s*$", re.I
+)
+AVAILABLE_LEVEL_SKILLS_HEADER = re.compile(r"^Available spells and skills at level\s+(\d+)\s*$", re.I)
+AVAILABLE_LEVEL_SKILL_ROW = re.compile(
+    r"^(General|Mage|Cleric|Thief|Warrior|Necromancer|Druid)\s+-\s+(.+?)\s+-\((guild|helpful|important|obscure|critical)\)\s*$",
+    re.I,
 )
 
 
 def is_room_preview_block(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    return len(rows) >= 2 and rows[0] == ROOM_PREVIEW_HEADER
+    return len(rows) >= 2 and any(row in ROOM_PREVIEW_HEADERS for row in rows)
 
 
 def parse_room_preview_units(text):
     """Preserve a looked-ahead room's title, prose and repeated entities."""
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    units = [("fixed", "在下一個房間，你可以看到：")]
-    payload = rows[1:]
+    header_index = next((index for index, row in enumerate(rows) if row in ROOM_PREVIEW_HEADERS), None)
+    if header_index is None:
+        return []
+    units = []
+    if header_index:
+        units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[:header_index])))
+    units.append(("fixed", ROOM_PREVIEW_HEADERS[rows[header_index]]))
+    payload = rows[header_index + 1:]
     if not payload:
         return units
     if len(payload[0]) <= 100 and not re.search(r"[.!?。！？]$", payload[0]):
@@ -2119,6 +2506,45 @@ def translate_room_preview_block(text, c):
     if len(units) < 2:
         raise RuntimeError("ROOM_PREVIEW_SEMANTIC_UNITS_EMPTY")
     return translate_semantic_units(units, c, "room_preview")
+
+
+def is_available_level_skills_block(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return bool(len(rows) >= 2 and AVAILABLE_LEVEL_SKILLS_HEADER.fullmatch(rows[0])
+                and all(AVAILABLE_LEVEL_SKILL_ROW.fullmatch(row) for row in rows[1:]))
+
+
+def translate_available_level_skills_block(text, c):
+    """Render one class/skill/importance row per source row."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    header = AVAILABLE_LEVEL_SKILLS_HEADER.fullmatch(rows[0])
+    if not header:
+        raise RuntimeError("AVAILABLE_LEVEL_SKILLS_HEADER_MISSING")
+    class_names = {
+        "general": "通用", "mage": "法師", "cleric": "牧師", "thief": "盜賊",
+        "warrior": "戰士", "necromancer": "死靈法師", "druid": "德魯伊",
+    }
+    importance_names = {
+        "guild": "公會", "helpful": "有幫助", "important": "重要",
+        "obscure": "冷門", "critical": "關鍵",
+    }
+    glossary = load_skill_glossary()
+    output = ["第 %s 級可用的法術與技能：" % header.group(1)]
+    for row in rows[1:]:
+        match = AVAILABLE_LEVEL_SKILL_ROW.fullmatch(row)
+        if not match:
+            raise RuntimeError("AVAILABLE_LEVEL_SKILLS_ROW_INVALID")
+        class_name, skill_name, importance = match.groups()
+        key = skill_name.strip().lower()
+        translated_skill = glossary.get(key) or learned_skill_get(key)
+        if not translated_skill:
+            translated_skill = translate_unknown_skill(skill_name.strip(), c)
+        output.append("%s - %s（%s）" % (
+            class_names[class_name.lower()], translated_skill, importance_names[importance.lower()],
+        ))
+    if len(output) != len(rows):
+        raise RuntimeError("AVAILABLE_LEVEL_SKILLS_LINE_COUNT_MISMATCH")
+    return "\n".join(output)
 
 
 def is_quest_information_block(text):
@@ -2308,14 +2734,18 @@ def should_bypass_whole_block_cache(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     return (is_room_prose_candidate(text) or
             any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
+            any(reviewed_phrase_translation(line.strip()) is not None for line in lines if line.strip()) or
             any(semantic_event_match(line) for line in lines) or
             is_scan_listing(text) or is_class_skill_table(text) or
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
-            is_login_menu(text) or is_help_search_listing(text) or
+            is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
             is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
-            is_room_preview_block(text) or is_quest_information_block(text))
+            is_numeric_report_block(text) or
+            is_wrapped_dialogue_block(text) or
+            is_room_preview_block(text) or is_available_level_skills_block(text) or
+            is_quest_information_block(text))
 
 
 def translate_mobs_in_room_listing(text, c):
@@ -2525,12 +2955,39 @@ def translate_semantic_event_line(line, c):
     if kind == "equipment":
         indent, action, item, trailing = groups
         templates = {
-            "wearing": "你穿戴著%s。", "holding": "你拿著%s。",
-            "wielding": "你揮舞著%s。", "carrying": "你攜帶著%s。",
+            "wearing": "你正穿戴著%s。", "holding": "你正拿著%s。",
+            "wielding": "你正裝備著%s。", "carrying": "你正攜帶著%s。",
         }
         return "%s%s%s" % (
             indent, templates[action.lower()] % translate_cached_phrase(item, c), trailing,
         )
+    if kind == "sniffs_air":
+        indent, actor, trailing = groups
+        return "%s%s嗅了嗅空氣，像是聞到附近的氣味。%s" % (
+            indent, translate_cached_phrase(actor, c), trailing,
+        )
+    if kind == "actor_dead":
+        indent, actor, trailing = groups
+        return "%s%s死了！%s" % (indent, translate_cached_phrase(actor, c), trailing)
+    if kind == "actor_arrived":
+        indent, actor, trailing = groups
+        return "%s%s來了。%s" % (indent, translate_cached_phrase(actor, c), trailing)
+    if kind == "throw_shadow":
+        indent, projectile, target, missed, trailing = groups
+        template = "你向%s投出%s，但沒有命中！" if missed else "你向%s投出%s！"
+        return "%s%s%s" % (
+            indent,
+            template % (translate_cached_phrase(target, c), translate_cached_phrase(projectile, c)),
+            trailing,
+        )
+    if kind == "no_loot":
+        indent, actor, trailing = groups
+        return "%s%s的屍體已經沒有東西可搜刮了。%s" % (
+            indent, translate_cached_phrase(actor, c), trailing,
+        )
+    if kind == "block_attack":
+        indent, trailing = groups
+        return "%s你擋住了對方的攻擊。%s" % (indent, trailing)
     if kind == "door_action":
         indent, action, target, trailing = groups
         templates = {"open": "你打開%s。", "close": "你關上%s。", "lock": "你鎖上%s。", "unlock": "你解鎖%s。"}
@@ -3396,7 +3853,7 @@ def translate_structured_line_block(text, c):
                 # share the same cached item-name translation.
                 quantity = re.match(r"^(\s*(?:\(\s*\d+\s*\)|\d+)\s+)(.+)$", source_line)
                 cache_source = quantity.group(2) if quantity else source_line
-                translated_body = cache_get(cache_source, c)
+                translated_body = reviewed_phrase_translation(cache_source) or cache_get(cache_source, c)
                 if translated_body is None:
                     translated_body = translate_piece(cache_source, c, force_robust=True)
                     cache_put(cache_source, translated_body, c)
@@ -3797,7 +4254,7 @@ def translate_character_status_block(text, c):
             output.append("你已收集 %s 顆橡實。" % match.group(1)); continue
         match = re.match(r"^You have (\d+)/(\d+) hit, (\d+)/(\d+) mana, (\d+)/(\d+) movement\.$", value)
         if match:
-            output.append("生命 %s／%s，法力 %s／%s，移動力 %s／%s。" % match.groups()); continue
+            output.append("血量 %s／%s，法力 %s／%s，體力 %s／%s。" % match.groups()); continue
         if re.match(r"^(?:Str|Int|Wis|Dex|Con|Chr):", value):
             parts = re.findall(r"(Str|Int|Wis|Dex|Con|Chr):\s*(-?\d+)", value)
             if parts:
@@ -3855,6 +4312,8 @@ def translate_character_status_block(text, c):
 def translate(text,c):
     if has_embedded_tip_block(text):
         return translate_embedded_tip_block(text, c)
+    if is_wrapped_dialogue_block(text):
+        return translate_wrapped_dialogue_block(text, c)
     xp_history = translate_xp_history_line(text, c)
     if xp_history is not None:
         return xp_history
@@ -3866,6 +4325,8 @@ def translate(text,c):
         return translate_combat_template_block(text, c)
     if is_quest_help_block(text):
         return translate_quest_help_block(text)
+    if is_available_level_skills_block(text):
+        return translate_available_level_skills_block(text, c)
     if is_room_preview_block(text):
         return translate_room_preview_block(text, c)
     if is_quest_information_block(text):
@@ -3880,6 +4341,8 @@ def translate(text,c):
         return translate_counter_stats_block(text)
     if is_character_status_block(text):
         return translate_character_status_block(text, c)
+    if is_character_creation_welcome(text):
+        return translate_character_creation_welcome(text)
     if is_login_menu(text):
         return translate_login_menu(text, c)
     if is_help_search_listing(text):
@@ -3986,12 +4449,21 @@ def atomic_write(path,text):
     tmp=path.with_suffix(".tmp");tmp.write_text(text,encoding="utf-8");os.replace(tmp,path)
 
 def run():
+    global SERVER_START_THREAD, SERVER_SHUTTING_DOWN, SERVER_ALLOW_AUTOTUNE
     INBOX.mkdir(exist_ok=True);OUTBOX.mkdir(exist_ok=True)
     if not acquire_lock():return
     log("LMT Q4 WORKER START pid=%s python=%s"%(os.getpid(),sys.executable),True)
     try:
-        start_server()
-        log("worker ready - LMT-60 1.7B Q4",True)
+        if cloud_translation_candidates():
+            SERVER_ALLOW_AUTOTUNE = True
+            SERVER_START_THREAD = threading.Thread(
+                target=start_server_in_background, name="mushz-lmt-startup", daemon=True
+            )
+            SERVER_START_THREAD.start()
+            log("worker ready - cloud primary; LMT-60 tuning in background",True)
+        else:
+            start_server()
+            log("worker ready - LMT-60 1.7B Q4",True)
         while session_alive():
             jobs=sorted(INBOX.glob("req_*.txt"))
             if not jobs:
@@ -4030,6 +4502,10 @@ def run():
                 try:job.unlink()
                 except OSError:pass
     finally:
+        SERVER_SHUTTING_DOWN = True
+        stop_candidate(ACTIVE_CANDIDATE)
+        if SERVER_START_THREAD is not None and SERVER_START_THREAD.is_alive():
+            SERVER_START_THREAD.join(timeout=5)
         if CACHE_CONNECTION is not None:
             try:CACHE_CONNECTION.close()
             except Exception:pass

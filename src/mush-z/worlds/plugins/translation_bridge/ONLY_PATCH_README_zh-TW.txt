@@ -10,8 +10,9 @@ Only Patch 不包含也不會覆蓋：
 - cloud_translation_config.txt（雲端服務與 API 金鑰）
 - translation_config.json
 - translation_cache.sqlite3
-- skill_glossary_zh_tw.json
 - library_glossary_zh_tw.json
 - log、history、backend_choice.json 或任何使用者資料
+
+Only Patch 會更新通用且經審核的遊戲、片語與技能詞彙表，以及結構化規則資料庫；這些不是玩家私人設定。
 
 新安裝或缺少模型/runtime 的電腦必須使用 Full Translation Package。

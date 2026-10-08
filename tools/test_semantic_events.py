@@ -54,6 +54,7 @@ def load_functions() -> dict[str, object]:
     }
     namespace = {
         "re": re,
+        "GAME_GLOSSARY": {},
         "translate_cached_phrase": lambda value, _config: translations.get(value, value),
         "numeric_values": lambda value: re.findall(r"\d[\d,]*(?:\.\d+)?[kKmMbB]?", value),
         "numeric_items_preserved": lambda source, result: all(
@@ -75,7 +76,7 @@ def main() -> None:
         "You flick the blade, 'Mischief', but A small troll avoids your attack.": "你將刀刃「Mischief」迅速揮向一隻小巨魔，但對方避開了攻擊。",
         "A small troll makes a strange noise as you place the blade, 'Mischief' in his back.": "當你將刀刃「Mischief」刺入一隻小巨魔背部時，對方發出奇怪的聲音。",
         "Hawana puts an azure blue mask in Tensor's floating disc.": "Hawana將一個天藍色面具放入Tensor 的浮空圓盤。",
-        "You are carrying the mask of an assassin.": "你攜帶著刺客面具。",
+        "You are carrying the mask of an assassin.": "你正攜帶著刺客面具。",
         "You open the large set of oak doors.": "你打開那扇大型橡木門。",
         "The large set of oak doors is closed.": "那扇大型橡木門關著。",
         "You receive 7 gold coins for your sacrifice of the corpse of A small troll.": "你奉獻一隻小巨魔的屍體，獲得 7 枚金幣。",
@@ -123,7 +124,7 @@ def main() -> None:
     assert rendered.count("\n") == block.count("\n")
     assert "230k" in rendered
     worker_source = WORKER.read_text(encoding="utf-8-sig")
-    assert "STRUCTURED_FIELD_CACHE_VERSION = 1" in worker_source
+    assert "STRUCTURED_FIELD_CACHE_VERSION = 2" in worker_source
     assert 'missing[start:start + 32]' in worker_source
     assert 'prefetch_semantic_event_fields(lines, c)' in worker_source
     assert 'any(deterministic_translate(line.strip()) is not None' in worker_source

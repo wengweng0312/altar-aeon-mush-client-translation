@@ -27,6 +27,10 @@ TOP_FILES = (
     "cloud_translation_client.py",
     "cloud_translation_probe.py",
     "library_glossary_zh_tw.json",
+    "game_glossary_zh_tw.json",
+    "phrase_glossary_zh_tw.json",
+    "skill_glossary_zh_tw.json",
+    "skill_catalog.json",
     "mush_structure_catalog.sqlite3",
     "mush_structure_catalog_report.txt",
     "launch_speech_worker.cmd",
@@ -51,6 +55,12 @@ TOP_FILES = (
 PATCH_FILES = (
     "translation_worker.py",
     "translation_worker.pyw",
+    "game_glossary_zh_tw.json",
+    "phrase_glossary_zh_tw.json",
+    "skill_glossary_zh_tw.json",
+    "skill_catalog.json",
+    "mush_structure_catalog.sqlite3",
+    "mush_structure_catalog_report.txt",
     "cloud_translation_client.py",
     "cloud_translation_probe.py",
     "launch_speech_worker.cmd",
@@ -126,7 +136,7 @@ bad = [name for name in names if banned(name)]
 if bad:
     raise SystemExit("Banned private/generated path selected: %s" % bad[0])
 
-config_bytes = cloud_config_bytes = glossary_bytes = None
+config_bytes = cloud_config_bytes = None
 if MODE == "full":
     config = json.loads((BRIDGE / "translation_config.json").read_text(encoding="utf-8"))
     config["translation_cache_version"] = 13
@@ -151,15 +161,6 @@ if MODE == "full":
             cloud_lines.append(line)
     cloud_config_bytes = ("\n".join(cloud_lines).rstrip() + "\n").encode("utf-8")
 
-    glossary_path = BRIDGE / "skill_glossary_zh_tw.json"
-    if glossary_path.is_file():
-        glossary = json.loads(glossary_path.read_text(encoding="utf-8"))
-        if not isinstance(glossary, dict):
-            raise SystemExit("skill_glossary_zh_tw.json must contain a JSON object")
-    else:
-        glossary = {}
-    glossary_bytes = (json.dumps(glossary, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 manifest = []
 with zipfile.ZipFile(OUTPUT, "w", allowZip64=True) as archive:
@@ -178,9 +179,6 @@ with zipfile.ZipFile(OUTPUT, "w", allowZip64=True) as archive:
             digest = sha256_file(path)
         manifest.append("%s  %s" % (digest, name))
     if MODE == "full":
-        glossary_name = "worlds/plugins/translation_bridge/skill_glossary_zh_tw.json"
-        archive.writestr(glossary_name, glossary_bytes, compress_type=zipfile.ZIP_DEFLATED)
-        manifest.append("%s  %s" % (hashlib.sha256(glossary_bytes).hexdigest(), glossary_name))
         for empty in ("inbox/", "outbox/", "speech_inbox/"):
             archive.writestr("worlds/plugins/translation_bridge/" + empty, b"")
     archive.writestr("PACKAGE_MANIFEST_SHA256.txt", "\n".join(manifest) + "\n")

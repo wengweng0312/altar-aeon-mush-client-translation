@@ -150,7 +150,12 @@ def main() -> None:
         # The bootstrap helper must time out safely if MUSHclient did not close.
         fake_mush = sandbox / "MUSHclient.exe"
         shutil.copy2(Path(r"C:\Windows\System32\cmd.exe"), fake_mush)
-        blocker = subprocess.Popen([str(fake_mush), "/c", "ping -n 8 127.0.0.1 >nul"])
+        # Use a local timer rather than ping: restricted test environments may
+        # reject even loopback traffic and let the fake client exit early.
+        blocker = subprocess.Popen([
+            str(fake_mush), "/c",
+            "powershell.exe -NoLogo -NoProfile -Command Start-Sleep -Seconds 8",
+        ])
         try:
             helper_log = sandbox / "helper.log"
             helper = subprocess.run(
@@ -166,7 +171,8 @@ def main() -> None:
                 timeout=10,
             )
             assert helper.returncode != 0
-            assert "no files were changed" in helper_log.read_text(encoding="utf-8-sig")
+            helper_text = helper_log.read_text(encoding="utf-8-sig")
+            assert "no files were changed" in helper_text, helper_text
         finally:
             blocker.terminate()
             blocker.wait(timeout=5)

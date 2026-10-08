@@ -26,6 +26,7 @@ log_archive/
 # Runtime state and caches
 *.sqlite
 *.sqlite3
+!src/mush-z/worlds/plugins/translation_bridge/mush_structure_catalog.sqlite3
 *.db-wal
 *.db-shm
 worker.lock

@@ -1,12 +1,12 @@
 Mush-Z structure catalog report
-Generated UTC: 2026-10-01T02:30:13.284848+00:00
+Generated UTC: 2026-10-08T20:55:51.428168+00:00
 Trigger source files scanned: 136
 XML files scanned: 111
 Lua trigger files scanned: 25
 Triggers cataloged: 1855
 Python-compatible patterns: 1842
-Trace records scanned: 21582
-Triggers observed in trace: 244
+Trace records scanned: 30546
+Triggers observed in trace: 225
 
 Categories:
   event: 716
@@ -20,85 +20,85 @@ Categories:
   data: 29
 
 Top deterministic candidates by aggregate observed count:
-    16658  [navigation] lua/mushz/core/filters.lua :: (unnamed) :: [Exits: * ]
-     1763  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You * into your hiding spot.
-     1106  [status] lua/mushz/core/kxwt.lua :: damage_other :: ^(?:kxft)?\s*(?P<attacker>.*?)\'s (?P<dtype>.*?) (?P<dstring>heals|annoys|scratches|hits|injures|wounds|mauls|decimates|devastates|maims|MUTILATES|DISMEMBERS|DISEMBOWELS|MASSACRES|
-      601  [event] lua/mushz/sound/sound_xml.lua :: mob_sniff :: .+ sniffs? the air, as though catching a nearby scent\.$
-      511  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Alas, you cannot go that way.
-      511  [navigation] worlds/plugins/ATCP_Mapper.xml :: (unnamed) :: Alas, you cannot go that way.
-      386  [combat] lua/mushz/core/filters.lua :: (unnamed) :: Your blood freezes as you hear * death cry!
-      336  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You receive * experience.
-      310  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Dark figures step from the shadows and solidify into exact replicas of you.
-      295  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * appreciates your sacrifice of *
-      212  [status] lua/mushz/sound/sound_xml.lua :: cry_victory_success :: You cry victory over your fallen enemy!
-      207  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel less tired.
-      193  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have some small wounds and bruises.
-      181  [navigation] lua/mushz/core/filters.lua :: (unnamed) :: [Exits: * ] [Doors: * ]
-      181  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You put * in *
-      173  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You got a * attack combo!*
-      152  [item] lua/mushz/core/filters.lua :: (unnamed) :: You quickly evaluate * armor and anatomy...
+    24724  [navigation] lua/mushz/core/filters.lua :: (unnamed) :: [Exits: * ]
+     2312  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You * into your hiding spot.
+     1596  [status] lua/mushz/core/kxwt.lua :: damage_other :: ^(?:kxft)?\s*(?P<attacker>.*?)\'s (?P<dtype>.*?) (?P<dstring>heals|annoys|scratches|hits|injures|wounds|mauls|decimates|devastates|maims|MUTILATES|DISMEMBERS|DISEMBOWELS|MASSACRES|
+      887  [event] lua/mushz/sound/sound_xml.lua :: mob_sniff :: .+ sniffs? the air, as though catching a nearby scent\.$
+      603  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Alas, you cannot go that way.
+      603  [navigation] worlds/plugins/ATCP_Mapper.xml :: (unnamed) :: Alas, you cannot go that way.
+      544  [combat] lua/mushz/core/filters.lua :: (unnamed) :: Your blood freezes as you hear * death cry!
+      500  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You receive * experience.
+      467  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Dark figures step from the shadows and solidify into exact replicas of you.
+      410  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * appreciates your sacrifice of *
+      339  [status] lua/mushz/sound/sound_xml.lua :: cry_victory_success :: You cry victory over your fallen enemy!
+      316  [event] lua/mushz/sound/sound_xml.lua :: get_object :: You get *.
+      304  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have some small wounds and bruises.
+      241  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel less tired.
+      194  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * tries to trip you, *
+      189  [navigation] lua/mushz/core/filters.lua :: (unnamed) :: [Exits: * ] [Doors: * ]
+      181  [item] lua/mushz/core/filters.lua :: (unnamed) :: You quickly evaluate * armor and anatomy...
+      176  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You got a * attack combo!*
       148  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You stomp on * and hear something crunch!
-      132  [event] lua/mushz/sound/sound_xml.lua :: get_object :: You get *.
-      128  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * tries to trip you, *
-      110  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You gain favor in the eyes of *
-      109  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You do not see that character here.
-      107  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You use your faith in * as a shield to protect you.
-      105  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your shield of faith dissipates, and you no longer feel as protected by *.
-       95  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your backstab does considerable damage to *
-       87  [item] worlds/plugins/mushz_sid.xml :: sid_footer_6 :: ^You are (wearing|holding|wielding|carrying) (.*?)\.$
-       83  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You quickly thrust your weapon at *
-       80  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You draw back your weapon, then thrust it at *
-       72  [navigation] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You open *
-       70  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You wait for an attack of opportunity...
-       67  [event] lua/mushz/extensions/scm.lua :: (unnamed) :: ^You receive (\d+) gold coins? for your sacrifice of (.+)\.$
-       66  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You fail to cast the spell*
-       65  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You stop using *
-       58  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You give up waiting, and shift out of your riposte stance.
-       57  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You place * in the back of *.
-       51  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You successfully finished a full * attack combo!*
-       48  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * narrowly avoids getting stomped on by you!
-       46  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have quite a few wounds.
-       44  [combat] lua/mushz/extensions/scm.lua :: you_dodge :: You dodge * attack.
-       43  [event] lua/mushz/sound/sound_xml.lua :: sound_sanc_drop :: The white aura around * fades.
-       42  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel as though * is watching over you.
+      147  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You use your faith in * as a shield to protect you.
+      143  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You do not see that character here.
+      142  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You gain favor in the eyes of *
+      141  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your shield of faith dissipates, and you no longer feel as protected by *.
+      138  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your backstab does considerable damage to *
+      120  [item] worlds/plugins/mushz_sid.xml :: sid_footer_6 :: ^You are (wearing|holding|wielding|carrying) (.*?)\.$
+      118  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You quickly thrust your weapon at *
+      107  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You draw back your weapon, then thrust it at *
+      105  [navigation] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You open *
+       95  [event] lua/mushz/extensions/scm.lua :: (unnamed) :: ^You receive (\d+) gold coins? for your sacrifice of (.+)\.$
+       86  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You wait for an attack of opportunity...
+       85  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You fail to cast the spell*
+       79  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You place * in the back of *.
+       77  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You stop using *
+       73  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You give up waiting, and shift out of your riposte stance.
+       69  [combat] lua/mushz/extensions/scm.lua :: you_dodge :: You dodge * attack.
+       66  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You do not seem to have that item.
+       62  [channel] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You pray to * for transportation...
+       62  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^            Welcome to Alter Aeon!$
+       61  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel as though * is watching over you.
+       59  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have quite a few wounds.
+       55  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel a slight tingle and you feel somehow abandoned.
+       54  [item] lua/mushz/extensions/scm.lua :: (unnamed) :: * misses you.
+       52  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You successfully finished a full * attack combo!*
+       52  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^You donate (?P<minus_item>.*?)$
+       51  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have a few scratches.
+       49  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Huh?
+       49  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(.+) \(unique\)$
+       49  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * narrowly avoids getting stomped on by you!
+       45  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The * is closed.
+       43  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(You feel better\!|You will your injuries to heal and your soul to take courage\.)$
+       42  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * is surrounded by a fuzzy pink outline*
+       40  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You throw dirt in *'s face, blinding *!
        40  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You stomp on * toes!
-       40  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You feel a slight tingle and you feel somehow abandoned.
-       39  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You are too high level, but still receive * experience.
-       39  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You are surrounded by a white aura.
-       39  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Huh?
-       38  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The white aura around your body fades.
-       38  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^You donate (?P<minus_item>.*?)$
-       36  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You learn very little from this battle.  You receive * experience.
-       35  [item] lua/mushz/extensions/scm.lua :: (unnamed) :: * misses you.
-       34  [channel] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You pray to * for transportation...
-       34  [item] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You have a few scratches.
-       34  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The * is closed.
+       40  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You learn very little from this battle.  You receive * experience.
+       39  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You gather darkness around yourself.
+       36  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You drop *
+       35  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(?:You find yourself feeling sharp and ready to take on anything\!|You feel sharp, and currently gain .+)$
        33  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You try to move stealthily, but fail!
-       31  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^You follow through after your feint\!$
-       29  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You throw dirt in *'s face, blinding *!
-       29  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You sense a hidden life form in the room.
-       28  [item] lua/mushz/extensions/scm.lua :: (unnamed) :: You miss *
-       28  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(You feel better\!|You will your injuries to heal and your soul to take courage\.)$
-       28  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(.+) \(unique\)$
-       28  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^(?:You find yourself feeling sharp and ready to take on anything\!|You feel sharp, and currently gain .+)$
-       28  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You miss * vital areas but manage to hit * anyway!
-       25  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You gather darkness around yourself.
-       25  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You drop *
-       25  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^            Welcome to Alter Aeon!$
-       24  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You create and magically throw bolts of ice at *
-       24  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You no longer feel sharp and at your best.
-       21  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You suddenly feel less tired and more refreshed!
-       20  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The black aura about your body fades.
-       20  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * trips you, sending you sprawling!
-       19  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your coat of crystal scales suddenly shatters in a chain reaction!
-       19  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You give * to *
-       19  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You are quickly covered in a coat of crystal scales!
-       19  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * begins to regain * vision.
-       18  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The physical reserve deep within you feels replenished.
-       18  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^.+ savagely devours (a|an|the) .+ of .+\.$
-       18  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * knocks your legs out from under you!
-       18  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You don't learn much from this battle, but still receive * experience.
-       17  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: Your ice shield fades and is gone.
-       17  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You mutilate one of * joints, crippling *
+       32  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^You follow through after your feint\!$
+       31  [item] lua/mushz/extensions/scm.lua :: (unnamed) :: You miss *
+       31  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You draw a mass of darkness from a nearby shadow, and shape it into a number of small blades.
+       31  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You are too high level, but still receive * experience.
+       31  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You no longer feel sharp and at your best.
+       31  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You miss * vital areas but manage to hit * anyway!
+       31  [event] worlds/plugins/gw2.xml :: (unnamed) :: Ok.
+       30  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You sense a hidden life form in the room.
+       30  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You put * in *
+       30  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The black aura about your body fades.
+       29  [status] worlds/plugins/AlterAeon.xml :: (unnamed) :: You don't learn much from this battle, but still receive * experience.
+       25  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You suddenly feel less tired and more refreshed!
+       25  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * trips you, sending you sprawling!
+       25  [combat] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * knocks your legs out from under you!
+       25  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * gives you *
+       24  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: ^You get (\d+) gold coins.
+       23  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You give * to *
+       23  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * begins to regain * vision.
+       22  [status] lua/mushz/sound/sound_xml.lua :: (unnamed) :: * restored you to full health!
+       21  [event] lua/mushz/extensions/scm.lua :: (unnamed) :: \s*You receive an explorer point!
+       20  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: You mutilate one of * joints, crippling *
+       20  [event] lua/mushz/sound/sound_xml.lua :: (unnamed) :: The physical reserve deep within you feels replenished.
 
 Privacy: no matched player text is stored in the database or this report.
