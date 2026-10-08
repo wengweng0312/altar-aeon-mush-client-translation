@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$VersionFile,
     [Parameter(Mandatory = $true)][string]$StatusFile,
-    [string]$ManifestUrl = "https://raw.githubusercontent.com/wengweng0312/altar-aeon-mush-client-translation/main/update/latest.json"
+    [string]$ManifestUrl = "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/latest/download/update_manifest.json"
 )
 
 $ErrorActionPreference = "Stop"
