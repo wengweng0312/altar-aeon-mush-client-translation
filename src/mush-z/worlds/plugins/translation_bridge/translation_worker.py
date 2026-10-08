@@ -19,6 +19,9 @@ LOG = ROOT/"translation_worker.log"
 CACHE_DB = ROOT/"translation_cache.sqlite3"
 SERVER_LOG = ROOT/"llama_server.log"
 TRACE_LOG = ROOT/"lmt_translation_trace.log"
+LOG_ARCHIVE = ROOT/"log_archive"
+TRACE_LOG_MAX_BYTES = 20 * 1024 * 1024
+WORKER_LOG_MAX_BYTES = 5 * 1024 * 1024
 SKILL_GLOSSARY_FILE = ROOT/"skill_glossary_zh_tw.json"
 LIBRARY_GLOSSARY_FILE = ROOT/"library_glossary_zh_tw.json"
 STRUCTURE_CATALOG_FILE = ROOT/"mush_structure_catalog.sqlite3"
@@ -384,9 +387,28 @@ def structured_block_kind(text):
             return "shop_item_continuation"
     return None
 
+def rotate_log_if_needed(path, max_bytes):
+    """Archive a full local log without deleting or overwriting old records."""
+    try:
+        if not path.is_file() or path.stat().st_size < int(max_bytes):
+            return None
+        LOG_ARCHIVE.mkdir(exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        destination = LOG_ARCHIVE / (path.stem + "_" + stamp + path.suffix)
+        serial = 1
+        while destination.exists():
+            destination = LOG_ARCHIVE / (path.stem + "_" + stamp + "_%02d" % serial + path.suffix)
+            serial += 1
+        os.replace(path, destination)
+        return destination
+    except Exception:
+        return None
+
+
 def log(msg, critical=False):
     try:
         if critical or config().get("debug_logging", False):
+            rotate_log_if_needed(LOG, WORKER_LOG_MAX_BYTES)
             with LOG.open("a", encoding="utf-8") as f:
                 f.write(time.strftime("%Y-%m-%d %H:%M:%S")+" [LMT] "+str(msg)+"\n")
     except Exception:
@@ -483,23 +505,35 @@ def mark_translation_engine(name):
     TRANSLATION_ENGINES_USED.add(str(name))
 
 
-def cloud_translate_many(sources):
-    """Try configured cloud providers in priority order, then allow LMT fallback."""
+def cloud_translate_many_partial(sources):
+    """Keep valid cloud units and retry only rejected units with the next provider."""
     sources = [str(source) for source in sources]
+    results = [None] * len(sources)
+    pending = list(range(len(sources)))
     for service, api_key, settings in cloud_translation_candidates("\n".join(sources)):
+        if not pending:
+            break
         provider = cloud_translation_client.SERVICE_NAMES.get(service, "unknown")
         try:
             translated = cloud_translation_client.translate_many(
-                service, sources, api_key,
+                service, [sources[index] for index in pending], api_key,
                 settings["azure_region"], settings["timeout_seconds"],
             )
-            if len(translated) != len(sources):
+            if len(translated) != len(pending):
                 raise RuntimeError("CLOUD_RESULT_COUNT_MISMATCH")
-            results = [validate_cloud_translation(source, result)
-                       for source, result in zip(sources, translated)]
-            mark_translation_engine(provider)
-            CLOUD_FAILURE_COUNT[service] = 0
-            return results
+            unresolved = []
+            accepted = 0
+            for index, result in zip(pending, translated):
+                try:
+                    results[index] = validate_cloud_translation(sources[index], result)
+                    accepted += 1
+                except Exception as unit_error:
+                    unresolved.append(index)
+                    log("cloud provider=%s unit fallback: %s" % (provider, str(unit_error)), True)
+            if accepted:
+                mark_translation_engine(provider)
+                CLOUD_FAILURE_COUNT[service] = 0
+            pending = unresolved
         except Exception as error:
             if cloud_translation_client.is_session_blocking_error(error):
                 CLOUD_DISABLED_FOR_SESSION.add(service)
@@ -515,7 +549,13 @@ def cloud_translate_many(sources):
                     (provider, CLOUD_COOLDOWN_SECONDS), True)
             else:
                 log("cloud provider=%s fallback: %s" % (provider, str(error)), True)
-    return None
+    return results if any(result is not None for result in results) else None
+
+
+def cloud_translate_many(sources):
+    """Return a complete cloud batch, or let the existing LMT fallback run."""
+    results = cloud_translate_many_partial(sources)
+    return results if results is not None and all(result is not None for result in results) else None
 
 
 def load_deterministic_templates():
@@ -1505,10 +1545,7 @@ def translate_room_prose_cached(text, c):
     missing_indexes = [index for index, value in enumerate(cached) if value is None]
     if missing_indexes:
         missing_sources = [chunks[index] for index in missing_indexes]
-        translated_missing = None
-        cloud_results = cloud_translate_many(missing_sources)
-        if cloud_results is not None and len(cloud_results) == len(missing_sources):
-            translated_missing = cloud_results
+        translated_missing = cloud_translate_many_partial(missing_sources)
         if translated_missing is None:
             try:
                 translated_missing = translate_room_units_once(missing_sources, c)
@@ -1517,6 +1554,18 @@ def translate_room_prose_cached(text, c):
                 # drops a marker, retain the proven whole-room translation path.
                 log("room aligned translation fallback: %r" % error, True)
                 return translate_piece(text, c, force_robust=True)
+        else:
+            unresolved = [index for index, value in enumerate(translated_missing) if value is None]
+            if unresolved:
+                try:
+                    local_results = translate_room_units_once(
+                        [missing_sources[index] for index in unresolved], c
+                    )
+                    for index, value in zip(unresolved, local_results):
+                        translated_missing[index] = value
+                except Exception as error:
+                    log("room partial cloud fallback: %r" % error, True)
+                    return translate_piece(text, c, force_robust=True)
         for index, translated_chunk in zip(missing_indexes, translated_missing):
             ok, reason = translation_sanity_ok(chunks[index], translated_chunk)
             if not ok:
@@ -3927,6 +3976,7 @@ def trace_record(request_id, status, source, result="", elapsed=0.0, error=""):
             "error": str(error),
             "engine": "+".join(sorted(TRANSLATION_ENGINES_USED)) or "local",
         }
+        rotate_log_if_needed(TRACE_LOG, TRACE_LOG_MAX_BYTES)
         with TRACE_LOG.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:

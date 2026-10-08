@@ -20,6 +20,8 @@ cloud_translation_probe_report.json
 translation_update.log
 translation_update_status.txt
 translation_update_status.txt.tmp
+log_archive/
+**/log_archive/
 
 # Runtime state and caches
 *.sqlite
