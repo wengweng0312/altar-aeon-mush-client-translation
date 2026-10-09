@@ -1,6 +1,6 @@
 # Mush-Z asynchronous translation worker - LMT-60 1.7B Q4 live integration
 # Minimal first-run build: preserve inbox/outbox/cache protocol; replace MADLAD with persistent llama-server.
-import base64, ctypes, hashlib, importlib.util, json, os, platform, re, sqlite3, subprocess, sys, threading, time, urllib.request
+import base64, ctypes, hashlib, importlib.util, json, locale, os, platform, re, sqlite3, subprocess, sys, threading, time, urllib.request
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from statistics import median
@@ -4639,6 +4639,28 @@ def trace_record(request_id, status, source, result="", elapsed=0.0, error=""):
 def atomic_write(path,text):
     tmp=path.with_suffix(".tmp");tmp.write_text(text,encoding="utf-8");os.replace(tmp,path)
 
+
+def decode_request_payload(data):
+    """Decode UTF-8 output capture or a legacy MUSHclient input code page."""
+    try:
+        return bytes(data).decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    encodings = ["mbcs", locale.getpreferredencoding(False), "cp950", "gb18030"]
+    fallback = None
+    for encoding in dict.fromkeys(encodings):
+        try:
+            candidate = bytes(data).decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+        if fallback is None:
+            fallback = candidate
+        if contains_cjk(candidate):
+            return candidate
+    if fallback is not None:
+        return fallback
+    return bytes(data).decode("utf-8", "replace")
+
 def run():
     global SERVER_START_THREAD, SERVER_SHUTTING_DOWN, SERVER_ALLOW_AUTOTUNE
     INBOX.mkdir(exist_ok=True);OUTBOX.mkdir(exist_ok=True)
@@ -4661,7 +4683,7 @@ def run():
                 time.sleep(.05);continue
             job=jobs[0];rid=job.stem[4:];out=OUTBOX/("res_"+rid+".txt")
             try:
-                raw=base64.b64decode(job.read_text(encoding="ascii")).decode("utf-8","replace")
+                raw=decode_request_payload(base64.b64decode(job.read_text(encoding="ascii")))
                 TRANSLATION_ENGINES_USED.clear()
                 if raw.startswith(CONTROL_CLEAR_RECENT_CACHE):
                     requested = raw[len(CONTROL_CLEAR_RECENT_CACHE):].strip() or "5"

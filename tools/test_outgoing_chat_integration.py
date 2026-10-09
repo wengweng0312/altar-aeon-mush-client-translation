@@ -83,6 +83,11 @@ class OutgoingChatIntegrationTests(unittest.TestCase):
         nvda_source = NVDA_MODULE.read_text(encoding="utf-8")
         self.assertNotIn('gesture="kb:control+shift+y"', nvda_source)
 
+    def test_request_decoder_accepts_utf8_and_legacy_big5_input(self):
+        value = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:chat 大家好，我是新來的，請多指教"
+        self.assertEqual(MODULE.decode_request_payload(value.encode("utf-8")), value)
+        self.assertEqual(MODULE.decode_request_payload(value.encode("cp950")), value)
+
     def test_selected_cloud_provider_is_preferred(self):
         settings = {
             "service": 1, "allow_private_messages": True,
