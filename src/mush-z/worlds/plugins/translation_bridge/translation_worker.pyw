@@ -1289,7 +1289,7 @@ def start_server_in_background():
 NUMERIC_MULTIPLIERS = {
     "": Decimal(1), "k": Decimal(1000), "m": Decimal(1000000), "b": Decimal(1000000000),
 }
-NUMERIC_PATTERN = re.compile(r"(?<![A-Za-z])([-+]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)(%?)")
+NUMERIC_PATTERN = re.compile(r"(?<![A-Za-z])([-+]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)(%?)(?!_)")
 
 
 def numeric_values(value):

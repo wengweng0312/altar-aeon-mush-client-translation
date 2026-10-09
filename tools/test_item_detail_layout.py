@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -53,6 +54,21 @@ def main() -> None:
     assert '"You are full.": "你完全恢復了。"' in worker
     assert '"MANA_REGEN", "ALIGNMENT"' in worker
     assert "item_detail_semantic_source_lines" in plugin
+
+    spec = importlib.util.spec_from_file_location("item_detail_worker_test", WORKER)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    icebringer = (
+        "Icebringer, Level: 27, Comp: NON-SOLID, ICE, Type: WEAPON, "
+        "Weight: 32 ARTIFACT GLOW, 2_WIELD, Damage: 6d11, Speed: slowest, "
+        "Damage Type: ice slash, 25 wield strength, DAMROLL by 9, HITROLL by 9, "
+        "SAVING_FIRE by 25%, HIT_POINTS by 20, MOVE by 20, MANA by 20, "
+        "Quality: WELL CRAFTED, This item is bound to your account."
+    )
+    rendered = icebringer.replace("2_WIELD", "雙手持握")
+    assert (module.Decimal("2"), False) not in module.numeric_values(icebringer)
+    assert module.numeric_items_preserved(icebringer, rendered)
     print("ITEM_DETAIL_LAYOUT_OK fields=13 internal_component_comma=preserved")
 
 
