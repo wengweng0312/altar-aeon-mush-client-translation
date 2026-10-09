@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "published": true,
-  "version": "1.2.1",
-  "patch_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/download/v1.2.1/Mush-Z_Translation_Mode_Only_Patch_v1.2.1.zip",
-  "sha256": "18eefefb44a379e66ce2f6372b7ca5cb6ce7e0c644b1298876dda760f3600e75",
-  "release_notes_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/tag/v1.2.1"
+  "version": "1.2.2",
+  "patch_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/download/v1.2.2/Mush-Z_Translation_Mode_Only_Patch_v1.2.2.zip",
+  "sha256": "a1cb89fe50e2862455b0a49db6a2f3ec37304f154dc4de594b1499452afc96c3",
+  "release_notes_url": "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/tag/v1.2.2"
 }
