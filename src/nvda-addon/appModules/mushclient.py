@@ -999,39 +999,6 @@ class AppModule(appModuleHandler.AppModule):
 			clsList.insert(0, Input)
 
 	@scriptHandler.script(
-		description="Speak the English original; press twice to copy it",
-		gesture="kb:control+shift+y",
-	)
-	def script_translationOriginalEnglish(self, gesture):
-		if not _translationReviewIsActive():
-			ui.message("翻譯模式未開啟。")
-			return
-		if scriptHandler.getLastScriptRepeatCount() > 0:
-			english = getattr(self, "_translationOriginalForRepeat", "")
-			if not english:
-				english = _translationOriginalEnglish(_readTranslationReviewEntry())
-			if not english:
-				ui.message("這一筆沒有英文原文。")
-				return
-			try:
-				api.copyToClip(english, notify=False)
-			except TypeError:
-				api.copyToClip(english)
-			ui.message("已複製英文原文。")
-			return
-		english = _translationOriginalEnglish(_readTranslationReviewEntry())
-		if not english:
-			ui.message("這一筆沒有英文原文。")
-			return
-		self._translationOriginalForRepeat = english
-		_translationOrNative(
-			gesture,
-			"control+alt+shift+y",
-			lambda ignoredGesture: ui.message(english),
-			lambda: self._syncTranslationReviewPosition(True),
-		)
-
-	@scriptHandler.script(
 		description="Previous Chinese segment, or NVDA previous review word",
 		gesture="kb:numpad4",
 	)

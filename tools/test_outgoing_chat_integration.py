@@ -7,6 +7,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "src/mush-z/worlds/plugins/translation_bridge/translation_worker.py"
 PLUGIN = ROOT / "src/mush-z/worlds/plugins/Translation_Mode.xml"
+NVDA_MODULE = ROOT / "src/nvda-addon/appModules/mushclient.py"
 SPEC = importlib.util.spec_from_file_location("translation_worker_outgoing_test", WORKER)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
@@ -79,6 +80,8 @@ class OutgoingChatIntegrationTests(unittest.TestCase):
         self.assertIn("GetCommand()", function)
         self.assertNotIn("Send(", function)
         self.assertNotIn("SendImmediate(", function)
+        nvda_source = NVDA_MODULE.read_text(encoding="utf-8")
+        self.assertNotIn('gesture="kb:control+shift+y"', nvda_source)
 
     def test_selected_cloud_provider_is_preferred(self):
         settings = {

@@ -1456,8 +1456,8 @@ local function write_accessible_history(original, translated, categories, anchor
   end
   local review_kind = review_kind_for(original, categories)
   -- Keep every semantic row bilingual in storage.  The NVDA presentation
-  -- layer exposes only the Chinese half and Ctrl+Shift+Y retrieves the hidden
-  -- English half.  Expanding this into separate English and Chinese history
+  -- layer exposes only the Chinese half while retaining the hidden English
+  -- half. Expanding this into separate English and Chinese history
   -- rows destroys that relationship and makes pure-English rows visible.
   if anchor_id then history_insert_before(anchor_id, entries, review_kind)
   else for _, entry in ipairs(entries) do history_add(entry, review_kind) end end
