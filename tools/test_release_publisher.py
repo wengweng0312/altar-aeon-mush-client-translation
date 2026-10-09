@@ -28,5 +28,7 @@ assert '--repository "${{ github.repository }}"' in workflow
 assert 'Copy-Item -LiteralPath "dist\\update_manifest.json" -Destination "update\\latest.json"' in workflow
 assert "Player-facing update verification failed" in workflow
 assert "raw.githubusercontent.com" not in workflow
+assert "shell: powershell" not in workflow
+assert workflow.count("shell: pwsh") == 4
 
 print("RELEASE_PUBLISHER_OK generic_origin=yes dry_run=yes player_check=yes")

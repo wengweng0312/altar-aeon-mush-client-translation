@@ -24,7 +24,7 @@ jobs:
           python-version: "3.11"
 
       - name: Build and validate Only Patch
-        shell: powershell
+        shell: pwsh
         run: |
           $env:TEMP = Join-Path $env:GITHUB_WORKSPACE ".test-tmp"
           $env:TMP = $env:TEMP
@@ -40,7 +40,7 @@ jobs:
           python tools/build_release.py --version "${{ inputs.version }}" --repository "${{ github.repository }}"
 
       - name: Publish GitHub Release
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -63,7 +63,7 @@ jobs:
           gh release create "v$version" dist/* --title "Mush-Z Translation Mode v$version stable" --notes-file $notes
 
       - name: Publish updater manifest
-        shell: powershell
+        shell: pwsh
         run: |
           $version = "${{ inputs.version }}".TrimStart("v")
           Copy-Item -LiteralPath "dist\update_manifest.json" -Destination "update\latest.json" -Force
@@ -78,7 +78,7 @@ jobs:
           }
 
       - name: Verify player-facing update discovery
-        shell: powershell
+        shell: pwsh
         run: |
           git pull --ff-only origin "${{ github.ref_name }}"
           $version = "${{ inputs.version }}".TrimStart("v")
