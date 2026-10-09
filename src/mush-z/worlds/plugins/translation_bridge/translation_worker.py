@@ -3899,7 +3899,10 @@ def translate_practice_table(text, c):
             # never ask the model to reproduce or rewrite it.
             output.append(indent + zh_name + separator + zh_rating + rating_separator + suffix)
         elif kind == "prose":
-            translated = translate_piece(value, c, force_robust=True)
+            # Section headings and the explanatory footer repeat across every
+            # practice attempt. Cache them independently while reconstructing
+            # dynamic counts, ratings and requirements from the fresh table.
+            translated = translate_cached_phrase(value, c)
             output.append(" ".join(translated.splitlines()).strip())
         else:
             output.append(value)
