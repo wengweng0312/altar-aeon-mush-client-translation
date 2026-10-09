@@ -4503,6 +4503,11 @@ def translate_character_status_block(text, c):
 def translate(text,c):
     if has_embedded_tip_block(text):
         return translate_embedded_tip_block(text, c)
+    # Quest detail blocks often contain several quoted NPC conversations.
+    # Preserve their deterministic fields before the generic wrapped-dialogue
+    # detector can claim the entire quest as one prose request.
+    if is_quest_structured_block(text):
+        return translate_quest_structured_block(text, c)
     if is_wrapped_dialogue_block(text):
         return translate_wrapped_dialogue_block(text, c)
     xp_history = translate_xp_history_line(text, c)
@@ -4566,8 +4571,6 @@ def translate(text,c):
         return translate_task_list_block(text, c, "job")
     if is_quest_list_block(text):
         return translate_task_list_block(text, c, "quest")
-    if is_quest_structured_block(text):
-        return translate_quest_structured_block(text, c)
     if str(text).lstrip().startswith("You know the following skills:"):
         return translate_skills_block(text, c)
     if is_class_skill_table(text):

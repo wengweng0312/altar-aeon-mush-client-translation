@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "src" / "mush-z" / "worlds" / "plugins" / "Translation_Mode.xml"
+WORKER = ROOT / "src" / "mush-z" / "worlds" / "plugins" / "translation_bridge" / "translation_worker.py"
 
 
 def semantic_long_rows(lines: list[str]) -> list[str]:
@@ -47,6 +49,23 @@ def main() -> None:
     assert 'value:match("^Current goal long description:%s*")' in plugin
     assert 'value:match("^Previous goal long description:%s*")' in plugin
     assert "split_long_field and value:match" in plugin
+
+    spec = importlib.util.spec_from_file_location("quest_layout_worker_test", WORKER)
+    worker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(worker)
+    dialogue_quest = """Quest Name: Give a troll a chance.
+Location: Dream realm 2
+Area Level: 28
+Previous goal long description:
+A bridge troll says, 'No attack Bob. Go get me bear and I will remove rock.'
+Current goal long description:
+Mongo says, 'Search every room. I wish you luck.'"""
+    assert worker.is_quest_structured_block(dialogue_quest)
+    assert worker.is_wrapped_dialogue_block(dialogue_quest)
+    worker.translate_quest_structured_block = lambda text, config: "QUEST_STRUCTURED"
+    worker.translate_wrapped_dialogue_block = lambda text, config: "WRAPPED_DIALOGUE"
+    assert worker.translate(dialogue_quest, {}) == "QUEST_STRUCTURED"
     print("QUEST_LONG_DESCRIPTION_LAYOUT_OK semantic_rows=3 display_wraps_joined=yes")
 
 
