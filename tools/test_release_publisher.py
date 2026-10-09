@@ -17,6 +17,8 @@ assert "DRY RUN PASSED" in publisher
 assert publisher.index("if ($DryRun)") < publisher.index("WriteAllText($repositoryFile")
 assert "release-patch.yml" in publisher
 assert "gh run watch" in publisher
+assert "function Invoke-GhCaptured" in publisher
+assert "release not found|HTTP 404" in publisher
 assert "SysWOW64\\WindowsPowerShell" in publisher
 assert "RELEASE COMPLETED AND PLAYER UPDATE CHECK PASSED" in publisher
 assert "wengweng0312" not in publisher  # destination comes from origin

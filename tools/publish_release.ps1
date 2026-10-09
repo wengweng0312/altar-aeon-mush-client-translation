@@ -15,6 +15,26 @@ function Invoke-Checked([scriptblock]$Command, [string]$Failure) {
     if ($LASTEXITCODE -ne 0) { throw $Failure }
 }
 
+function Invoke-GhCaptured([string[]]$Arguments) {
+    # Windows PowerShell 5 can promote a native program's stderr to a
+    # terminating NativeCommandError when ErrorActionPreference is Stop.
+    # Some gh existence checks intentionally return a non-zero exit code, so
+    # capture their output under a non-terminating preference and inspect the
+    # exit code ourselves.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "SilentlyContinue"
+        $output = & gh @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = (($output | ForEach-Object { [string]$_ }) -join "`n").Trim()
+    }
+}
+
 function Get-Repository {
     $remote = (& git -C $Root remote get-url origin).Trim()
     if ($LASTEXITCODE -ne 0 -or $remote -notmatch 'github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$') {
@@ -57,8 +77,8 @@ $DefaultBranch = (& gh repo view $Repository --json defaultBranchRef --jq .defau
 if ($LASTEXITCODE -ne 0 -or -not $DefaultBranch) { throw "Unable to determine the default branch." }
 if ($Branch -ne $DefaultBranch) { throw "Publishing is allowed only from the default branch '$DefaultBranch'. Current branch: '$Branch'." }
 
-$latestOutput = & gh release view --repo $Repository --json tagName --jq .tagName 2>$null
-$LatestTag = if ($LASTEXITCODE -eq 0 -and $null -ne $latestOutput) { ([string]$latestOutput).Trim() } else { "" }
+$latestCheck = Invoke-GhCaptured @("release", "view", "--repo", $Repository, "--json", "tagName", "--jq", ".tagName")
+$LatestTag = if ($latestCheck.ExitCode -eq 0) { $latestCheck.Output } else { "" }
 $LatestVersion = if ($LatestTag) { $LatestTag.TrimStart("v") } else { "0.0.0" }
 if (-not $Version) {
     $parts = $LatestVersion.Split(".")
@@ -84,8 +104,12 @@ try {
     throw "Unable to compare version $Version with $LatestVersion."
 }
 
-if (& gh release view "v$Version" --repo $Repository --json tagName --jq .tagName 2>$null) {
+$releaseCheck = Invoke-GhCaptured @("release", "view", "v$Version", "--repo", $Repository, "--json", "tagName", "--jq", ".tagName")
+if ($releaseCheck.ExitCode -eq 0) {
     throw "Release v$Version already exists."
+}
+if ($releaseCheck.Output -and $releaseCheck.Output -notmatch '(?i)release not found|HTTP 404') {
+    throw "Unable to check whether release v$Version exists: $($releaseCheck.Output)"
 }
 
 Write-Host ""
