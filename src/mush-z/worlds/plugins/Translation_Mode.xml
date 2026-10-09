@@ -17,6 +17,7 @@
  <alias match="translation_history_top_review" enabled="y" script="TranslationHistoryTopReview" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_history_bottom_review" enabled="y" script="TranslationHistoryBottomReview" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_reveal_current_original" enabled="y" script="TranslationRevealCurrentOriginal" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="translation_translate_outgoing_chat" enabled="y" script="TranslateOutgoingChatInput" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_block_diagnostic" enabled="y" script="SpeakBlockDiagnostic" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_cache_clear_recent" enabled="y" script="ClearRecentTranslationCache" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_update_test" enabled="y" script="TestAutomaticUpdatePrompt" omit_from_output="y" omit_from_command_history="y" />
@@ -65,6 +66,7 @@ local block_starts = {
 local active_block = nil
 local pending_categories = {}
 local block_diag = {starts=0,skills=0,inventory=0,carried_container=0,ground_container=0,shop_items=0,shop_spells=0,free_items=0,history=0}
+local outgoing_request_id = nil
 
 local function block_category_for_line(line)
   local exact = block_starts[line]
@@ -385,6 +387,43 @@ function ClearRecentTranslationCache()
   requests[request_id] = {original="Cache cleanup failed.", ticks=0, categories={}, skip_history=true}
 end
 
+function TranslateOutgoingChatInput()
+  if not enabled then
+    speak("Translation mode is off.")
+    return
+  end
+  if outgoing_request_id and requests[outgoing_request_id] then
+    speak("Message translation is already in progress.")
+    return
+  end
+  local command = tostring(GetCommand() or "")
+  if command:find("^%s*$") then
+    speak("The command input is empty.")
+    return
+  end
+  seq = seq + 1
+  local request_id = string.format("%s_%06d", session_id, seq)
+  local payload = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:" .. command
+  local tmp = inbox .. "/req_" .. request_id .. ".tmp"
+  local final = inbox .. "/req_" .. request_id .. ".txt"
+  local f = io.open(tmp, "wb")
+  if not f then
+    speak("Unable to request message translation.")
+    return
+  end
+  f:write(b64(payload)); f:close()
+  if not os.rename(tmp, final) then
+    os.remove(tmp)
+    speak("Unable to request message translation.")
+    return
+  end
+  requests[request_id] = {
+    original=command, ticks=0, categories={}, skip_history=true, kind="outgoing_chat"
+  }
+  outgoing_request_id = request_id
+  speak("Translating message.")
+end
+
 
 local function file_exists(path)
   local f = io.open(path, "rb")
@@ -544,7 +583,9 @@ function OnPluginInstall()
   Accelerator("ctrl+alt+shift+pagedown", "translation_history_next_review")
   Accelerator("ctrl+alt+shift+home", "translation_history_top_review")
   Accelerator("ctrl+alt+shift+end", "translation_history_bottom_review")
-  Accelerator("ctrl+alt+shift+y", "translation_reveal_current_original")
+  -- Translation Mode loads last and intentionally replaces output_functions'
+  -- old Ctrl+Shift+Y "top line" binding with outgoing Chinese chat preview.
+  Accelerator("ctrl+shift+y", "translation_translate_outgoing_chat")
   Accelerator("ctrl+shift+f8", "translation_block_diagnostic")
   Accelerator("ctrl+shift+delete", "translation_cache_clear_recent")
   tm_debug("TM DEBUG INSTALL: Translation Mode 0.6.0 loaded")
@@ -1467,7 +1508,26 @@ local function poll_results()
 
     requests[request_id] = nil
 
-    if enabled then
+    if enabled and req and req.kind == "outgoing_chat" then
+      outgoing_request_id = nil
+      local translated = nil
+      if text:sub(1,4) == "OK\r\n" then
+        translated = text:sub(5)
+      elseif text:sub(1,3) == "OK\n" then
+        translated = text:sub(4)
+      end
+      if not translated or translated == "" then
+        speak("Message translation failed. Original input kept.")
+      elseif tostring(GetCommand() or "") ~= tostring(req.original or "") then
+        speak("Input changed. Translation discarded.")
+      else
+        SetCommandSelection(1, -1)
+        PasteCommand(translated:gsub("[\r\n]+", " "))
+        local current = tostring(GetCommand() or "")
+        SetCommandSelection(#current + 1, #current)
+        speak("English translation ready. Press Enter to send after checking it.")
+      end
+    elseif enabled then
       local translated = nil
       if text:sub(1,4) == "OK\r\n" then
         translated = text:sub(5)
@@ -1511,7 +1571,12 @@ local function expire_requests()
     -- 35 seconds at a 100 ms timer. Worker has its own 25-second timeout and returns ERR for English fallback.
     if r.ticks >= 350 then
       log("TIMEOUT request=" .. tostring(n), true)
-      if enabled and r.original then pcall(write_fallback_history, r); speak(r.original, n) end
+      if enabled and r.kind == "outgoing_chat" then
+        outgoing_request_id = nil
+        speak("Message translation timed out. Original input kept.")
+      elseif enabled and r.original then
+        pcall(write_fallback_history, r); speak(r.original, n)
+      end
       requests[n] = nil
       -- Keep process launch out of the 100 ms TranslationTick.
       recovery_requested = true

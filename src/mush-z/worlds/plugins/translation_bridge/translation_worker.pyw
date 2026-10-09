@@ -58,6 +58,7 @@ DETERMINISTIC_TEMPLATES = None
 DETERMINISTIC_FIELD_GLOSSARY = None
 PORT = 18082
 CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
+CONTROL_TRANSLATE_OUTGOING_CHAT = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:"
 CPU_AUTOTUNE_VERSION = 1
 STRUCTURED_FIELD_CACHE_VERSION = 2
 CPU_AUTOTUNE_MIN_GAIN = 1.05
@@ -1512,6 +1513,142 @@ def completion_once(text, c, n_predict=384, force_robust=False, force_simple=Fal
     if not ok:
         raise RuntimeError("LMT_SANITY_" + reason)
     return out
+
+
+OUTGOING_DIRECT_CHANNELS = frozenset({
+    "arena", "auction", "bovine", "chat", "gossip", "newbie", "xp", "zt",
+})
+OUTGOING_MESSAGE_COMMANDS = frozenset({"say", "reply", "gtell", "ctell"})
+
+
+def parse_outgoing_chat_command(command):
+    """Split a known talk command without guessing at gameplay commands."""
+    command = str(command or "")
+    if not command.strip():
+        return None
+    patterns = (
+        r"^(?P<prefix>\s*\$[a-z][a-z0-9_-]*\s+)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*#\s*)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*%send\s+[a-z][a-z0-9_-]*\s+)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*(?:channel|chan)\s+send\s+[a-z][a-z0-9_-]*\s+)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*tell\s+\S+\s+)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*sayto\s+\S+\s+)(?P<message>\S.*)$",
+        r"^(?P<prefix>\s*'\s*)(?P<message>\S.*)$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, command, re.I)
+        if match:
+            return match.group("prefix"), match.group("message")
+    match = re.match(
+        r"^(?P<name>[a-z][a-z0-9_-]*)(?P<space>\s+)(?P<message>\S.*)$",
+        command, re.I,
+    )
+    if not match:
+        return None
+    name = match.group("name").lower()
+    if name not in OUTGOING_MESSAGE_COMMANDS and name not in OUTGOING_DIRECT_CHANNELS:
+        return None
+    return match.group("name") + match.group("space"), match.group("message")
+
+
+def contains_cjk(text):
+    return bool(re.search(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", str(text)))
+
+
+def protect_outgoing_ascii_terms(text):
+    terms = []
+
+    def replace(match):
+        terms.append(match.group(0))
+        return "ZXQTERM%04dQXZ" % (len(terms) - 1)
+
+    protected = re.sub(
+        r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_'’-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_'’-]*)*",
+        replace, str(text),
+    )
+    return protected, terms
+
+
+def restore_outgoing_ascii_terms(text, terms):
+    text = str(text)
+    for index, term in enumerate(terms):
+        marker = "ZXQTERM%04dQXZ" % index
+        if text.count(marker) != 1:
+            raise RuntimeError("OUTGOING_PROTECTED_TERM_MISSING_OR_REPEATED")
+        text = text.replace(marker, term)
+    if re.search(r"ZXQTERM\d{4}QXZ", text):
+        raise RuntimeError("OUTGOING_UNKNOWN_PROTECTED_TERM")
+    return text
+
+
+def outgoing_translation_sanity_ok(source, translated):
+    translated = str(translated or "").strip()
+    if not translated:
+        return False, "blank"
+    if contains_cjk(translated):
+        return False, "chinese_remains"
+    if re.search(r"Translate the following|Chinese\s*:|English\s*:", translated, re.I):
+        return False, "prompt_leakage"
+    compact = re.sub(r"\s+", "", translated)
+    if re.search(r"(.{12,80}?)\1\1", compact):
+        return False, "repetition_loop"
+    if len(str(source)) >= 80 and len(translated) < 12:
+        return False, "severe_undertranslation"
+    return True, ""
+
+
+def completion_zh_en_once(text, c):
+    """Use LMT's official Standard Translation Prompt in the reverse direction."""
+    mark_translation_engine("lmt_q4_zh_en")
+    start_server()
+    prompt = "Translate the following text from Chinese into English:\nChinese: %s\nEnglish:" % text
+    timeout = max(3, float(c.get("request_timeout_seconds", 25)))
+    response = http_post("/v1/chat/completions", {
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 192,
+        "temperature": 0.0,
+        "repeat_penalty": 1.1,
+        "stream": False,
+    }, timeout)
+    choices = response.get("choices") or []
+    if not choices:
+        raise RuntimeError("LMT_ZH_EN_NO_CHOICES")
+    output = ((choices[0].get("message") or {}).get("content") or "").strip()
+    tokens = int((response.get("usage") or {}).get("completion_tokens") or 0)
+    if tokens >= 192:
+        raise RuntimeError("LMT_ZH_EN_TOKEN_LIMIT")
+    ok, reason = outgoing_translation_sanity_ok(text, output)
+    if not ok:
+        raise RuntimeError("LMT_ZH_EN_SANITY_" + reason)
+    return output
+
+
+def translate_outgoing_chat(command, c=None, completion_func=None):
+    """Translate only the message and return a preview command; never send it."""
+    parsed = parse_outgoing_chat_command(command)
+    if parsed is None:
+        raise RuntimeError("OUTGOING_UNSUPPORTED_CHAT_COMMAND")
+    prefix, message = parsed
+    if not contains_cjk(message):
+        raise RuntimeError("OUTGOING_NO_CHINESE_TEXT")
+    protected, terms = protect_outgoing_ascii_terms(message)
+    reverse_config = dict(c or config())
+    reverse_config["source_language"] = "zh"
+    reverse_config["target_language"] = "en"
+    reverse_config["translation_cache_version"] = 1
+    cache_source = CONTROL_TRANSLATE_OUTGOING_CHAT + protected
+    output = cache_get(cache_source, reverse_config)
+    if output is None:
+        output = (completion_func or completion_zh_en_once)(protected, reverse_config)
+        ok, reason = outgoing_translation_sanity_ok(protected, output)
+        if not ok:
+            raise RuntimeError("OUTGOING_SANITY_" + reason)
+        cache_put(cache_source, output, reverse_config)
+    restored = restore_outgoing_ascii_terms(output, terms).replace("\r", " ").replace("\n", " ").strip()
+    ok, reason = outgoing_translation_sanity_ok(message, restored)
+    if not ok:
+        raise RuntimeError("OUTGOING_FINAL_SANITY_" + reason)
+    return prefix + restored
 
 
 def split_source(text, target_chars=650):
@@ -4478,6 +4615,14 @@ def run():
                     result = "已清除最近 %d 筆翻譯快取。請重新觸發內容以重新翻譯。" % removed
                     trace_record(rid,"CONTROL",raw,result,0.0,"")
                     atomic_write(out,"OK\n"+result)
+                    continue
+                if raw.startswith(CONTROL_TRANSLATE_OUTGOING_CHAT):
+                    source = raw[len(CONTROL_TRANSLATE_OUTGOING_CHAT):]
+                    t = time.perf_counter()
+                    result = translate_outgoing_chat(source, config())
+                    elapsed = time.perf_counter() - t
+                    trace_record(rid, "OUTGOING_ZH_EN", source, result, elapsed, "")
+                    atomic_write(out, "OK\n" + result)
                     continue
                 c=config(); result=None if should_bypass_whole_block_cache(raw) else cache_get(raw,c)
                 if result is None:
