@@ -66,7 +66,33 @@ Mongo says, 'Search every room. I wish you luck.'"""
     worker.translate_quest_structured_block = lambda text, config: "QUEST_STRUCTURED"
     worker.translate_wrapped_dialogue_block = lambda text, config: "WRAPPED_DIALOGUE"
     assert worker.translate(dialogue_quest, {}) == "QUEST_STRUCTURED"
-    print("QUEST_LONG_DESCRIPTION_LAYOUT_OK semantic_rows=3 display_wraps_joined=yes")
+
+    nearby = """There are the following unfinished quests nearby:
+Num  Level  Name
+  1     30  Put an end to Sh'kar the evil biomancer's foul experiments.
+For details on a quest, use 'quest nearby'. For example, 'quest nearby 1'."""
+    available = """The following quests are available to you at this time:
+[ 1] Help the dwarven alchemist.
+You can see more information with the 'quest info' command."""
+    assert worker.is_quest_list_block(nearby)
+    assert worker.is_quest_list_block(available)
+    original_translate_piece = worker.translate_piece
+    worker.translate_piece = lambda text, config, **kwargs: "譯：" + text
+    rendered_nearby = worker.translate_task_list_block(nearby, {}, "quest")
+    worker.translate_piece = original_translate_piece
+    rendered_lines = rendered_nearby.splitlines()
+    assert len(rendered_lines) == 4, rendered_lines
+    assert rendered_lines[0] == "附近有以下尚未完成的任務：", rendered_lines
+    assert rendered_lines[1] == "編號　等級　名稱", rendered_lines
+    assert rendered_lines[2].startswith("  1　30　譯：Put an end"), rendered_lines
+    assert rendered_lines[3].startswith("若要查看任務詳情"), rendered_lines
+    worker.translate_task_list_block = lambda text, config, kind: "QUEST_LIST"
+    assert worker.translate(nearby, {}) == "QUEST_LIST"
+    assert worker.translate(available, {}) == "QUEST_LIST"
+    print(
+        "QUEST_LONG_DESCRIPTION_LAYOUT_OK semantic_rows=3 "
+        "display_wraps_joined=yes quest_lists_prioritized=yes"
+    )
 
 
 if __name__ == "__main__":
