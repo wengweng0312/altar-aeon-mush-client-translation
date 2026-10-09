@@ -1119,5 +1119,5 @@ class AppModule(appModuleHandler.AppModule):
 			gesture,
 			"control+alt+shift+end",
 			globalCommands.commands.script_review_bottom,
-			lambda: self._syncTranslationReviewPosition(True),
+			lambda: self._syncTranslationReviewPosition(True, atEnd=True),
 		)

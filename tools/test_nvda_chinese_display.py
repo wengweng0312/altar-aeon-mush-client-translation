@@ -201,6 +201,10 @@ def main() -> None:
     mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
     assert present(mismatched_dialogue) == mismatched_dialogue
 
+    addon_source = MODULE.read_text(encoding="utf-8")
+    bottom_script = addon_source.split("def script_translationHistoryBottom", 1)[1].split("\n\t@", 1)[0]
+    assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
+
     print("NVDA_CHINESE_DISPLAY_OK safe_dialogue_pairing=yes structured_translation_preserved=yes")
 
 
