@@ -453,6 +453,43 @@ def _translationChinesePresentationLines(chinese, english):
 	return lines
 
 
+def _translationPairedDialogueLines(chinese, english):
+	"""Pair safely aligned sentences from a translated NPC dialogue."""
+	englishValue = " ".join(english.split()).strip()
+	chineseValue = " ".join(chinese.split()).strip()
+	if not chineseValue or not englishValue:
+		return []
+	if not (
+		re.match(r"^[^\r\n]+?\s+(?:says|asks|replies|exclaims),\s*['\"]", englishValue, re.I)
+		or re.match(r"^[^\r\n]+?\s+tells?\s+[^\r\n]+?,\s*['\"]", englishValue, re.I)
+	):
+		return []
+
+	def splitSentences(value, terminators, requireWhitespace):
+		rows = []
+		start = 0
+		pattern = r"[" + re.escape(terminators) + r"]+[”’\"'）】》〕』」]*"
+		if requireWhitespace:
+			pattern += r"(?=\s|$)"
+		for match in re.finditer(pattern, value):
+			row = value[start:match.end()].strip()
+			if row:
+				rows.append(row)
+			start = match.end()
+		tail = value[start:].strip()
+		if tail:
+			rows.append(tail)
+		return rows
+
+	chineseRows = splitSentences(chineseValue, "。！？!?", False)
+	englishRows = splitSentences(englishValue, ".!?", True)
+	# Sentence pairing is presentation-only, but a wrong pairing is still more
+	# confusing than one long line. Fail closed whenever either side differs.
+	if len(chineseRows) < 2 or len(chineseRows) != len(englishRows) or len(chineseRows) > 20:
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationEnglishPresentationLines(english):
 	"""Keep help fields and semantic paragraphs separate; rooms stay one line."""
 	english = english.strip()
@@ -536,6 +573,9 @@ def _translationReviewPresentation(text):
 	chineseLine = re.sub(r"\s+", " ", chinese).strip()
 	englishLine = re.sub(r"\s+", " ", english).strip()
 	if chineseLine and englishLine:
+		pairedDialogue = _translationPairedDialogueLines(chinese, english)
+		if pairedDialogue:
+			return "\n".join(pairedDialogue)
 		return chineseLine + " | " + englishLine
 	chineseLines = _translationChinesePresentationLines(chinese, english)
 	keys = _translationEnglishKeys(english)

@@ -21,6 +21,7 @@ FUNCTIONS = {
     "_translationEnglishKeys",
     "_splitMergedChineseRoomTitle",
     "_translationChinesePresentationLines",
+    "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
     "_translationReviewMetadata",
     "_translationReviewPresentation",
@@ -180,7 +181,27 @@ def main() -> None:
     assert present(job_marked) == "目前接受的工作： | Currently accepted jobs:"
     assert original(job_marked) == "Currently accepted jobs:"
 
-    print("NVDA_CHINESE_DISPLAY_OK all_bilingual_same_line=yes structured_translation_preserved=yes")
+	# Long NPC speech is split only when both languages have the same safe
+	# sentence count. It remains one history entry, with one bilingual row per
+	# sentence for numpad 7/9 review.
+    ceska = (
+        "剝皮匠切斯卡說：「我剝動物皮，群獵。我做衣服，還有盔甲。"
+        "我經常用森林動物的皮，但我會覺得無聊。想和異國野獸的皮合作。"
+        "你帶給我新的皮，我做點東西給你。」 | "
+        "Ceska the skinner says, 'I skin animals the pack hunts. I make clothing and armor. "
+        "I work with hide from forest animals all the time, but I get bored. "
+        "Want to work with hide of an exotic beast. You bring me a new hide and I make something for you.'"
+    )
+    ceska_lines = present(ceska).splitlines()
+    assert len(ceska_lines) == 5, ceska_lines
+    assert ceska_lines[0].startswith("剝皮匠切斯卡說"), ceska_lines
+    assert ceska_lines[0].endswith("I skin animals the pack hunts."), ceska_lines
+    assert ceska_lines[-1].endswith("I make something for you.'"), ceska_lines
+
+    mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
+    assert present(mismatched_dialogue) == mismatched_dialogue
+
+    print("NVDA_CHINESE_DISPLAY_OK safe_dialogue_pairing=yes structured_translation_preserved=yes")
 
 
 if __name__ == "__main__":
