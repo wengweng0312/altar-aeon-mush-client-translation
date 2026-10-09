@@ -17,7 +17,18 @@ ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "src" / "mush-z" / "worlds" / "plugins" / "translation_bridge"
 ADDON_SOURCE = ROOT / "src" / "nvda-addon"
 DIST = ROOT / "dist"
-REPOSITORY = "wengweng0312/altar-aeon-mush-client-translation"
+DEFAULT_REPOSITORY = "wengweng0312/altar-aeon-mush-client-translation"
+
+
+def infer_repository() -> str:
+    try:
+        remote = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"], cwd=ROOT, text=True
+        ).strip()
+    except Exception:
+        return DEFAULT_REPOSITORY
+    match = re.search(r"github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$", remote)
+    return f"{match.group(1)}/{match.group(2)}" if match else DEFAULT_REPOSITORY
 
 
 def sha256(path: Path) -> str:
@@ -31,10 +42,16 @@ def sha256(path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
+    parser.add_argument("--repository", default=infer_repository())
     args = parser.parse_args()
     version = args.version.strip().removeprefix("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
         raise SystemExit("version must look like 1.2.3 or 1.2.3-beta.1")
+    repository = args.repository.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise SystemExit("repository must look like owner/name")
+
+    (BRIDGE / "release_repository.txt").write_text(repository + "\n", encoding="utf-8")
 
     subprocess.run([sys.executable, str(ROOT / "tools" / "validate_source.py")], check=True)
     if DIST.exists():
@@ -67,9 +84,9 @@ def main() -> int:
         "schema_version": 1,
         "published": True,
         "version": version,
-        "patch_url": f"https://github.com/{REPOSITORY}/releases/download/v{version}/{asset_name}",
+        "patch_url": f"https://github.com/{repository}/releases/download/v{version}/{asset_name}",
         "sha256": digest,
-        "release_notes_url": f"https://github.com/{REPOSITORY}/releases/tag/v{version}",
+        "release_notes_url": f"https://github.com/{repository}/releases/tag/v{version}",
     }
     (DIST / "update_manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

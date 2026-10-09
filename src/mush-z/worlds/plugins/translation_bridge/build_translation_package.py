@@ -50,6 +50,7 @@ TOP_FILES = (
     "update_translation.ps1",
     "translation_update_helper.ps1",
     "translation_version.json",
+    "release_repository.txt",
     "check_translation_update.ps1",
 )
 PATCH_FILES = (
@@ -76,6 +77,7 @@ PATCH_FILES = (
     "update_translation.ps1",
     "translation_update_helper.ps1",
     "translation_version.json",
+    "release_repository.txt",
     "check_translation_update.ps1",
 )
 TREE_DIRS = ("runtime", "lmt_runtime")

@@ -1,6 +1,6 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$ManifestUrl = "https://github.com/wengweng0312/altar-aeon-mush-client-translation/releases/latest/download/update_manifest.json",
+    [string]$ManifestUrl = "",
     [string]$ManifestFile = "",
     [string]$PatchFile = "",
     [string]$MushZRoot = "",
@@ -12,6 +12,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+
+if ([string]::IsNullOrWhiteSpace($ManifestUrl)) {
+    $repositoryFile = Join-Path $PSScriptRoot "release_repository.txt"
+    $repository = if (Test-Path -LiteralPath $repositoryFile) {
+        (Get-Content -LiteralPath $repositoryFile -Raw -Encoding UTF8).Trim()
+    } else {
+        "wengweng0312/altar-aeon-mush-client-translation"
+    }
+    if ($repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
+        throw "Invalid release repository configuration."
+    }
+    $ManifestUrl = "https://github.com/$repository/releases/latest/download/update_manifest.json"
+}
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $mushZRoot = if ([string]::IsNullOrWhiteSpace($MushZRoot)) {
     [IO.Path]::GetFullPath((Join-Path $scriptRoot "..\..\.."))

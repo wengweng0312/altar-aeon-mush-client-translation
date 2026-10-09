@@ -24,7 +24,20 @@ jobs:
           python-version: "3.11"
 
       - name: Build and validate Only Patch
-        run: python tools/build_release.py --version "${{ inputs.version }}"
+        shell: powershell
+        run: |
+          $env:TEMP = Join-Path $env:GITHUB_WORKSPACE ".test-tmp"
+          $env:TMP = $env:TEMP
+          New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
+          $failures = @()
+          Get-ChildItem tools -Filter "test_*.py" | Sort-Object Name | ForEach-Object {
+            python $_.FullName
+            if ($LASTEXITCODE -ne 0) { $failures += $_.Name }
+          }
+          if ($failures.Count -gt 0) {
+            throw "Regression tests failed: $($failures -join ', ')"
+          }
+          python tools/build_release.py --version "${{ inputs.version }}" --repository "${{ github.repository }}"
 
       - name: Publish GitHub Release
         shell: powershell
@@ -32,20 +45,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ inputs.version }}".TrimStart("v")
-          gh release create "v$version" dist/* --title "Mush-Z Translation Mode v$version" --generate-notes
+          $fullUrl = ""
+          $releases = gh release list --limit 100 --json tagName | ConvertFrom-Json
+          foreach ($release in $releases) {
+            $assets = gh release view $release.tagName --json assets | ConvertFrom-Json
+            $full = $assets.assets | Where-Object { $_.name -match 'Full.*\.zip$' } | Select-Object -First 1
+            if ($null -ne $full) { $fullUrl = $full.url; break }
+          }
+          $notes = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          @(
+            "## Mush-Z Translation Mode v$version"
+            ""
+            "Only Patch：適合已安裝 Translation Mode 的玩家使用。"
+            ""
+            $(if ($fullUrl) { "[點此下載 Full 版]($fullUrl)（第一次安裝使用）" } else { "第一次安裝請到 Releases 頁面尋找 Full 版。" })
+          ) | Set-Content -LiteralPath $notes -Encoding UTF8
+          gh release create "v$version" dist/* --title "Mush-Z Translation Mode v$version stable" --notes-file $notes
 
       - name: Publish updater manifest
         shell: powershell
         run: |
           $version = "${{ inputs.version }}".TrimStart("v")
           Copy-Item -LiteralPath "dist\update_manifest.json" -Destination "update\latest.json" -Force
-          git checkout -- "src/mush-z/worlds/plugins/translation_bridge/translation_version.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "update/latest.json"
+          git add "update/latest.json" "src/mush-z/worlds/plugins/translation_bridge/translation_version.json" "src/mush-z/worlds/plugins/translation_bridge/release_repository.txt"
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Publish updater manifest for v$version"
-            git pull --rebase origin main
-            git push origin HEAD:main
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push origin "HEAD:${{ github.ref_name }}"
+          }
+
+      - name: Verify player-facing update discovery
+        shell: powershell
+        run: |
+          git pull --ff-only origin "${{ github.ref_name }}"
+          $version = "${{ inputs.version }}".TrimStart("v")
+          $temporaryVersion = Join-Path $env:RUNNER_TEMP "old-version.json"
+          $status = Join-Path $env:RUNNER_TEMP "update-status.txt"
+          '{"version":"0.0.0","channel":"stable"}' | Set-Content -LiteralPath $temporaryVersion -Encoding UTF8
+          & "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "src\mush-z\worlds\plugins\translation_bridge\check_translation_update.ps1" -VersionFile $temporaryVersion -StatusFile $status
+          $result = Get-Content -LiteralPath $status -Raw
+          if ($result -notmatch "status=update" -or $result -notmatch "version=$([regex]::Escape($version))") {
+            throw "Player-facing update verification failed: $result"
           }
