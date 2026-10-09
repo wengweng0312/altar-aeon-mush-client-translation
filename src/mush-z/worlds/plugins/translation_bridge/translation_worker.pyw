@@ -2336,6 +2336,31 @@ def translate_xp_history_line(text, c):
     )
 
 
+RELATIVE_HISTORY_TIMESTAMP = re.compile(
+    r"^(\s*)(.+?\S)\s+(\d+)\s+(seconds?|minutes?|hours?|days?)\s+ago(\s*)$",
+    re.I,
+)
+
+
+def translate_relative_history_timestamp(text, c):
+    """Cache a history message independently from its changing age suffix."""
+    match = RELATIVE_HISTORY_TIMESTAMP.fullmatch(str(text))
+    if not match:
+        return None
+    indent, message, amount, unit, trailing = match.groups()
+    translated = translate_cached_phrase(message, c)
+    translated = " ".join(str(translated).splitlines()).strip()
+    if not translated:
+        return None
+    unit_zh = {
+        "second": "秒", "seconds": "秒",
+        "minute": "分鐘", "minutes": "分鐘",
+        "hour": "小時", "hours": "小時",
+        "day": "天", "days": "天",
+    }[unit.lower()]
+    return "%s%s %s %s前%s" % (indent, translated, amount, unit_zh, trailing)
+
+
 def is_put_item_block(text):
     """Recognize a buffered run of fixed-shape container transfer messages."""
     lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
@@ -4513,6 +4538,9 @@ def translate(text,c):
         return translate_quest_structured_block(text, c)
     if is_wrapped_dialogue_block(text):
         return translate_wrapped_dialogue_block(text, c)
+    relative_history = translate_relative_history_timestamp(text, c)
+    if relative_history is not None:
+        return relative_history
     xp_history = translate_xp_history_line(text, c)
     if xp_history is not None:
         return xp_history
