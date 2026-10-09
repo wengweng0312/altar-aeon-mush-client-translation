@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,37 @@ class OutgoingChatIntegrationTests(unittest.TestCase):
         self.assertIn("GetCommand()", function)
         self.assertNotIn("Send(", function)
         self.assertNotIn("SendImmediate(", function)
+
+    def test_selected_cloud_provider_is_preferred(self):
+        settings = {
+            "service": 1, "allow_private_messages": True,
+            "azure_region": "global", "timeout_seconds": 1.5,
+        }
+        candidates = [(1, "secret-not-logged", settings)]
+        with mock.patch.object(MODULE, "cloud_translation_config", return_value=settings), \
+             mock.patch.object(MODULE, "cloud_translation_candidates", return_value=candidates), \
+             mock.patch.object(
+                 MODULE.cloud_translation_client, "translate_many_zh_en", return_value=["Hello"]
+             ) as cloud, \
+             mock.patch.object(
+                 MODULE, "completion_zh_en_once", side_effect=AssertionError("LMT should not run")
+             ):
+            self.assertEqual(MODULE.translate_outgoing_chat("chat 你好", NO_CACHE), "chat Hello")
+        cloud.assert_called_once()
+
+    def test_private_message_setting_keeps_tell_offline(self):
+        settings = {
+            "service": 1, "allow_private_messages": False,
+            "azure_region": "global", "timeout_seconds": 1.5,
+        }
+        with mock.patch.object(MODULE, "cloud_translation_config", return_value=settings), \
+             mock.patch.object(MODULE, "cloud_translation_candidates") as candidates, \
+             mock.patch.object(MODULE, "completion_zh_en_once", return_value="Hello") as lmt:
+            self.assertEqual(
+                MODULE.translate_outgoing_chat("tell John 你好", NO_CACHE), "tell John Hello"
+            )
+        candidates.assert_not_called()
+        lmt.assert_called_once()
 
 
 if __name__ == "__main__":

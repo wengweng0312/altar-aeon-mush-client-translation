@@ -1597,6 +1597,55 @@ def outgoing_translation_sanity_ok(source, translated):
     return True, ""
 
 
+def outgoing_command_may_be_private(command):
+    value = str(command or "").lstrip().lower()
+    if re.match(r"^(?:tell|reply|gtell|ctell)\b", value):
+        return True
+    # Alter Aeon permits user-created private channels. Their privacy cannot be
+    # inferred from the command text, so generic channel forms stay offline
+    # unless the player explicitly allows private-message cloud translation.
+    return value.startswith(("$", "#", "%send ", "channel send ", "chan send "))
+
+
+def cloud_translate_outgoing_message(text, command):
+    settings = cloud_translation_config()
+    if settings["service"] == 0:
+        return None
+    if not settings["allow_private_messages"] and outgoing_command_may_be_private(command):
+        return None
+    for service, api_key, candidate_settings in cloud_translation_candidates(""):
+        provider = cloud_translation_client.SERVICE_NAMES.get(service, "unknown")
+        try:
+            results = cloud_translation_client.translate_many_zh_en(
+                service, [text], api_key,
+                candidate_settings["azure_region"], candidate_settings["timeout_seconds"],
+            )
+            if len(results) != 1:
+                raise RuntimeError("CLOUD_ZH_EN_RESULT_COUNT_MISMATCH")
+            result = str(results[0]).strip()
+            ok, reason = outgoing_translation_sanity_ok(text, result)
+            if not ok:
+                raise RuntimeError("CLOUD_ZH_EN_SANITY_" + reason)
+            mark_translation_engine(provider + "_zh_en")
+            CLOUD_FAILURE_COUNT[service] = 0
+            return result
+        except Exception as error:
+            if cloud_translation_client.is_session_blocking_error(error):
+                CLOUD_DISABLED_FOR_SESSION.add(service)
+                CLOUD_FAILURE_COUNT[service] = 0
+                log("outgoing cloud provider=%s disabled for session: %s" %
+                    (provider, str(error)), True)
+                continue
+            CLOUD_FAILURE_COUNT[service] = CLOUD_FAILURE_COUNT.get(service, 0) + 1
+            if CLOUD_FAILURE_COUNT[service] >= CLOUD_FAILURE_LIMIT:
+                CLOUD_DISABLED_UNTIL[service] = time.monotonic() + CLOUD_COOLDOWN_SECONDS
+                CLOUD_FAILURE_COUNT[service] = 0
+                log("outgoing cloud provider=%s paused after repeated failures" % provider, True)
+            else:
+                log("outgoing cloud provider=%s fallback: %s" % (provider, str(error)), True)
+    return None
+
+
 def completion_zh_en_once(text, c):
     """Use LMT's official Standard Translation Prompt in the reverse direction."""
     mark_translation_engine("lmt_q4_zh_en")
@@ -1639,7 +1688,12 @@ def translate_outgoing_chat(command, c=None, completion_func=None):
     cache_source = CONTROL_TRANSLATE_OUTGOING_CHAT + protected
     output = cache_get(cache_source, reverse_config)
     if output is None:
-        output = (completion_func or completion_zh_en_once)(protected, reverse_config)
+        if completion_func is not None:
+            output = completion_func(protected, reverse_config)
+        else:
+            output = cloud_translate_outgoing_message(protected, command)
+            if output is None:
+                output = completion_zh_en_once(protected, reverse_config)
         ok, reason = outgoing_translation_sanity_ok(protected, output)
         if not ok:
             raise RuntimeError("OUTGOING_SANITY_" + reason)

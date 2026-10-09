@@ -107,6 +107,60 @@ def translate_deepl_many(texts, api_key, timeout=1.5, opener=urllib.request.urlo
         raise CloudTranslationError("DEEPL_RESPONSE_SHAPE") from None
 
 
+def translate_azure_many_zh_en(texts, api_key, region="global", timeout=1.5,
+                               opener=urllib.request.urlopen):
+    url = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=zh-Hant&to=en"
+    headers = {
+        "Content-Type": "application/json; charset=UTF-8",
+        "Ocp-Apim-Subscription-Key": api_key,
+    }
+    if region and region.lower() != "global":
+        headers["Ocp-Apim-Subscription-Region"] = region
+    data = _post_json(url, headers, [{"Text": text} for text in texts], timeout, opener)
+    try:
+        results = [str(item["translations"][0]["text"]).strip() for item in data]
+        if len(results) != len(texts):
+            raise CloudTranslationError("AZURE_RESPONSE_COUNT")
+        return results
+    except (KeyError, IndexError, TypeError):
+        raise CloudTranslationError("AZURE_RESPONSE_SHAPE") from None
+
+
+def translate_google_many_zh_en(texts, api_key, timeout=1.5,
+                                opener=urllib.request.urlopen):
+    query = urllib.parse.urlencode({"key": api_key})
+    url = "https://translation.googleapis.com/language/translate/v2?" + query
+    payload = {"q": list(texts), "source": "zh-TW", "target": "en", "format": "text"}
+    data = _post_json(url, {"Content-Type": "application/json; charset=UTF-8"}, payload, timeout, opener)
+    try:
+        results = [html.unescape(str(item["translatedText"])).strip()
+                   for item in data["data"]["translations"]]
+        if len(results) != len(texts):
+            raise CloudTranslationError("GOOGLE_RESPONSE_COUNT")
+        return results
+    except (KeyError, IndexError, TypeError):
+        raise CloudTranslationError("GOOGLE_RESPONSE_SHAPE") from None
+
+
+def translate_deepl_many_zh_en(texts, api_key, timeout=1.5,
+                               opener=urllib.request.urlopen):
+    host = "api-free.deepl.com" if api_key.strip().endswith(":fx") else "api.deepl.com"
+    url = "https://%s/v2/translate" % host
+    headers = {
+        "Authorization": "DeepL-Auth-Key " + api_key,
+        "Content-Type": "application/json; charset=UTF-8",
+    }
+    payload = {"text": list(texts), "source_lang": "ZH", "target_lang": "EN"}
+    data = _post_json(url, headers, payload, timeout, opener)
+    try:
+        results = [str(item["text"]).strip() for item in data["translations"]]
+        if len(results) != len(texts):
+            raise CloudTranslationError("DEEPL_RESPONSE_COUNT")
+        return results
+    except (KeyError, IndexError, TypeError):
+        raise CloudTranslationError("DEEPL_RESPONSE_SHAPE") from None
+
+
 def translate_many(service, texts, api_key, azure_region="global", timeout=1.5,
                    opener=urllib.request.urlopen):
     texts = [str(text) for text in texts]
@@ -123,6 +177,29 @@ def translate_many(service, texts, api_key, azure_region="global", timeout=1.5,
             translated = translate_google_many(batch, api_key, timeout, opener)
         elif service == 3:
             translated = translate_deepl_many(batch, api_key, timeout, opener)
+        else:
+            raise CloudTranslationError("SERVICE_DISABLED_OR_UNKNOWN")
+        results.extend(translated)
+    return results
+
+
+def translate_many_zh_en(service, texts, api_key, azure_region="global", timeout=1.5,
+                         opener=urllib.request.urlopen):
+    """Translate Traditional Chinese player messages into English."""
+    texts = [str(text) for text in texts]
+    if not texts:
+        return []
+    results = []
+    for start in range(0, len(texts), 25):
+        batch = texts[start:start + 25]
+        if service == 1:
+            translated = translate_azure_many_zh_en(
+                batch, api_key, azure_region, timeout, opener
+            )
+        elif service == 2:
+            translated = translate_google_many_zh_en(batch, api_key, timeout, opener)
+        elif service == 3:
+            translated = translate_deepl_many_zh_en(batch, api_key, timeout, opener)
         else:
             raise CloudTranslationError("SERVICE_DISABLED_OR_UNKNOWN")
         results.extend(translated)
