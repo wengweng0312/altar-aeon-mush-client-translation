@@ -51,6 +51,7 @@ def load_functions() -> dict[str, object]:
         "an iron sword": "一把鐵劍",
         "Moondoggie": "Moondoggie",
         "a healing potion": "一瓶治療藥水",
+        "A forret": "一隻福雷特",
     }
     namespace = {
         "re": re,
@@ -112,6 +113,7 @@ def main() -> None:
         "A shadow decoy misses A small troll.": "一個暗影誘餌沒有擊中一隻小巨魔。",
         "A shadow decoy dodges A small troll's attack.": "一個暗影誘餌閃避了一隻小巨魔的攻擊。",
         "A small troll is mortally wounded, and will die soon if not aided.": "一隻小巨魔受到致命傷，若未獲救很快便會死亡。",
+        "A forret keeps bleeding!": "一隻福雷特還在流血！",
     }
     for source, expected in cases.items():
         actual = translate(source, {})

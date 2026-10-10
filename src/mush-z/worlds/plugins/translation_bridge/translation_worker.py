@@ -282,6 +282,7 @@ SEMANTIC_EVENT_PATTERNS = (
     ("miss", re.compile(r"^(\s*)(.+?) misses (.+)\.(\s*)$", re.I)),
     ("dodge", re.compile(r"^(\s*)(.+?) dodges (.+?)'s attack\.(\s*)$", re.I)),
     ("mortally_wounded", re.compile(r"^(\s*)(.+?) is mortally wounded, and will die soon if not aided\.(\s*)$", re.I)),
+    ("keeps_bleeding", re.compile(r"^(\s*)(.+?) keeps bleeding!(\s*)$", re.I)),
 )
 COMBAT_TARGET_PATTERNS = (
     ("stomp_crunch", re.compile(r"^(\s*)You stomp on (.+) and hear something crunch!(\s*)$", re.I)),
@@ -3503,13 +3504,14 @@ def translate_semantic_event_line(line, c):
             indent, translate_cached_phrase(actor, c),
             translate_cached_phrase(spell, c), trailing,
         )
-    if kind in {"actor_here", "actor_darkened", "mortally_wounded"}:
+    if kind in {"actor_here", "actor_darkened", "mortally_wounded", "keeps_bleeding"}:
         indent, actor, trailing = groups
         actor_zh = translate_cached_phrase(actor, c)
         template = {
             "actor_here": "%s在這裡。",
             "actor_darkened": "%s籠罩在黑暗中。",
             "mortally_wounded": "%s受到致命傷，若未獲救很快便會死亡。",
+            "keeps_bleeding": "%s還在流血！",
         }[kind]
         return "%s%s%s" % (indent, template % actor_zh, trailing)
     if kind in {"receive_xp", "limited_xp"}:
@@ -3560,7 +3562,7 @@ def prefetch_semantic_event_fields(lines, c):
         elif kind == "blade_reaction": values.append(groups[1])
         elif kind == "damage_other": values.extend((groups[1], groups[2], groups[4]))
         elif kind == "aura_fades": values.append(groups[2])
-        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item"}: values.append(groups[1])
+        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item", "actor_here", "actor_darkened", "actor_dead", "actor_arrived", "mortally_wounded", "keeps_bleeding"}: values.append(groups[1])
         elif kind == "get_gold_from": values.append(groups[2])
         elif kind == "gives_you": values.extend(groups[1:3])
         elif kind == "item_compare": values.extend((groups[1], groups[3]))
