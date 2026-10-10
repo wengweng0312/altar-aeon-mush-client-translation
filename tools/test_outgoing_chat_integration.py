@@ -99,11 +99,13 @@ class OutgoingChatIntegrationTests(unittest.TestCase):
              mock.patch.object(
                  MODULE.cloud_translation_client, "translate_many_zh_en", return_value=["Hello"]
              ) as cloud, \
+             mock.patch.object(MODULE, "record_cloud_usage") as usage, \
              mock.patch.object(
                  MODULE, "completion_zh_en_once", side_effect=AssertionError("LMT should not run")
              ):
             self.assertEqual(MODULE.translate_outgoing_chat("chat 你好", NO_CACHE), "chat Hello")
         cloud.assert_called_once()
+        usage.assert_called_once_with(1, ["你好"])
 
     def test_private_message_setting_keeps_tell_offline(self):
         settings = {

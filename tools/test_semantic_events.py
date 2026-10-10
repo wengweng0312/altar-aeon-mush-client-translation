@@ -16,6 +16,8 @@ FUNCTIONS = {
     "prefetch_semantic_event_fields",
     "translate_semantic_event_block",
     "deterministic_translate",
+    "combat_template_match",
+    "translate_combat_template_line",
 }
 
 
@@ -24,7 +26,7 @@ def load_functions() -> dict[str, object]:
     body = []
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == "SEMANTIC_EVENT_PATTERNS"
+            isinstance(target, ast.Name) and target.id in {"SEMANTIC_EVENT_PATTERNS", "COMBAT_TARGET_PATTERNS"}
             for target in node.targets
         ):
             body.append(node)
@@ -114,10 +116,21 @@ def main() -> None:
         "A shadow decoy dodges A small troll's attack.": "一個暗影誘餌閃避了一隻小巨魔的攻擊。",
         "A small troll is mortally wounded, and will die soon if not aided.": "一隻小巨魔受到致命傷，若未獲救很快便會死亡。",
         "A forret keeps bleeding!": "一隻福雷特還在流血！",
+        "A forret stops bleeding.": "一隻福雷特的流血停止了。",
+        "A forret anticipates your bloodletting stab and avoids your attack.": "一隻福雷特預判了你的放血刺擊，避開了攻擊。",
+        "A forret tries to trip you, but your fly spell helps you recover.": "一隻福雷特試圖絆倒你，但你的飛行法術幫助你恢復平衡。",
+        "A forret tries to trip you, but you avoid the move well in advance.": "一隻福雷特試圖絆倒你，但你早已看穿並避開。",
+        "A forret parries a shadow decoy's attack.": "一隻福雷特招架了一個暗影誘餌的攻擊。",
+        "A forret is too weak to attack.": "一隻福雷特虛弱得無法攻擊。",
+        "A forret collapses in a heap of broken branches.": "一隻福雷特倒在一堆斷枝中。",
+        "A forret sprays webs all over you!": "一隻福雷特朝你全身噴出蛛網！",
     }
     for source, expected in cases.items():
         actual = translate(source, {})
         assert actual == expected, (source, actual, expected)
+
+    combat = module["translate_combat_template_line"]
+    assert combat("You slit A forret's throat.", {}) == "你割開一隻福雷特的喉嚨。"
 
     aggregate = "You get 2 items: a cup, a plate."
     assert module["semantic_event_match"](aggregate) is None

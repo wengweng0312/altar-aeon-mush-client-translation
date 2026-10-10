@@ -283,6 +283,18 @@ SEMANTIC_EVENT_PATTERNS = (
     ("dodge", re.compile(r"^(\s*)(.+?) dodges (.+?)'s attack\.(\s*)$", re.I)),
     ("mortally_wounded", re.compile(r"^(\s*)(.+?) is mortally wounded, and will die soon if not aided\.(\s*)$", re.I)),
     ("keeps_bleeding", re.compile(r"^(\s*)(.+?) keeps bleeding!(\s*)$", re.I)),
+    ("stops_bleeding", re.compile(r"^(\s*)(.+?) stops bleeding\.(\s*)$", re.I)),
+    ("anticipates_bloodletting", re.compile(
+        r"^(\s*)(.+?) anticipates your bloodletting stab and avoids your attack\.(\s*)$", re.I)),
+    ("trip_fly_recovery", re.compile(
+        r"^(\s*)(.+?) tries to trip you, but your fly spell helps you recover\.(\s*)$", re.I)),
+    ("trip_avoided", re.compile(
+        r"^(\s*)(.+?) tries to trip you, but you avoid the move well in advance\.(\s*)$", re.I)),
+    ("parry", re.compile(r"^(\s*)(.+?) parries (.+?)'s attack\.(\s*)$", re.I)),
+    ("too_weak_to_attack", re.compile(r"^(\s*)(.+?) is too weak to attack\.(\s*)$", re.I)),
+    ("collapses_branches", re.compile(
+        r"^(\s*)(.+?) collapses in a heap of broken branches\.(\s*)$", re.I)),
+    ("sprays_webs", re.compile(r"^(\s*)(.+?) sprays webs all over you!(\s*)$", re.I)),
 )
 COMBAT_TARGET_PATTERNS = (
     ("stomp_crunch", re.compile(r"^(\s*)You stomp on (.+) and hear something crunch!(\s*)$", re.I)),
@@ -299,6 +311,7 @@ COMBAT_TARGET_PATTERNS = (
     )),
     ("feign", re.compile(r"^(\s*)You feign a sudden attack on (.+), who moves to block!(\s*)$", re.I)),
     ("death_cry", re.compile(r"^(\s*)Your blood freezes as you hear (.+)'s death cry!(\s*)$", re.I)),
+    ("slit_throat", re.compile(r"^(\s*)You slit (.+)'s throat\.(\s*)$", re.I)),
     ("dead", re.compile(r"^(\s*)(.+) is DEAD!(\s*)$")),
     ("backstab_damage", re.compile(r"^(\s*)Your backstab does considerable damage to (.+)!(\s*)$", re.I)),
     ("dirt", re.compile(r"^(\s*)You throw dirt in (.+)'s face, blinding (?:him|her|it)!(\s*)$", re.I)),
@@ -3504,7 +3517,11 @@ def translate_semantic_event_line(line, c):
             indent, translate_cached_phrase(actor, c),
             translate_cached_phrase(spell, c), trailing,
         )
-    if kind in {"actor_here", "actor_darkened", "mortally_wounded", "keeps_bleeding"}:
+    if kind in {
+        "actor_here", "actor_darkened", "mortally_wounded", "keeps_bleeding",
+        "stops_bleeding", "anticipates_bloodletting", "trip_fly_recovery",
+        "trip_avoided", "too_weak_to_attack", "collapses_branches", "sprays_webs",
+    }:
         indent, actor, trailing = groups
         actor_zh = translate_cached_phrase(actor, c)
         template = {
@@ -3512,6 +3529,13 @@ def translate_semantic_event_line(line, c):
             "actor_darkened": "%s籠罩在黑暗中。",
             "mortally_wounded": "%s受到致命傷，若未獲救很快便會死亡。",
             "keeps_bleeding": "%s還在流血！",
+            "stops_bleeding": "%s的流血停止了。",
+            "anticipates_bloodletting": "%s預判了你的放血刺擊，避開了攻擊。",
+            "trip_fly_recovery": "%s試圖絆倒你，但你的飛行法術幫助你恢復平衡。",
+            "trip_avoided": "%s試圖絆倒你，但你早已看穿並避開。",
+            "too_weak_to_attack": "%s虛弱得無法攻擊。",
+            "collapses_branches": "%s倒在一堆斷枝中。",
+            "sprays_webs": "%s朝你全身噴出蛛網！",
         }[kind]
         return "%s%s%s" % (indent, template % actor_zh, trailing)
     if kind in {"receive_xp", "limited_xp"}:
@@ -3540,6 +3564,11 @@ def translate_semantic_event_line(line, c):
         target_zh = translate_cached_phrase(target, c)
         template = "%s沒有擊中%s。" if kind == "miss" else "%s閃避了%s的攻擊。"
         return "%s%s%s" % (indent, template % (actor_zh, target_zh), trailing)
+    if kind == "parry":
+        indent, actor, target, trailing = groups
+        return "%s%s招架了%s的攻擊。%s" % (
+            indent, translate_cached_phrase(actor, c), translate_cached_phrase(target, c), trailing,
+        )
     return None
 
 
@@ -3562,7 +3591,8 @@ def prefetch_semantic_event_fields(lines, c):
         elif kind == "blade_reaction": values.append(groups[1])
         elif kind == "damage_other": values.extend((groups[1], groups[2], groups[4]))
         elif kind == "aura_fades": values.append(groups[2])
-        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item", "actor_here", "actor_darkened", "actor_dead", "actor_arrived", "mortally_wounded", "keeps_bleeding"}: values.append(groups[1])
+        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item", "actor_here", "actor_darkened", "actor_dead", "actor_arrived", "mortally_wounded", "keeps_bleeding", "stops_bleeding", "anticipates_bloodletting", "trip_fly_recovery", "trip_avoided", "too_weak_to_attack", "collapses_branches", "sprays_webs"}: values.append(groups[1])
+        elif kind == "parry": values.extend((groups[1], groups[2]))
         elif kind == "get_gold_from": values.append(groups[2])
         elif kind == "gives_you": values.extend(groups[1:3])
         elif kind == "item_compare": values.extend((groups[1], groups[3]))
@@ -3692,6 +3722,7 @@ def translate_combat_template_line(line, c):
         "downward_thrust": "你朝%s使出強力下刺，試圖給予致命一擊！",
         "feign": "你對%s佯裝突然攻擊，對方移動格擋！",
         "death_cry": "你聽見%s的死亡哀號，頓時血液凝結！",
+        "slit_throat": "你割開%s的喉嚨。",
         "dead": "%s已經死亡！",
         "backstab_damage": "你的背刺對%s造成了相當大的傷害！",
         "dirt": "你將泥土丟進%s的臉，使其失明！",
