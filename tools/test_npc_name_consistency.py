@@ -121,6 +121,47 @@ def main() -> None:
         )
         assert "精靈小偷" in stable_again and "皮克西盜賊" not in stable_again
 
+        # Movement sentences are unsafe training examples: the translated
+        # direction must never become part of the persistent creature name.
+        movement = module.normalize_npc_names(
+            "A swamp fang leaves up.", "沼澤之牙往上方離開。"
+        )
+        assert movement == "沼澤之牙往上方離開。", movement
+        db = module.cache_connection()
+        assert db.execute(
+            "SELECT translated_name FROM mob_types WHERE source_name='swamp fang'"
+        ).fetchone() is None
+
+        # A later reliable combat sentence may teach the clean local spelling.
+        learned = module.normalize_npc_names(
+            "A swamp fang misses you.", "沼澤之牙沒有擊中你。"
+        )
+        assert learned == "沼澤之牙沒有擊中你。", learned
+        assert db.execute(
+            "SELECT translated_name FROM mob_types WHERE source_name='swamp fang'"
+        ).fetchone()[0] == "沼澤之牙"
+
+        # Existing installations are repaired narrowly: remove the polluted
+        # mob name and only cache entries that mention that English identity.
+        db.execute(
+            "UPDATE mob_types SET translated_name=? WHERE source_name='swamp fang'",
+            ("沼澤之牙往上方",),
+        )
+        module.cache_put(
+            "Shift appreciates your sacrifice of the corpse of A swamp fang.",
+            "你將沼澤之牙往上方往上方的屍體奉獻給切換。",
+            config,
+        )
+        module.cache_put("An unrelated sentence.", "一個無關句子。", config)
+        module.ensure_npc_name_tables(db)
+        assert db.execute(
+            "SELECT translated_name FROM mob_types WHERE source_name='swamp fang'"
+        ).fetchone() is None
+        assert module.cache_get(
+            "Shift appreciates your sacrifice of the corpse of A swamp fang.", config
+        ) is None
+        assert module.cache_get("An unrelated sentence.", config) == "一個無關句子。"
+
         module.CACHE_CONNECTION.close()
         module.CACHE_CONNECTION = None
 

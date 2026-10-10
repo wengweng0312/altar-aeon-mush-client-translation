@@ -1117,8 +1117,8 @@ NPC_SOURCE_SUBJECT = re.compile(
 )
 MOB_SOURCE_SUBJECT = re.compile(
     r"^(?:a|an|the)\s+([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,5})\s+"
-    r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
-    r"sighs|starts|stops|has|stretches|concentrates|watches|stands|sits|goes|moves|"
+    r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|goes|moves|"
+    r"sighs|starts|stops|has|stretches|concentrates|watches|stands|sits|"
     r"attacks|hits|strikes|bites|claws|scratches|stings|misses|dodges|dies|is)\b",
     re.I,
 )
@@ -1143,6 +1143,14 @@ MOB_RESULT_MARKERS = dict(NPC_RESULT_MARKERS, **{
 NPC_PROTECTION_MARKER = re.compile(r"ZXQNPC(\d{4})QXZ")
 
 
+def contaminated_mob_translation(value):
+    """Movement grammar must never become part of a persistent mob name."""
+    return bool(re.search(
+        r"(?:往|向)(?:上|下|北|南|東|西|前|後)(?:方)?|離開|前往|抵達|到達|來了",
+        str(value), re.I,
+    ))
+
+
 def ensure_npc_name_tables(db):
     db.execute("""CREATE TABLE IF NOT EXISTS npc_names(
       source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
@@ -1154,6 +1162,18 @@ def ensure_npc_name_tables(db):
     db.execute("""CREATE TABLE IF NOT EXISTS mob_type_aliases(
       source_name TEXT NOT NULL, alias_name TEXT NOT NULL,
       PRIMARY KEY(source_name,alias_name))""")
+    # Repair early builds that learned a movement direction from sentences such
+    # as "A swamp fang leaves up.".  Only affected entity caches are removed;
+    # the player's remaining translation history stays intact.
+    contaminated = [name for name, translated in
+                    db.execute("SELECT source_name,translated_name FROM mob_types")
+                    if contaminated_mob_translation(translated)]
+    for name in contaminated:
+        db.execute("DELETE FROM mob_type_aliases WHERE source_name=?", (name,))
+        db.execute("DELETE FROM mob_types WHERE source_name=?", (name,))
+        db.execute("DELETE FROM translations WHERE instr(lower(source_text),?)>0", (name,))
+    if contaminated:
+        db.commit()
 
 
 def protect_known_entity_names(source):
@@ -1298,6 +1318,10 @@ def valid_npc_translation(value):
     return bool(re.search(r"[A-Za-z\u3400-\u9fff]", value))
 
 
+def valid_mob_translation(value):
+    return valid_npc_translation(value) and not contaminated_mob_translation(value)
+
+
 def normalize_npc_names(source, translated):
     """Keep each locally encountered NPC spelling stable across all engines."""
     db = cache_connection()
@@ -1343,7 +1367,7 @@ def normalize_npc_names(source, translated):
                 if not span:
                     continue
                 candidate = result_lines[index][span[0]:span[1]].strip()
-                if not valid_npc_translation(candidate):
+                if not valid_mob_translation(candidate):
                     continue
                 row = db.execute("SELECT translated_name FROM mob_types WHERE source_name=?", (key,)).fetchone()
                 canonical = row[0] if row else candidate
