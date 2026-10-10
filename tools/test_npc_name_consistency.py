@@ -91,10 +91,40 @@ def main() -> None:
             "林卡斯加入了隊伍。",
         ], linkas_result
 
+        # Generic creatures use their own table but share the exact same
+        # protection/restoration path once a reliable actor sentence teaches
+        # the first local spelling.
+        spider_source = "A spider guard attacks you."
+        spider_first = module.normalize_npc_names(spider_source, "一名蜘蛛守衛攻擊你。")
+        assert spider_first == "一名蜘蛛守衛攻擊你。", spider_first
+        spider_second = module.normalize_npc_names(
+            "A spider guard leaves north.", "一隻蜘蛛警衛離開前往北方。"
+        )
+        assert spider_second == "一隻蜘蛛守衛離開前往北方。", spider_second
+        protected, occurrences = module.protect_known_entity_names(
+            "A spider guard attacks Gimthen."
+        )
+        assert protected.count("ZXQNPC") == 2 and len(occurrences) == 2, (protected, occurrences)
+        restored = module.restore_known_entity_names(
+            protected.replace(" attacks ", "攻擊"), occurrences
+        )
+        assert "蜘蛛守衛" in restored and "吉姆森" in restored, restored
+
+        # Accuracy is deliberately not a promotion requirement: the player's
+        # first accepted wording remains stable until recent-cache reset.
+        wrong_but_stable = module.normalize_npc_names(
+            "A pixie thief attacks you.", "一名精靈小偷攻擊你。"
+        )
+        assert "精靈小偷" in wrong_but_stable
+        stable_again = module.normalize_npc_names(
+            "A pixie thief leaves east.", "一名皮克西盜賊離開向東。"
+        )
+        assert "精靈小偷" in stable_again and "皮克西盜賊" not in stable_again
+
         module.CACHE_CONNECTION.close()
         module.CACHE_CONNECTION = None
 
-    print("NPC_NAME_CONSISTENCY_OK first_seen=locked old_cache=normalized recent_reset=yes")
+    print("NPC_NAME_CONSISTENCY_OK proper=locked mob_type=locked old_cache=normalized recent_reset=yes")
 
 
 if __name__ == "__main__":

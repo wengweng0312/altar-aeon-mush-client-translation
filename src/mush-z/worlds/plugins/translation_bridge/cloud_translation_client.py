@@ -1,12 +1,28 @@
 """Provider-neutral cloud translation client. Never logs or returns API keys."""
 import html
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 
 
 SERVICE_NAMES = {1: "azure", 2: "google", 3: "deepl"}
+NPC_MARKER = re.compile(r"ZXQNPC\d{4}QXZ")
+
+
+def _html_protect_markers(text):
+    # Escape game text first so MUD angle brackets and ampersands cannot become
+    # provider-side markup.  Only our generated marker wrapper remains HTML.
+    escaped = html.escape(str(text))
+    return NPC_MARKER.sub(lambda match: '<span translate="no">%s</span>' % match.group(0), escaped)
+
+
+def _html_restore_markers(text):
+    value = re.sub(r"</?span(?:\s+[^>]*)?>", "", str(text), flags=re.I)
+    if "<" in value or ">" in value:
+        raise CloudTranslationError("UNEXPECTED_HTML_RESPONSE")
+    return html.unescape(value)
 
 
 class CloudTranslationError(RuntimeError):
@@ -57,16 +73,16 @@ def _post_json(url, headers, payload, timeout, opener):
 
 
 def translate_azure_many(texts, api_key, region="global", timeout=1.5, opener=urllib.request.urlopen):
-    url = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hant"
+    url = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hant&textType=html"
     headers = {
         "Content-Type": "application/json; charset=UTF-8",
         "Ocp-Apim-Subscription-Key": api_key,
     }
     if region and region.lower() != "global":
         headers["Ocp-Apim-Subscription-Region"] = region
-    data = _post_json(url, headers, [{"Text": text} for text in texts], timeout, opener)
+    data = _post_json(url, headers, [{"Text": _html_protect_markers(text)} for text in texts], timeout, opener)
     try:
-        results = [str(item["translations"][0]["text"]).strip() for item in data]
+        results = [_html_restore_markers(item["translations"][0]["text"]).strip() for item in data]
         if len(results) != len(texts):
             raise CloudTranslationError("AZURE_RESPONSE_COUNT")
         return results
@@ -77,10 +93,11 @@ def translate_azure_many(texts, api_key, region="global", timeout=1.5, opener=ur
 def translate_google_many(texts, api_key, timeout=1.5, opener=urllib.request.urlopen):
     query = urllib.parse.urlencode({"key": api_key})
     url = "https://translation.googleapis.com/language/translate/v2?" + query
-    payload = {"q": list(texts), "source": "en", "target": "zh-TW", "format": "text"}
+    payload = {"q": [_html_protect_markers(text) for text in texts],
+               "source": "en", "target": "zh-TW", "format": "html"}
     data = _post_json(url, {"Content-Type": "application/json; charset=UTF-8"}, payload, timeout, opener)
     try:
-        results = [html.unescape(str(item["translatedText"])).strip()
+        results = [_html_restore_markers(item["translatedText"]).strip()
                    for item in data["data"]["translations"]]
         if len(results) != len(texts):
             raise CloudTranslationError("GOOGLE_RESPONSE_COUNT")
@@ -96,10 +113,12 @@ def translate_deepl_many(texts, api_key, timeout=1.5, opener=urllib.request.urlo
         "Authorization": "DeepL-Auth-Key " + api_key,
         "Content-Type": "application/json; charset=UTF-8",
     }
-    payload = {"text": list(texts), "source_lang": "EN", "target_lang": "ZH-HANT"}
+    payload = {"text": [_html_protect_markers(text) for text in texts],
+               "source_lang": "EN", "target_lang": "ZH-HANT",
+               "tag_handling": "html", "tag_handling_version": "v2"}
     data = _post_json(url, headers, payload, timeout, opener)
     try:
-        results = [str(item["text"]).strip() for item in data["translations"]]
+        results = [_html_restore_markers(item["text"]).strip() for item in data["translations"]]
         if len(results) != len(texts):
             raise CloudTranslationError("DEEPL_RESPONSE_COUNT")
         return results

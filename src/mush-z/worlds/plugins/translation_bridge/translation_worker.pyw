@@ -624,6 +624,8 @@ def cloud_api_report():
 def cloud_translate_many_partial(sources):
     """Keep valid cloud units and retry only rejected units with the next provider."""
     sources = [str(source) for source in sources]
+    protected_records = [protect_known_entity_names(source) for source in sources]
+    protected_sources = [record[0] for record in protected_records]
     results = [None] * len(sources)
     pending = list(range(len(sources)))
     for service, api_key, settings in cloud_translation_candidates("\n".join(sources)):
@@ -632,7 +634,7 @@ def cloud_translate_many_partial(sources):
         provider = cloud_translation_client.SERVICE_NAMES.get(service, "unknown")
         try:
             translated = cloud_translation_client.translate_many(
-                service, [sources[index] for index in pending], api_key,
+                service, [protected_sources[index] for index in pending], api_key,
                 settings["azure_region"], settings["timeout_seconds"],
             )
             record_cloud_usage(service, [sources[index] for index in pending])
@@ -642,7 +644,8 @@ def cloud_translate_many_partial(sources):
             accepted = 0
             for index, result in zip(pending, translated):
                 try:
-                    results[index] = validate_cloud_translation(sources[index], result)
+                    restored = restore_known_entity_names(result, protected_records[index][1])
+                    results[index] = validate_cloud_translation(sources[index], restored)
                     accepted += 1
                 except Exception as unit_error:
                     unresolved.append(index)
@@ -1100,6 +1103,8 @@ def clear_recent_translation_cache(limit=5):
                 db.executemany("DELETE FROM translations WHERE cache_key=?", [(key,) for key in stale_keys])
             db.executemany("DELETE FROM npc_name_aliases WHERE source_name=?", [(name,) for name in npc_names])
             db.executemany("DELETE FROM npc_names WHERE source_name=?", [(name,) for name in npc_names])
+            db.executemany("DELETE FROM mob_type_aliases WHERE source_name=?", [(name,) for name in npc_names])
+            db.executemany("DELETE FROM mob_types WHERE source_name=?", [(name,) for name in npc_names])
         db.commit()
     return len(rows)
 
@@ -1108,6 +1113,13 @@ NPC_SOURCE_SUBJECT = re.compile(
     r"^([A-Z][A-Za-z'’-]*(?:\s+(?:the\s+)?[A-Za-z][A-Za-z'’-]*){0,5})\s+"
     r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
     r"sighs|starts|stops|has|stretches|concentrates|watches|stands|sits|goes|moves)\b",
+    re.I,
+)
+MOB_SOURCE_SUBJECT = re.compile(
+    r"^(?:a|an|the)\s+([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,5})\s+"
+    r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
+    r"sighs|starts|stops|has|stretches|concentrates|watches|stands|sits|goes|moves|"
+    r"attacks|hits|strikes|bites|claws|scratches|stings|misses|dodges|dies|is)\b",
     re.I,
 )
 NPC_TALK_TARGET = re.compile(r"^You try to talk to\s+(.+?)\.{3}\s*$", re.I)
@@ -1122,6 +1134,13 @@ NPC_RESULT_MARKERS = {
     "stretches": r"伸展|伸", "concentrates": r"專注|集中", "watches": r"守望|守|看",
     "stands": r"站", "sits": r"坐", "goes": r"回|走|前往", "moves": r"移動|走",
 }
+MOB_RESULT_MARKERS = dict(NPC_RESULT_MARKERS, **{
+    "attacks": r"攻擊|襲擊", "hits": r"擊中|打中|攻擊", "strikes": r"擊|打|攻擊",
+    "bites": r"咬", "claws": r"抓|爪", "scratches": r"抓傷|劃傷|刮",
+    "stings": r"刺|螫", "misses": r"沒有擊中|未擊中|打偏|落空",
+    "dodges": r"閃避|躲開", "dies": r"死|死亡", "is": r"死了|死亡|是",
+})
+NPC_PROTECTION_MARKER = re.compile(r"ZXQNPC(\d{4})QXZ")
 
 
 def ensure_npc_name_tables(db):
@@ -1130,6 +1149,51 @@ def ensure_npc_name_tables(db):
     db.execute("""CREATE TABLE IF NOT EXISTS npc_name_aliases(
       source_name TEXT NOT NULL, alias_name TEXT NOT NULL,
       PRIMARY KEY(source_name,alias_name))""")
+    db.execute("""CREATE TABLE IF NOT EXISTS mob_types(
+      source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS mob_type_aliases(
+      source_name TEXT NOT NULL, alias_name TEXT NOT NULL,
+      PRIMARY KEY(source_name,alias_name))""")
+
+
+def protect_known_entity_names(source):
+    """Replace locally confirmed proper names and mob types with opaque markers."""
+    db = cache_connection()
+    if db is None:
+        return str(source), []
+    ensure_npc_name_tables(db)
+    rows = []
+    rows.extend((name, translated, "npc") for name, translated in
+                db.execute("SELECT source_name,translated_name FROM npc_names"))
+    rows.extend((name, translated, "mob") for name, translated in
+                db.execute("SELECT source_name,translated_name FROM mob_types"))
+    rows.sort(key=lambda row: len(row[0]), reverse=True)
+    protected = str(source)
+    occurrences = []
+    for source_name, translated_name, kind in rows:
+        pattern = re.compile(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(source_name), re.I)
+        def replace(match, source_name=source_name, translated_name=translated_name, kind=kind):
+            marker = "ZXQNPC%04dQXZ" % len(occurrences)
+            occurrences.append((marker, source_name, translated_name, kind))
+            return marker
+        protected = pattern.sub(replace, protected)
+    return protected, occurrences
+
+
+def restore_known_entity_names(translated, occurrences):
+    """Restore protected names, rejecting missing, duplicated or invented markers."""
+    result = str(translated)
+    expected = [item[0] for item in occurrences]
+    found = ["ZXQNPC%sQXZ" % value for value in NPC_PROTECTION_MARKER.findall(result)]
+    if sorted(found) != sorted(expected):
+        raise RuntimeError("NPC_MARKER_SET_MISMATCH")
+    for marker, _source_name, translated_name, _kind in occurrences:
+        if result.count(marker) != 1:
+            raise RuntimeError("NPC_MARKER_COUNT_MISMATCH")
+        result = result.replace(marker, translated_name)
+    if NPC_PROTECTION_MARKER.search(result):
+        raise RuntimeError("NPC_MARKER_REMAINS")
+    return result
 
 
 def npc_source_identity(line):
@@ -1154,6 +1218,15 @@ def npc_source_identity(line):
     return name.strip(), verb.lower()
 
 
+def mob_source_identity(line):
+    """Return a generic mob type only from a reliable actor+verb sentence."""
+    match = MOB_SOURCE_SUBJECT.match(str(line).strip())
+    if not match:
+        return None
+    name, verb = match.groups()
+    return name.strip(), verb.lower()
+
+
 def npc_names_in_source(source, db=None):
     """Find directly structured names plus already-known names in a request."""
     value = str(source)
@@ -1162,11 +1235,17 @@ def npc_names_in_source(source, db=None):
         identity = npc_source_identity(line)
         if identity:
             names.add(identity[0].lower())
+        mob_identity = mob_source_identity(line)
+        if mob_identity:
+            names.add(mob_identity[0].lower())
     try:
         db = db or cache_connection()
         if db is not None:
             ensure_npc_name_tables(db)
             for (name,) in db.execute("SELECT source_name FROM npc_names"):
+                if english_name_in_text(name, value):
+                    names.add(name)
+            for (name,) in db.execute("SELECT source_name FROM mob_types"):
                 if english_name_in_text(name, value):
                     names.add(name)
     except Exception:
@@ -1195,6 +1274,21 @@ def translated_npc_span(line, context):
         return None
     match = re.match(r"^\s*(.{1,40}?)(?=" + marker + r")", value)
     return match.span(1) if match else None
+
+
+def translated_mob_span(line, context):
+    marker = MOB_RESULT_MARKERS.get(context)
+    if not marker:
+        return None
+    match = re.match(r"^\s*(.{1,50}?)(?=" + marker + r")", str(line))
+    if not match:
+        return None
+    start, end = match.span(1)
+    candidate = str(line)[start:end]
+    stripped = re.sub(r"^\s*(?:一名|一個|一隻|一位|那名|那個|那隻|該名|該個|該隻)\s*", "", candidate)
+    left_trim = len(candidate) - len(candidate.lstrip())
+    article_trim = len(candidate.strip()) - len(stripped.strip())
+    return start + left_trim + article_trim, end
 
 
 def valid_npc_translation(value):
@@ -1237,6 +1331,31 @@ def normalize_npc_names(source, translated):
                 db.execute("INSERT OR IGNORE INTO npc_name_aliases(source_name,alias_name) VALUES(?,?)",
                            (key, candidate))
                 result_lines[index] = result_lines[index][:span[0]] + canonical + result_lines[index][span[1]:]
+            # Generic creatures use a separate table and are learned only from
+            # reliable actor+verb grammar, never from arbitrary room prose.
+            for index, source_line in enumerate(source_lines):
+                identity = mob_source_identity(source_line)
+                if not identity:
+                    continue
+                english_name, context = identity
+                key = english_name.lower()
+                span = translated_mob_span(result_lines[index], context)
+                if not span:
+                    continue
+                candidate = result_lines[index][span[0]:span[1]].strip()
+                if not valid_npc_translation(candidate):
+                    continue
+                row = db.execute("SELECT translated_name FROM mob_types WHERE source_name=?", (key,)).fetchone()
+                canonical = row[0] if row else candidate
+                now = int(time.time())
+                if row is None:
+                    db.execute("INSERT INTO mob_types(source_name,translated_name,updated_at) VALUES(?,?,?)",
+                               (key, canonical, now))
+                else:
+                    db.execute("UPDATE mob_types SET updated_at=? WHERE source_name=?", (now, key))
+                db.execute("INSERT OR IGNORE INTO mob_type_aliases(source_name,alias_name) VALUES(?,?)",
+                           (key, candidate))
+                result_lines[index] = result_lines[index][:span[0]] + canonical + result_lines[index][span[1]:]
         result = "\n".join(result_lines)
         # Once an alias has been observed in a structured line, normalize it
         # inside other cached prose whenever the corresponding English name is
@@ -1245,6 +1364,12 @@ def normalize_npc_names(source, translated):
             if not english_name_in_text(key, source):
                 continue
             for (alias,) in db.execute("SELECT alias_name FROM npc_name_aliases WHERE source_name=?", (key,)):
+                if alias and alias != canonical:
+                    result = result.replace(alias, canonical)
+        for key, canonical in db.execute("SELECT source_name,translated_name FROM mob_types"):
+            if not english_name_in_text(key, source):
+                continue
+            for (alias,) in db.execute("SELECT alias_name FROM mob_type_aliases WHERE source_name=?", (key,)):
                 if alias and alias != canonical:
                     result = result.replace(alias, canonical)
         db.commit()
@@ -1764,7 +1889,8 @@ def completion_once(text, c, n_predict=384, force_robust=False, force_simple=Fal
     # LMT was trained and documented with this Standard Translation Prompt.
     # The primary request uses the GGUF's own chat template.  force_simple is
     # retained as the raw-completion fallback flag for older callers.
-    prompt = OFFICIAL_PROMPT_TEMPLATE.format(text=text)
+    protected_text, protected_entities = protect_known_entity_names(text)
+    prompt = OFFICIAL_PROMPT_TEMPLATE.format(text=protected_text)
     timeout=max(3,float(c.get("request_timeout_seconds",25)))
     if force_simple:
         resp=http_post("/completion",{
@@ -1792,6 +1918,7 @@ def completion_once(text, c, n_predict=384, force_robust=False, force_simple=Fal
         tokens=int((resp.get("usage") or {}).get("completion_tokens") or 0)
     if tokens >= n_predict:
         raise RuntimeError("LMT_TOKEN_LIMIT")
+    out = restore_known_entity_names(out, protected_entities)
     ok, reason = translation_sanity_ok(text, out)
     if not ok:
         raise RuntimeError("LMT_SANITY_" + reason)
