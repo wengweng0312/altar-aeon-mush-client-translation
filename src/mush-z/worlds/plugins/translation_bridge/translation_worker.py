@@ -3201,7 +3201,7 @@ def should_bypass_whole_block_cache(text):
             any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
             any(reviewed_phrase_translation(line.strip()) is not None for line in lines if line.strip()) or
             any(semantic_event_match(line) for line in lines) or
-            is_scan_listing(text) or is_class_skill_table(text) or
+            is_scan_listing(text) or is_class_skill_table(text) or is_practice_table(text) or
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
@@ -3891,7 +3891,7 @@ SKILL_LINE = re.compile(
     r"^(\s*)(.*?)(?:\s{2,})(very bad|very good|exceptional|moderate|average|perfect|poor|fair|good|bad)\s+(\d+%)\s*$",
     re.IGNORECASE,
 )
-PRACTICE_HEADER = re.compile(r"^You have\s+(\d+)\s+practices?\s+left\.$", re.IGNORECASE)
+PRACTICE_HEADER = re.compile(r"^You have\s+(\d+|one)\s+practices?\s+left\.$", re.IGNORECASE)
 PRACTICE_COLUMN_HEADER = re.compile(r"^-+\s+Int\s+Wis\s+Chr\s+Lvl\s+-+$", re.IGNORECASE)
 PRACTICE_LINE = re.compile(
     r"^(\s*)(.*?)(\s{2,})"
@@ -4192,7 +4192,10 @@ def is_practice_table(text):
     """Recognize the skill-practice requirement table by shape, not its contents."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     nonempty = [line.strip() for line in lines if line.strip()]
-    if not nonempty or not PRACTICE_HEADER.match(nonempty[0]):
+    # A movement/combat status row can arrive in the same quiet-period batch.
+    # The table header must still be near the start, followed by real columns
+    # and skill rows; this remains much stricter than matching a word alone.
+    if not nonempty or not any(PRACTICE_HEADER.match(line) for line in nonempty[:3]):
         return False
     return (sum(bool(PRACTICE_COLUMN_HEADER.match(line)) for line in nonempty) >= 1 and
             sum(bool(PRACTICE_LINE.match(line)) for line in lines) >= 1)
@@ -4224,7 +4227,7 @@ def translate_practice_table(text, c):
     output = []
     for kind, value in parsed:
         if kind == "header":
-            output.append("你還剩 %s 次練習。" % value)
+            output.append("你還剩 %s 次練習。" % ("1" if value.lower() == "one" else value))
         elif kind == "columns":
             output.append(value.replace("Int Wis Chr Lvl", "智力 智慧 魅力 等級"))
         elif kind == "skill":

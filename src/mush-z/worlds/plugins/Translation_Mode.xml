@@ -1476,7 +1476,8 @@ local function write_accessible_history(original, translated, categories, anchor
       return "job"
     end
     if value:match("^%s*You know the following skills:")
-      or value:match("^%s*You have%s+%d+%s+practices?%s+left%.") then
+      or value:match("^%s*You have%s+%d+%s+practices?%s+left%.")
+      or value:match("^%s*You have%s+one%s+practice%s+left%.") then
       return "skills"
     end
     for _, category in ipairs(request_categories or {}) do
@@ -1509,7 +1510,8 @@ local function write_fallback_history(req)
     or value:match("^%s*Job Name:%s*") then
     review_kind = "job"
   elseif value:match("^%s*You know the following skills:")
-    or value:match("^%s*You have%s+%d+%s+practices?%s+left%.") then
+    or value:match("^%s*You have%s+%d+%s+practices?%s+left%.")
+    or value:match("^%s*You have%s+one%s+practice%s+left%.") then
     review_kind = "skills"
   else
     for _, category in ipairs(req.categories or {}) do

@@ -35,10 +35,24 @@ Warcries
     assert "激怒" in result and "24 war" in result
     assert "戰吼" in result
     assert len(module.PRACTICE_FIXED_PROSE) >= 39
+
+    singular_source = source.replace("You have 4 practices left.", "You have one practice left.")
+    assert module.is_practice_table(singular_source)
+    assert module.should_bypass_whole_block_cache(singular_source)
+    singular_result = module.translate_practice_table(singular_source, {})
+    assert "你還剩 1 次練習。" in singular_result
+    prefixed_source = "You slip from the shadows.\n" + singular_source
+    assert module.is_practice_table(prefixed_source)
+    assert module.should_bypass_whole_block_cache(prefixed_source)
+    prefixed_result = module.translate_practice_table(prefixed_source, {})
+    assert prefixed_result.splitlines()[0].startswith("快取：")
+    assert "你還剩 1 次練習。" in prefixed_result
+
     plugin = PLUGIN.read_text(encoding="utf-8-sig")
     footer = "to find a teacher or guildmaster to learn less common abilities."
     assert ('if line == "' + footer + '" then') in plugin
     assert "flush_pending()" in plugin
+    assert plugin.count("You have%s+one%s+practice%s+left") == 2
     print(
         "PRACTICE_TABLE_CACHE_OK dynamic_fields=local fixed_headings=local "
         "repeated_prose=cached immediate_footer_flush=yes"
