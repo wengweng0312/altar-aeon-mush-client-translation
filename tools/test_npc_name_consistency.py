@@ -29,6 +29,12 @@ def main() -> None:
             "target_language": "zh-TW",
         }
         assert module.translate_cached_phrase("A kobold druid", config) == "一名狗頭人德魯伊"
+        assert module.translate_cached_phrase("A kobold warrior", config) == "一名狗頭人戰士"
+        assert module.translate_cached_phrase("A kobold mage", config) == "一名狗頭人法師"
+        assert module.translate_cached_phrase("A kobold cleric", config) == "一名狗頭人牧師"
+        assert module.translate_cached_phrase("A kobold thief", config) == "一名狗頭人盜賊"
+        assert module.translate_cached_phrase("A kobold necromancer", config) == "一名狗頭人死靈法師"
+        assert module.translate_cached_phrase("kobold warrior", config) == "狗頭人戰士"
 
         first_source = "Gimthen says, 'Welcome to me shop.'"
         first = module.normalize_npc_names(first_source, "金騰說：「歡迎來到我的店。」")

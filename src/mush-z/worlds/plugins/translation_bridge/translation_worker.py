@@ -722,6 +722,25 @@ def deterministic_translate(text):
             GAME_GLOSSARY = {}
     if source.strip() in GAME_GLOSSARY:
         return GAME_GLOSSARY[source.strip()]
+    # Keep common kobold profession labels stable without teaching the rule to
+    # arbitrary prose.  A full noun-phrase match avoids changing proper names
+    # or uses of "kobold" elsewhere in room descriptions and dialogue.
+    kobold_professions = {
+        "warrior": "戰士",
+        "mage": "法師",
+        "cleric": "牧師",
+        "thief": "盜賊",
+        "necromancer": "死靈法師",
+        "druid": "德魯伊",
+    }
+    kobold_match = re.fullmatch(
+        r"(?:(a|an|the)\s+)?kobold\s+(warrior|mage|cleric|thief|necromancer|druid)",
+        source.strip(),
+        re.IGNORECASE,
+    )
+    if kobold_match:
+        prefix = "一名" if kobold_match.group(1) else ""
+        return "%s狗頭人%s" % (prefix, kobold_professions[kobold_match.group(2).lower()])
     fixed_events = {
         # Mush-Z emits these compact health-condition labels from the prompt.
         # They are status values, not ordinary adjective fragments.
