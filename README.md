@@ -101,6 +101,18 @@ Ctrl+Shift+Delete
 
 這會清除最近五筆翻譯快取，讓它們下次出現時重新翻譯。
 
+## 查看線上 API 用量
+
+翻譯模式開啟時，在 MUSHclient 指令輸入框輸入：
+
+```text
+check_api
+```
+
+系統會依序報告 Microsoft Azure、Google Cloud 與 DeepL 的設定狀態。DeepL
+可直接顯示官方已用、上限及剩餘字元；Azure 與 Google 則顯示此外掛從本版開始
+記錄的本機送出字元數。查詢不會送出測試翻譯，也不會顯示 API 金鑰。
+
 ## 離線與線上翻譯
 
 Full 版已包含離線 LMT 翻譯模型，不需要另外安裝 Python，也不需要申請 API 金鑰。預設設定即可完全離線使用。

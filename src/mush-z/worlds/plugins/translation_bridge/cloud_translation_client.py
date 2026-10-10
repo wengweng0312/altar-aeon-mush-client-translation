@@ -209,3 +209,29 @@ def translate_many_zh_en(service, texts, api_key, azure_region="global", timeout
 def translate(service, text, api_key, azure_region="global", timeout=1.5,
               opener=urllib.request.urlopen):
     return translate_many(service, [text], api_key, azure_region, timeout, opener)[0]
+
+
+def deepl_usage(api_key, timeout=3.0, opener=urllib.request.urlopen):
+    """Return DeepL's official character usage without translating text."""
+    host = "api-free.deepl.com" if api_key.strip().endswith(":fx") else "api.deepl.com"
+    request = urllib.request.Request(
+        "https://%s/v2/usage" % host,
+        headers={"Authorization": "DeepL-Auth-Key " + api_key},
+        method="GET",
+    )
+    try:
+        with opener(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise CloudTranslationError("HTTP_%s" % error.code) from None
+    except urllib.error.URLError:
+        raise CloudTranslationError("NETWORK_UNAVAILABLE") from None
+    except (ValueError, UnicodeError):
+        raise CloudTranslationError("INVALID_JSON_RESPONSE") from None
+    try:
+        return {
+            "character_count": int(data["character_count"]),
+            "character_limit": int(data["character_limit"]),
+        }
+    except (KeyError, TypeError, ValueError):
+        raise CloudTranslationError("DEEPL_USAGE_RESPONSE_SHAPE") from None

@@ -86,6 +86,7 @@ BANNED_PARTS = (
     "lmt_translation_trace.log", "translation_worker.log", "llama_server.log",
     "accessible_history", "backend_choice.json", "worker.lock", "mush_session_",
     "launch_debug.txt", "translate_api.txt", "cloud_translation_probe_report.json",
+    "cloud_api_local_usage.json",
 )
 
 

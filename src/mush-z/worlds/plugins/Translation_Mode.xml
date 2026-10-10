@@ -21,6 +21,7 @@
  <alias match="translation_block_diagnostic" enabled="y" script="SpeakBlockDiagnostic" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_cache_clear_recent" enabled="y" script="ClearRecentTranslationCache" omit_from_output="y" omit_from_command_history="y" />
  <alias match="translation_update_test" enabled="y" script="TestAutomaticUpdatePrompt" omit_from_output="y" omit_from_command_history="y" />
+ <alias match="check_api" enabled="y" script="CheckApiUsage" omit_from_output="y" omit_from_command_history="y" />
 
 </aliases>
 <timers>
@@ -385,6 +386,29 @@ function ClearRecentTranslationCache()
     return
   end
   requests[request_id] = {original="Cache cleanup failed.", ticks=0, categories={}, skip_history=true}
+end
+
+function CheckApiUsage()
+  if not enabled then
+    speak("Translation mode is off. Turn it on before checking API usage.")
+    return
+  end
+  seq = seq + 1
+  local request_id = string.format("%s_%06d", session_id, seq)
+  local tmp = inbox .. "/req_" .. request_id .. ".tmp"
+  local final = inbox .. "/req_" .. request_id .. ".txt"
+  local f = io.open(tmp, "wb")
+  if not f then speak("Unable to request API usage."); return end
+  f:write(b64("__MUSHZ_CONTROL_CHECK_API__")); f:close()
+  if not os.rename(tmp, final) then
+    os.remove(tmp)
+    speak("Unable to request API usage.")
+    return
+  end
+  requests[request_id] = {
+    original="API usage check failed.", ticks=0, categories={}, skip_history=true
+  }
+  speak("Checking API usage.")
 end
 
 function TranslateOutgoingChatInput()

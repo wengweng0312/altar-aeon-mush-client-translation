@@ -19,6 +19,7 @@ LOG = ROOT/"translation_worker.log"
 CACHE_DB = ROOT/"translation_cache.sqlite3"
 SERVER_LOG = ROOT/"llama_server.log"
 TRACE_LOG = ROOT/"lmt_translation_trace.log"
+API_USAGE_FILE = ROOT/"cloud_api_local_usage.json"
 LOG_ARCHIVE = ROOT/"log_archive"
 TRACE_LOG_MAX_BYTES = 20 * 1024 * 1024
 WORKER_LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -59,6 +60,7 @@ DETERMINISTIC_FIELD_GLOSSARY = None
 PORT = 18082
 CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
 CONTROL_TRANSLATE_OUTGOING_CHAT = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:"
+CONTROL_CHECK_API = "__MUSHZ_CONTROL_CHECK_API__"
 CPU_AUTOTUNE_VERSION = 1
 STRUCTURED_FIELD_CACHE_VERSION = 2
 CPU_AUTOTUNE_MIN_GAIN = 1.05
@@ -527,6 +529,77 @@ def mark_translation_engine(name):
     TRANSLATION_ENGINES_USED.add(str(name))
 
 
+def record_cloud_usage(service, sources):
+    """Persist successful request characters; never store text or credentials."""
+    try:
+        today = time.strftime("%Y-%m-%d")
+        month = time.strftime("%Y-%m")
+        data = {"started": today, "months": {}}
+        if API_USAGE_FILE.is_file():
+            loaded = json.loads(API_USAGE_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data.update(loaded)
+        months = data.setdefault("months", {})
+        current = months.setdefault(month, {})
+        key = cloud_translation_client.SERVICE_NAMES.get(service, "unknown")
+        current[key] = int(current.get(key, 0)) + sum(len(str(value)) for value in sources)
+        atomic_write(API_USAGE_FILE, json.dumps(data, ensure_ascii=False, indent=2))
+    except Exception as error:
+        log("unable to record local cloud usage: %r" % error, True)
+
+
+def cloud_api_report():
+    """Report every provider without exposing keys or spending translation quota."""
+    settings = cloud_translation_config()
+    primary = settings.get("service", 0)
+    month = time.strftime("%Y-%m")
+    started = "this version"
+    local = {}
+    try:
+        data = json.loads(API_USAGE_FILE.read_text(encoding="utf-8"))
+        started = str(data.get("started") or started)
+        local = data.get("months", {}).get(month, {})
+    except Exception:
+        pass
+    labels = {1: "Microsoft Azure", 2: "Google Cloud", 3: "DeepL"}
+    lines = ["%s API 用量報告。本機從 %s 開始計算。" % (month, started)]
+    for service in (1, 2, 3):
+        name = labels[service]
+        key = settings["api_keys"].get(service, "")
+        role = " 目前是第一順位。" if primary == service else ""
+        if not key:
+            lines.append("%s：未設定。%s" % (name, role))
+            continue
+        local_count = int(local.get(cloud_translation_client.SERVICE_NAMES[service], 0))
+        state = "本次執行期間已停用" if service in CLOUD_DISABLED_FOR_SESSION else "已設定"
+        if service == 3:
+            try:
+                usage = cloud_translation_client.deepl_usage(
+                    key, max(1.0, min(10.0, settings["timeout_seconds"]))
+                )
+                used = usage["character_count"]
+                limit = usage["character_limit"]
+                remaining = max(0, limit - used)
+                lines.append(
+                    "%s：官方本期已使用 %s／%s 字元，剩餘 %s。"
+                    "本機本月送出 %s 字元。%s" %
+                    (name, used, limit, remaining, local_count, role)
+                )
+            except Exception as error:
+                lines.append(
+                    "%s：%s。官方用量查詢失敗：%s。"
+                    "本機本月送出 %s 字元。%s" %
+                    (name, state, str(error), local_count, role)
+                )
+        else:
+            lines.append(
+                "%s：%s。本機本月送出 %s 字元。"
+                "翻譯 API 金鑰無法讀取官方帳戶用量。%s" %
+                (name, state, local_count, role)
+            )
+    return "\n".join(lines)
+
+
 def cloud_translate_many_partial(sources):
     """Keep valid cloud units and retry only rejected units with the next provider."""
     sources = [str(source) for source in sources]
@@ -541,6 +614,7 @@ def cloud_translate_many_partial(sources):
                 service, [sources[index] for index in pending], api_key,
                 settings["azure_region"], settings["timeout_seconds"],
             )
+            record_cloud_usage(service, [sources[index] for index in pending])
             if len(translated) != len(pending):
                 raise RuntimeError("CLOUD_RESULT_COUNT_MISMATCH")
             unresolved = []
@@ -1780,6 +1854,7 @@ def cloud_translate_outgoing_message(text, command):
                 service, [text], api_key,
                 candidate_settings["azure_region"], candidate_settings["timeout_seconds"],
             )
+            record_cloud_usage(service, [text])
             if len(results) != 1:
                 raise RuntimeError("CLOUD_ZH_EN_RESULT_COUNT_MISMATCH")
             result = str(results[0]).strip()
@@ -4939,6 +5014,11 @@ def run():
                     result = translate_outgoing_chat(source, config())
                     elapsed = time.perf_counter() - t
                     trace_record(rid, "OUTGOING_ZH_EN", source, result, elapsed, "")
+                    atomic_write(out, "OK\n" + result)
+                    continue
+                if raw == CONTROL_CHECK_API:
+                    result = cloud_api_report()
+                    trace_record(rid, "CONTROL", raw, result, 0.0, "")
                     atomic_write(out, "OK\n" + result)
                     continue
                 c=config(); result=None if should_bypass_whole_block_cache(raw) else cache_get(raw,c)

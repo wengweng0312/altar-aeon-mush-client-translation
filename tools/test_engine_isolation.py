@@ -45,6 +45,7 @@ def main() -> None:
         "cloud_translation_client": SimpleNamespace(SERVICE_NAMES={1: "azure", 3: "deepl"},
             translate_many=provider, is_session_blocking_error=lambda _error: False),
         "validate_cloud_translation": validate, "mark_translation_engine": lambda _name: None,
+        "record_cloud_usage": lambda _service, _sources: None,
         "CLOUD_FAILURE_COUNT": {}, "CLOUD_FAILURE_LIMIT": 3,
         "CLOUD_DISABLED_FOR_SESSION": set(), "CLOUD_DISABLED_UNTIL": {},
         "CLOUD_COOLDOWN_SECONDS": 30, "time": SimpleNamespace(monotonic=lambda: 0),
