@@ -101,6 +101,8 @@ def main() -> None:
         "You start following Hawana.": "你開始跟隨Hawana。",
         "You add Hawana to your group.": "你將Hawana加入隊伍。",
         "Hawana has become a member of the group.": "Hawana加入了隊伍。",
+        "Hawana has left the group.": "Hawana離開了隊伍。",
+        "Hawana stops resting, and stands up.": "Hawana停止休息並站了起來。",
         "Hawana vanishes into a flickering red glow.": "Hawana消失在閃爍的紅光中。",
         "a steel sword (unique)": "一把鋼劍（唯一）",
         "You get a crescent-shaped shadow.": "你取得一道新月形陰影。",

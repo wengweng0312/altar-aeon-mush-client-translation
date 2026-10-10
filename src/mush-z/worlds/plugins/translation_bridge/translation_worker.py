@@ -249,6 +249,8 @@ SEMANTIC_EVENT_PATTERNS = (
     ("you_follow", re.compile(r"^(\s*)You (start|stop) following (.+?)\.(\s*)$", re.I)),
     ("group_add", re.compile(r"^(\s*)You add (.+?) to your group\.(\s*)$", re.I)),
     ("group_member", re.compile(r"^(\s*)(.+?) has become a member of the group\.(\s*)$", re.I)),
+    ("group_left", re.compile(r"^(\s*)(.+?) has left the group\.(\s*)$", re.I)),
+    ("stops_resting", re.compile(r"^(\s*)(.+?) stops resting, and stands up\.(\s*)$", re.I)),
     ("teleport_vanish", re.compile(r"^(\s*)(.+?) vanishes into a flickering red glow\.(\s*)$", re.I)),
     ("teleport_appear", re.compile(r"^(\s*)(.+?) (?:appears out of a flickering blue glow|appears in the middle of the room)\.(\s*)$", re.I)),
     ("unique_item", re.compile(r"^(\s*)(.+?) \(unique\)(\s*)$", re.I)),
@@ -1080,7 +1082,7 @@ def clear_recent_translation_cache(limit=5):
 NPC_SOURCE_SUBJECT = re.compile(
     r"^([A-Z][A-Za-z'’-]*(?:\s+(?:the\s+)?[A-Za-z][A-Za-z'’-]*){0,5})\s+"
     r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
-    r"sighs|starts|has|stretches|concentrates|watches|stands|sits|goes|moves)\b",
+    r"sighs|starts|stops|has|stretches|concentrates|watches|stands|sits|goes|moves)\b",
     re.I,
 )
 NPC_TALK_TARGET = re.compile(r"^You try to talk to\s+(.+?)\.{3}\s*$", re.I)
@@ -1091,7 +1093,7 @@ NPC_RESULT_MARKERS = {
     "whispers": r"低語|耳語", "shouts": r"大喊|喊道|喊", "exclaims": r"驚呼|喊道",
     "gives": r"給|交|將", "bows": r"鞠躬", "waves": r"揮", "leaves": r"離開|前往",
     "arrives": r"抵達|來了|到達", "sighs": r"嘆", "starts": r"開始|驚|嚇",
-    "has": r"加入|成為",
+    "has": r"加入|成為|離開", "stops": r"停止",
     "stretches": r"伸展|伸", "concentrates": r"專注|集中", "watches": r"守望|守|看",
     "stands": r"站", "sits": r"坐", "goes": r"回|走|前往", "moves": r"移動|走",
 }
@@ -2018,19 +2020,34 @@ def semantic_sentence_chunks(text):
     return chunks
 
 
+def room_title_index(rows):
+    """Find a room title even when movement/status text precedes it."""
+    for index, row in enumerate(rows[:-1]):
+        if not row or len(row) > 100 or re.search(r"[.!?:;。！？：；]$", row):
+            continue
+        if re.match(r"^(?:you|your|there|exits?|mobs?|level|experience)\b", row, re.I):
+            continue
+        following = rows[index + 1]
+        if len(following) >= len(row) + 8 or re.search(r"[.!?。！？]$", following):
+            return index
+    return -1
+
+
 def room_semantic_chunks(text):
-    """Keep the room title separate, then return complete prose sentences."""
+    """Keep movement, room title and complete prose sentences separate."""
     rows = [
         line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
     ]
     if not rows:
         return []
-    title = rows[0]
-    if len(rows) < 2 or re.search(r"[.!?。！？]$", title):
+    title_index = room_title_index(rows)
+    if title_index < 0:
         return semantic_sentence_chunks(text)
-    body = semantic_sentence_chunks(" ".join(rows[1:]))
-    return [title] + body if body else [title]
+    prefix = semantic_sentence_chunks(" ".join(rows[:title_index]))
+    title = rows[title_index]
+    body = semantic_sentence_chunks(" ".join(rows[title_index + 1:]))
+    return prefix + [title] + body
 
 
 ROOM_UNIT_MARKER = re.compile(r"(?:\[\[ROOM_(\d+)\]\]|【房[间間]\s*(\d+)】)")
@@ -2125,8 +2142,7 @@ def is_room_prose_candidate(text):
     rows = [line.strip() for line in value.split("\n") if line.strip()]
     if len(value) < 180 or len(rows) < 3:
         return False
-    title = rows[0]
-    if not (2 <= len(title) <= 100) or re.search(r"[:.!?。！？]$", title):
+    if room_title_index(rows) < 0:
         return False
     if re.search(r"\b(?:says|asks|tells|exclaims|yells|whispers),?\s*['\"]", value, re.I):
         return False
@@ -3407,9 +3423,14 @@ def translate_semantic_event_line(line, c):
         indent, action, actor, trailing = groups
         template = "你開始跟隨%s。" if action.lower() == "start" else "你停止跟隨%s。"
         return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
-    if kind in {"group_add", "group_member"}:
+    if kind in {"group_add", "group_member", "group_left", "stops_resting"}:
         indent, actor, trailing = groups
-        template = "你將%s加入隊伍。" if kind == "group_add" else "%s加入了隊伍。"
+        template = {
+            "group_add": "你將%s加入隊伍。",
+            "group_member": "%s加入了隊伍。",
+            "group_left": "%s離開了隊伍。",
+            "stops_resting": "%s停止休息並站了起來。",
+        }[kind]
         return "%s%s%s" % (indent, template % translate_cached_phrase(actor, c), trailing)
     if kind in {"teleport_vanish", "teleport_appear"}:
         indent, actor, trailing = groups
@@ -3599,7 +3620,7 @@ def prefetch_semantic_event_fields(lines, c):
         elif kind == "blade_reaction": values.append(groups[1])
         elif kind == "damage_other": values.extend((groups[1], groups[2], groups[4]))
         elif kind == "aura_fades": values.append(groups[2])
-        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "teleport_vanish", "teleport_appear", "unique_item", "actor_here", "actor_darkened", "actor_dead", "actor_arrived", "mortally_wounded", "keeps_bleeding", "stops_bleeding", "anticipates_bloodletting", "trip_fly_recovery", "trip_avoided", "too_weak_to_attack", "collapses_branches", "sprays_webs"}: values.append(groups[1])
+        elif kind in {"actor_white_aura", "restored_health", "starts_following_you", "stops_following_you", "group_add", "group_member", "group_left", "stops_resting", "teleport_vanish", "teleport_appear", "unique_item", "actor_here", "actor_darkened", "actor_dead", "actor_arrived", "mortally_wounded", "keeps_bleeding", "stops_bleeding", "anticipates_bloodletting", "trip_fly_recovery", "trip_avoided", "too_weak_to_attack", "collapses_branches", "sprays_webs"}: values.append(groups[1])
         elif kind == "parry": values.extend((groups[1], groups[2]))
         elif kind == "get_gold_from": values.append(groups[2])
         elif kind == "gives_you": values.extend(groups[1:3])

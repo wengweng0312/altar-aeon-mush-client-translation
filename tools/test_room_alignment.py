@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "src" / "mush-z" / "worlds" / "plugins" / "translation_bridge" / "translation_worker.py"
 FUNCTIONS = {
     "semantic_sentence_chunks",
+    "room_title_index",
     "room_semantic_chunks",
+    "is_room_prose_candidate",
     "parse_numbered_room_translation",
 }
 
@@ -48,6 +50,20 @@ def main() -> None:
         "The path is clear of any big rocks or boulders but the ground is sandy and is mixed with pebbles.",
         "There are unclear markings in the dirt but it is clear there are things living in this cave.",
     ], chunks
+
+    cellar = (
+        "You make your way down the steep steps into the gloom.\n"
+        "Cellar\n"
+        "A dark and damp cellar filled with barrels and crates. Along one wall a\n"
+        "pile of straw has been fashioned into a bed and there is a very strong\n"
+        "smell of alcohol in the air, tinged with an unpleasant aroma of waste which\n"
+        "seems to be coming from a bucket in one corner."
+    )
+    cellar_chunks = module["room_semantic_chunks"](cellar)
+    assert cellar_chunks[0] == "You make your way down the steep steps into the gloom."
+    assert cellar_chunks[1] == "Cellar"
+    assert len(cellar_chunks) == 4, cellar_chunks
+    assert module["is_room_prose_candidate"](cellar)
 
     parsed = module["parse_numbered_room_translation"](
         "[[ROOM_0]] 洞穴中的三叉路口\n"
