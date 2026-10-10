@@ -202,6 +202,11 @@ def main() -> None:
     assert present(mismatched_dialogue) == mismatched_dialogue
 
     addon_source = MODULE.read_text(encoding="utf-8")
+    navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]
+    assert "currentNavigator = api.getNavigatorObject()" in navigator_method
+    assert "_translationReviewIsActive()" in navigator_method
+    assert "isinstance(currentNavigator, TranslationReviewObject)" in navigator_method
+    assert navigator_method.index("isinstance(currentNavigator, TranslationReviewObject)") < navigator_method.index("api.setNavigatorObject(output)")
     bottom_script = addon_source.split("def script_translationHistoryBottom", 1)[1].split("\n\t@", 1)[0]
     assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
 

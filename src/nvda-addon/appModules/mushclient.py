@@ -830,7 +830,15 @@ class Input(Window):
 		self.setNavigator()
 
 	def setNavigator(self):
-		if self._output and api.getNavigatorObject() == self._output:
+		currentNavigator = api.getNavigatorObject()
+		# Typing moves the command edit's caret and calls this method for every
+		# character.  Do not throw away Translation Mode's virtual review cursor:
+		# the player may be copying a long English name one character at a time
+		# with numpad1/3 while composing a command.  Outside that virtual document,
+		# retain Mush-Z's original behaviour of following the English output.
+		if _translationReviewIsActive() and isinstance(currentNavigator, TranslationReviewObject):
+			return
+		if self._output and currentNavigator == self._output:
 			return
 		self._output = None
 		try:
