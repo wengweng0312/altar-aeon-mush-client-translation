@@ -225,6 +225,11 @@ BUY_ITEM_LINE = re.compile(
     re.IGNORECASE,
 )
 SEMANTIC_EVENT_PATTERNS = (
+    ("get_items_from", re.compile(r"^(\s*)You get (\d+) items? from (.+?): (.+?)([.]?)(\s*)$", re.I)),
+    ("get_items", re.compile(r"^(\s*)You get (\d+) items?: (.+?)([.]?)(\s*)$", re.I)),
+    ("not_found_in", re.compile(r"^(\s*)You don't see anything named '([^']+)' in (.+?)\.?(\s*)$", re.I)),
+    ("not_found_here", re.compile(r"^(\s*)You don't see anything named '([^']+)' here\.?(\s*)$", re.I)),
+    ("you_dodge_attack", re.compile(r"^(\s*)You dodge (?:his|her|its|their) attack\.(\s*)$", re.I)),
     ("blade_spin", re.compile(r"^(\s*)You start swinging and spinning the blade, '([^']+)'\.\.\.(\s*)$", re.I)),
     ("blade_flick_hit", re.compile(r"^(\s*)You flick the blade, '([^']+)' at (.+?), and score a quick hit!(\s*)$", re.I)),
     ("blade_flick_miss", re.compile(r"^(\s*)You flick the blade, '([^']+)', but (.+?) avoids your attack\.(\s*)$", re.I)),
@@ -3241,10 +3246,89 @@ def has_historical_fallback_shape(text):
     return any(re.fullmatch(pattern, line, re.I) for line in lines for pattern in patterns)
 
 
+PEER_ROOM_PREVIEW = re.compile(r"^\s*\(you peer out from your hiding place\.\.\.\)\s*$", re.I)
+LEVEL_ADVANCE_LINE = re.compile(
+    r"^You advance another rank closer to level (\d+) "
+    r"(mage|cleric|thief|warrior|necromancer|druid)!$", re.I,
+)
+LEVEL_GAIN_LINE = re.compile(
+    r"^You gain: (\d[\d,]*/\d[\d,]*) hit, (\d[\d,]*/\d[\d,]*) mana, "
+    r"(\d[\d,]*/\d[\d,]*) movement, (\d[\d,]*/\d[\d,]*) practices?\.$", re.I,
+)
+LEVEL_CHEAPEST_LINE = re.compile(
+    r"^Your next cheapest level is (?:a|an) (.+?) for (\d[\d,]*)$", re.I,
+)
+LEVEL_CHEAPEST_TIE_LINE = re.compile(
+    r"^Your next cheapest level is a tie for (\d[\d,]*)$", re.I,
+)
+LEVEL_CLASS_ZH = {
+    "mage": "法師", "cleric": "牧師", "thief": "盜賊",
+    "warrior": "戰士", "necromancer": "死靈法師", "druid": "德魯伊",
+}
+
+
+def is_peer_room_title_preview(text):
+    """A two-row peer preview whose room title was lost by premature EOS."""
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    return len(rows) == 2 and bool(PEER_ROOM_PREVIEW.fullmatch(rows[0]))
+
+
+def translate_peer_room_title_preview(text, c):
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    if len(rows) != 2 or not PEER_ROOM_PREVIEW.fullmatch(rows[0]):
+        raise RuntimeError("PEER_ROOM_TITLE_PREVIEW_PARSE_FAILED")
+    title = translate_cached_phrase(rows[1], c)
+    if not title.strip():
+        raise RuntimeError("PEER_ROOM_TITLE_PREVIEW_EMPTY_TITLE")
+    return "（你從藏身處向外窺視……）\n" + title
+
+
+def level_advance_matches(text):
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    if len(rows) != 4 or rows[0].upper() != "CONGRATULATIONS!":
+        return None
+    advance = LEVEL_ADVANCE_LINE.fullmatch(rows[1])
+    gain = LEVEL_GAIN_LINE.fullmatch(rows[2])
+    cheapest = LEVEL_CHEAPEST_LINE.fullmatch(rows[3])
+    tie = LEVEL_CHEAPEST_TIE_LINE.fullmatch(rows[3])
+    if not advance or not gain or (not cheapest and not tie):
+        return None
+    return advance, gain, cheapest, tie
+
+
+def is_level_advance_block(text):
+    return level_advance_matches(text) is not None
+
+
+def translate_level_advance_block(text):
+    matched = level_advance_matches(text)
+    if matched is None:
+        raise RuntimeError("LEVEL_ADVANCE_PARSE_FAILED")
+    advance, gain, cheapest, tie = matched
+    level, class_name = advance.groups()
+    hit, mana, movement, practices = gain.groups()
+    output = [
+        "恭喜！",
+        "你又晉升一個階級，更接近第 %s 級%s！" % (level, LEVEL_CLASS_ZH[class_name.lower()]),
+        "你獲得：血量 %s、法力 %s、體力 %s、練習 %s。" % (hit, mana, movement, practices),
+    ]
+    if tie:
+        output.append("下一個最便宜的等級並列，需要 %s 點經驗值。" % tie.group(1))
+    else:
+        rank_name, cost = cheapest.groups()
+        rank_name = re.sub(
+            r"^(mage|cleric|thief|warrior|necromancer|druid)\b",
+            lambda item: LEVEL_CLASS_ZH[item.group(1).lower()], rank_name, flags=re.I,
+        )
+        output.append("下一個最便宜的等級是 %s，需要 %s 點經驗值。" % (rank_name, cost))
+    return "\n".join(output)
+
+
 def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return (is_room_prose_candidate(text) or
+    return (is_peer_room_title_preview(text) or is_level_advance_block(text) or
+            is_room_prose_candidate(text) or
             any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
             any(reviewed_phrase_translation(line.strip()) is not None for line in lines if line.strip()) or
             any(semantic_event_match(line) for line in lines) or
@@ -3373,6 +3457,13 @@ def semantic_event_match(line):
         if kind == "get_item" and re.match(r"\d+ items?:", match.group(2), re.I):
             # Mush-Z reconstructs this aggregate into a table-like row.
             continue
+        if kind in {"get_items", "get_items_from"}:
+            count = int(match.group(2))
+            payload = match.group(4) if kind == "get_items_from" else match.group(3)
+            if len(re.split(r",\s*", payload)) != count:
+                # Item names can contain punctuation.  Only claim the strict
+                # aggregate grammar when its declared count proves the split.
+                continue
         return kind, match
     return None
 
@@ -3384,6 +3475,35 @@ def translate_semantic_event_line(line, c):
         return None
     kind, match = matched
     groups = match.groups()
+    if kind in {"get_items", "get_items_from"}:
+        if kind == "get_items_from":
+            indent, count, container, payload, punctuation, trailing = groups
+        else:
+            indent, count, payload, punctuation, trailing = groups
+            container = None
+        items = re.split(r",\s*", payload)
+        translated_items = "、".join(translate_cached_phrase(item, c) for item in items)
+        if container is None:
+            return "%s你取得 %s 件物品：%s%s%s" % (
+                indent, count, translated_items, punctuation, trailing,
+            )
+        return "%s你從%s取得 %s 件物品：%s%s%s" % (
+            indent, translate_cached_phrase(container, c), count,
+            translated_items, punctuation, trailing,
+        )
+    if kind == "not_found_in":
+        indent, name, container, trailing = groups
+        return "%s你在%s中沒有看到任何名為「%s」的東西。%s" % (
+            indent, translate_cached_phrase(container, c), name, trailing,
+        )
+    if kind == "not_found_here":
+        indent, name, trailing = groups
+        return "%s你在這裡沒有看到任何名為「%s」的東西。%s" % (
+            indent, name, trailing,
+        )
+    if kind == "you_dodge_attack":
+        indent, trailing = groups
+        return "%s你閃避了對方的攻擊。%s" % (indent, trailing)
     if kind == "blade_spin":
         indent, weapon, trailing = groups
         return "%s你開始揮動並旋轉刀刃「%s」……%s" % (indent, weapon, trailing)
@@ -3638,7 +3758,12 @@ def prefetch_semantic_event_fields(lines, c):
             continue
         kind, match = matched
         groups = match.groups()
-        if kind == "actor_puts": values.extend(groups[1:4])
+        if kind == "get_items_from":
+            values.append(groups[2])
+            values.extend(re.split(r",\s*", groups[3]))
+        elif kind == "get_items": values.extend(re.split(r",\s*", groups[2]))
+        elif kind == "not_found_in": values.append(groups[2])
+        elif kind == "actor_puts": values.extend(groups[1:4])
         elif kind in {"blade_flick_hit", "blade_flick_miss"}: values.append(groups[2])
         elif kind == "blade_reaction": values.append(groups[1])
         elif kind == "damage_other": values.extend((groups[1], groups[2], groups[4]))
@@ -4895,6 +5020,10 @@ def translate_character_status_block(text, c):
 
 
 def translate(text,c):
+    if is_peer_room_title_preview(text):
+        return translate_peer_room_title_preview(text, c)
+    if is_level_advance_block(text):
+        return translate_level_advance_block(text)
     if has_embedded_tip_block(text):
         return translate_embedded_tip_block(text, c)
     # Quest lists are tables, not quest-detail prose.  Check them before the

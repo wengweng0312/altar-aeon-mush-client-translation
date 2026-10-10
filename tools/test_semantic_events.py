@@ -54,6 +54,7 @@ def load_functions() -> dict[str, object]:
         "Moondoggie": "Moondoggie",
         "a healing potion": "一瓶治療藥水",
         "A forret": "一隻福雷特",
+        "the corpse of A kobold foot soldier": "一名狗頭人步兵的屍體",
     }
     namespace = {
         "re": re,
@@ -126,6 +127,11 @@ def main() -> None:
         "A forret is too weak to attack.": "一隻福雷特虛弱得無法攻擊。",
         "A forret collapses in a heap of broken branches.": "一隻福雷特倒在一堆斷枝中。",
         "A forret sprays webs all over you!": "一隻福雷特朝你全身噴出蛛網！",
+        "You dodge his attack.": "你閃避了對方的攻擊。",
+        "You don't see anything named 'blade' here.": "你在這裡沒有看到任何名為「blade」的東西。",
+        "You don't see anything named 'shadow' in the corpse of A kobold foot soldier.": "你在一名狗頭人步兵的屍體中沒有看到任何名為「shadow」的東西。",
+        "You get 2 items: a crescent-shaped shadow, a crescent-shaped shadow": "你取得 2 件物品：一道新月形陰影、一道新月形陰影",
+        "You get 2 items from the corpse of A kobold foot soldier: a crescent-shaped shadow, a crescent-shaped shadow": "你從一名狗頭人步兵的屍體取得 2 件物品：一道新月形陰影、一道新月形陰影",
     }
     for source, expected in cases.items():
         actual = translate(source, {})
@@ -134,8 +140,10 @@ def main() -> None:
     combat = module["translate_combat_template_line"]
     assert combat("You slit A forret's throat.", {}) == "你割開一隻福雷特的喉嚨。"
 
-    aggregate = "You get 2 items: a cup, a plate."
-    assert module["semantic_event_match"](aggregate) is None
+    aggregate = "You get 2 items: a cup, a plate"
+    assert module["semantic_event_match"](aggregate) is not None
+    # A suspicious count mismatch is deliberately left to the old fallback.
+    assert module["semantic_event_match"]("You get 3 items: a cup, a plate") is None
     block = "A shadow decoy misses A small troll.\nYou receive 230k experience."
     rendered = module["translate_semantic_event_block"](block, {})
     assert rendered.count("\n") == block.count("\n")
