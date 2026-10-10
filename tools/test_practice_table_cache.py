@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "src/mush-z/worlds/plugins/translation_bridge/translation_worker.py"
+PLUGIN = ROOT / "src/mush-z/worlds/plugins/Translation_Mode.xml"
 
 
 def main() -> None:
@@ -29,13 +30,19 @@ Warcries
     )
 
     result = module.translate_practice_table(source, {})
-    assert cached == [
-        "Warcries",
-        "(If you run out, you can buy extra practices using the 'credit buy' command.)",
-    ], cached
+    assert cached == ["(If you run out, you can buy extra practices using the 'credit buy' command.)"], cached
     assert "你還剩 4 次練習。" in result
     assert "激怒" in result and "24 war" in result
-    print("PRACTICE_TABLE_CACHE_OK dynamic_fields=local repeated_prose=cached")
+    assert "戰吼" in result
+    assert len(module.PRACTICE_FIXED_PROSE) >= 39
+    plugin = PLUGIN.read_text(encoding="utf-8-sig")
+    footer = "to find a teacher or guildmaster to learn less common abilities."
+    assert ('if line == "' + footer + '" then') in plugin
+    assert "flush_pending()" in plugin
+    print(
+        "PRACTICE_TABLE_CACHE_OK dynamic_fields=local fixed_headings=local "
+        "repeated_prose=cached immediate_footer_flush=yes"
+    )
 
 
 if __name__ == "__main__":

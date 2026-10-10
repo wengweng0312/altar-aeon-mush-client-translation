@@ -786,6 +786,12 @@ local function queue_buffered(line, target_ticks)
   table.insert(pending_categories, active_block or false)
   pending_ticks = 0
   pending_target_ticks = math.min(pending_target_ticks or 3, target_ticks)
+  -- The practice table has a reliable final sentence. Send the complete
+  -- block immediately instead of waiting another 300 ms. Unknown variants
+  -- retain the normal quiet-period fallback, so a table is never truncated.
+  if line == "to find a teacher or guildmaster to learn less common abilities." then
+    flush_pending()
+  end
   return "1"
 end
 

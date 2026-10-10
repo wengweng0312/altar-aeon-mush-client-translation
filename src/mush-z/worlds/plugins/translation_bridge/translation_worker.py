@@ -962,13 +962,173 @@ def clear_recent_translation_cache(limit=5):
         raise RuntimeError("CACHE_UNAVAILABLE")
     limit = max(1, min(50, int(limit)))
     rows = db.execute(
-        "SELECT cache_key FROM translations ORDER BY last_used DESC, rowid DESC LIMIT ?",
+        "SELECT cache_key,source_text FROM translations ORDER BY last_used DESC, rowid DESC LIMIT ?",
         (limit,),
     ).fetchall()
+    npc_names = set()
+    for _cache_key, source_text in rows:
+        npc_names.update(npc_names_in_source(source_text, db))
     if rows:
-        db.executemany("DELETE FROM translations WHERE cache_key=?", rows)
+        db.executemany("DELETE FROM translations WHERE cache_key=?", [(row[0],) for row in rows])
+        if npc_names:
+            # A name lock is derived from translation output, so clearing the
+            # triggering translations must also let the player choose it
+            # again. Remove every whole-sentence cache mentioning that NPC;
+            # otherwise an older sentence could immediately recreate the
+            # just-deleted spelling without a new translation.
+            all_rows = db.execute("SELECT cache_key,source_text FROM translations").fetchall()
+            stale_keys = [
+                cache_key for cache_key, source_text in all_rows
+                if any(english_name_in_text(name, source_text) for name in npc_names)
+            ]
+            if stale_keys:
+                db.executemany("DELETE FROM translations WHERE cache_key=?", [(key,) for key in stale_keys])
+            db.executemany("DELETE FROM npc_name_aliases WHERE source_name=?", [(name,) for name in npc_names])
+            db.executemany("DELETE FROM npc_names WHERE source_name=?", [(name,) for name in npc_names])
         db.commit()
     return len(rows)
+
+
+NPC_SOURCE_SUBJECT = re.compile(
+    r"^([A-Z][A-Za-z'’-]*(?:\s+(?:the\s+)?[A-Za-z][A-Za-z'’-]*){0,5})\s+"
+    r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
+    r"sighs|starts|stretches|concentrates|watches|stands|sits|goes|moves)\b",
+    re.I,
+)
+NPC_TALK_TARGET = re.compile(r"^You try to talk to\s+(.+?)\.{3}\s*$", re.I)
+NPC_MAP_TARGET = re.compile(r"^([A-Z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,5})\s*->")
+NPC_RESULT_MARKERS = {
+    "says": r"說道|說", "asks": r"問道|問", "yells": r"大喊|喊道|喊",
+    "whispers": r"低語|耳語", "shouts": r"大喊|喊道|喊", "exclaims": r"驚呼|喊道",
+    "gives": r"給|交|將", "bows": r"鞠躬", "waves": r"揮", "leaves": r"離開|前往",
+    "arrives": r"抵達|來了|到達", "sighs": r"嘆", "starts": r"驚|嚇",
+    "stretches": r"伸展|伸", "concentrates": r"專注|集中", "watches": r"守望|守|看",
+    "stands": r"站", "sits": r"坐", "goes": r"回|走|前往", "moves": r"移動|走",
+}
+
+
+def ensure_npc_name_tables(db):
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_names(
+      source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_name_aliases(
+      source_name TEXT NOT NULL, alias_name TEXT NOT NULL,
+      PRIMARY KEY(source_name,alias_name))""")
+
+
+def npc_source_identity(line):
+    """Return a stable English NPC identity and its grammatical context."""
+    value = str(line).strip()
+    talk = NPC_TALK_TARGET.match(value)
+    if talk:
+        return talk.group(1).strip(), "talk"
+    mapped = NPC_MAP_TARGET.match(value)
+    if mapped:
+        return mapped.group(1).strip(), "map"
+    subject = NPC_SOURCE_SUBJECT.match(value)
+    if not subject:
+        return None
+    name, verb = subject.groups()
+    first = name.split()[0].lower()
+    if first in {"a", "an", "the", "you", "your"}:
+        return None
+    return name.strip(), verb.lower()
+
+
+def npc_names_in_source(source, db=None):
+    """Find directly structured names plus already-known names in a request."""
+    value = str(source)
+    names = set()
+    for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        identity = npc_source_identity(line)
+        if identity:
+            names.add(identity[0].lower())
+    try:
+        db = db or cache_connection()
+        if db is not None:
+            ensure_npc_name_tables(db)
+            for (name,) in db.execute("SELECT source_name FROM npc_names"):
+                if english_name_in_text(name, value):
+                    names.add(name)
+    except Exception:
+        pass
+    return names
+
+
+def english_name_in_text(name, text):
+    return re.search(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(str(name)), str(text), re.I) is not None
+
+
+def translated_npc_span(line, context):
+    """Locate only the translated name field; fail closed on uncertain prose."""
+    value = str(line)
+    if context == "talk":
+        match = re.match(r"^(?:你|您).*?(?:和|跟)(.{1,40}?)(?=說話|交談|談談)", value)
+        return match.span(1) if match else None
+    if context == "map":
+        match = re.match(r"^\s*(.{1,40}?)\s*(?=->)", value)
+        return match.span(1) if match else None
+    marker = NPC_RESULT_MARKERS.get(context)
+    if not marker:
+        return None
+    match = re.match(r"^\s*(.{1,40}?)(?=" + marker + r")", value)
+    return match.span(1) if match else None
+
+
+def valid_npc_translation(value):
+    value = str(value).strip()
+    if not value or len(value) > 40 or re.search(r"[\r\n，。！？,:：；;]", value):
+        return False
+    return bool(re.search(r"[A-Za-z\u3400-\u9fff]", value))
+
+
+def normalize_npc_names(source, translated):
+    """Keep each locally encountered NPC spelling stable across all engines."""
+    db = cache_connection()
+    if db is None:
+        return translated
+    try:
+        ensure_npc_name_tables(db)
+        source_lines = str(source).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        result_lines = str(translated).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if len(source_lines) == len(result_lines):
+            for index, source_line in enumerate(source_lines):
+                identity = npc_source_identity(source_line)
+                if not identity:
+                    continue
+                english_name, context = identity
+                key = english_name.lower()
+                span = translated_npc_span(result_lines[index], context)
+                if not span:
+                    continue
+                candidate = result_lines[index][span[0]:span[1]].strip()
+                if not valid_npc_translation(candidate):
+                    continue
+                row = db.execute("SELECT translated_name FROM npc_names WHERE source_name=?", (key,)).fetchone()
+                canonical = row[0] if row else candidate
+                now = int(time.time())
+                if row is None:
+                    db.execute("INSERT INTO npc_names(source_name,translated_name,updated_at) VALUES(?,?,?)",
+                               (key, canonical, now))
+                else:
+                    db.execute("UPDATE npc_names SET updated_at=? WHERE source_name=?", (now, key))
+                db.execute("INSERT OR IGNORE INTO npc_name_aliases(source_name,alias_name) VALUES(?,?)",
+                           (key, candidate))
+                result_lines[index] = result_lines[index][:span[0]] + canonical + result_lines[index][span[1]:]
+        result = "\n".join(result_lines)
+        # Once an alias has been observed in a structured line, normalize it
+        # inside other cached prose whenever the corresponding English name is
+        # present in the source. This repairs old sentence caches lazily.
+        for key, canonical in db.execute("SELECT source_name,translated_name FROM npc_names"):
+            if not english_name_in_text(key, source):
+                continue
+            for (alias,) in db.execute("SELECT alias_name FROM npc_name_aliases WHERE source_name=?", (key,)):
+                if alias and alias != canonical:
+                    result = result.replace(alias, canonical)
+        db.commit()
+        return result
+    except Exception as error:
+        log("npc name normalization skipped: %r" % error, True)
+        return translated
 
 def find_runtime():
     home=Path.home()
@@ -3631,6 +3791,49 @@ PRACTICE_LINE = re.compile(
     r"(\s+)(\S.*)$",
     re.IGNORECASE,
 )
+PRACTICE_FIXED_PROSE = {
+    "Mage elemental cold spellgroup": "法師元素冰系法術組",
+    "Mage elemental fire spellgroup": "法師元素火系法術組",
+    "Mage illusion spellgroup": "法師幻術組",
+    "Mage basic magics": "法師基礎魔法",
+    "Mage elemental lightning spellgroup": "法師元素閃電法術組",
+    "Mage force fields": "法師力場",
+    "Cleric divine aid spellgroup": "牧師神助法術組",
+    "Cleric healing spellgroup": "牧師治療法術組",
+    "Cleric divine conjuration spellgroup": "牧師神聖召喚法術組",
+    "Cleric inquisition spellgroup": "牧師審判法術組",
+    "Cleric tribulation spellgroup": "牧師苦難法術組",
+    "Thief tinkering": "盜賊工藝",
+    "Thief defensive fighting skills": "盜賊防禦戰鬥技巧",
+    "Thief stealth skills": "盜賊潛行技能",
+    "Thief stealing skill group": "盜賊偷竊技能組",
+    "Thief poison skill group": "盜賊毒術組",
+    "Thief ranged fighting skills": "盜賊遠程戰鬥技巧",
+    "Thief melee fighting skills": "盜賊近戰技巧",
+    "Thief shadow disciplines": "盜賊暗影訓練",
+    "Warrior hand to hand combat": "戰士徒手格鬥",
+    "Warrior group tactics": "戰士團隊戰術",
+    "Warrior fighting styles": "戰士戰鬥風格",
+    "Warrior weapon handling": "戰士武器操作",
+    "Warrior iron body": "戰士鐵身",
+    "Barbarian blood skills": "野蠻人血之技能",
+    "Warcries": "戰吼",
+    "Warrior power attacks": "戰士力量攻擊",
+    "Druid plant lore": "德魯伊植物知識",
+    "Rangers Guild Trade Skills": "遊俠公會貿易技能",
+    "Culinary skills": "烹飪技能",
+    "Decantation": "分裝術",
+    "Orienteering": "定向越野",
+    "Lapidarists Guild Trade Skills": "寶石工匠公會貿易技能",
+    "Ranged weapon skills": "遠程武器技能",
+    "Woodwrights Guild Trade Skills": "木匠公會貿易技能",
+    "Smiths Guild Trade Skills": "鐵匠公會貿易技能",
+    "General skills": "一般技能",
+    "While you can learn critical spells and skills on your own, you need":
+        "雖然你可以自行學會關鍵法術與技能，但仍需要",
+    "to find a teacher or guildmaster to learn less common abilities.":
+        "尋找老師或公會會長，才能學習較少見的能力。",
+}
 CLASS_SKILL_HEADER = re.compile(
     r"^(Spell|Skill)\s+Mage\s+Cler\s+Thie\s+Warr\s+Necr\s+Drui\s+Lvl\s+Prac\s+Known\s+Dependencies\s*$",
     re.IGNORECASE,
@@ -3927,7 +4130,7 @@ def translate_practice_table(text, c):
             # Section headings and the explanatory footer repeat across every
             # practice attempt. Cache them independently while reconstructing
             # dynamic counts, ratings and requirements from the fresh table.
-            translated = translate_cached_phrase(value, c)
+            translated = PRACTICE_FIXED_PROSE.get(value.strip()) or translate_cached_phrase(value, c)
             output.append(" ".join(translated.splitlines()).strip())
         else:
             output.append(value)
@@ -4742,6 +4945,7 @@ def run():
                 if result is None:
                     t=time.perf_counter()
                     result=to_traditional_characters(translate(raw,c))
+                    result=normalize_npc_names(raw,result)
                     elapsed=time.perf_counter()-t
                     log("translated id=%s chars=%d in %.3fs"%(rid,len(raw),elapsed))
                     trace_record(rid,"OK",raw,result,elapsed,"")
@@ -4749,6 +4953,10 @@ def run():
                 else:
                     mark_translation_engine("cache")
                     seed_structured_line_cache(raw, result, c)
+                    cached_result=result
+                    result=normalize_npc_names(raw,result)
+                    if result != cached_result:
+                        cache_put(raw,result,c)
                     trace_record(rid,"CACHE",raw,result,0.0,"")
                 atomic_write(out,"OK\n"+result)
             except Exception as e:
