@@ -20,6 +20,8 @@ FUNCTIONS = {
     "_isDirectionalActorMovement",
     "_translationEnglishKeys",
     "_splitMergedChineseRoomTitle",
+	"_translationPairedRoomLines",
+    "_translationPairedProseLines",
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
@@ -145,9 +147,9 @@ def main() -> None:
         "這條路繼續呈西向東走向，許多矮人在巡迴。"
     )
     prefixed_lines = present(prefixed_chinese + " | " + prefixed_english).splitlines()
-    assert len(prefixed_lines) == 1, prefixed_lines
-    assert prefixed_lines[0].startswith("你下一個最便宜"), prefixed_lines
-    assert " | Your next cheapest level" in prefixed_lines[0], prefixed_lines
+    assert len(prefixed_lines) == 3, prefixed_lines
+    assert prefixed_lines[0].endswith("Your next cheapest level is a tie for 12000000"), prefixed_lines
+    assert prefixed_lines[1] == "龍牙之道 | Dragon Tooth way", prefixed_lines
     line_text = "龍牙之路〔Dragon Tooth way〕\n繼續以東西走向延伸。\n〔huge portal〕"
     line_ranges = module["_translationPresentationLineRanges"](line_text)
     assert [line_text[start:end] for start, end in line_ranges] == [
@@ -215,6 +217,41 @@ def main() -> None:
     assert len(voiced_lines) == 7, voiced_lines
     assert voiced_lines[0].endswith("trying to make us kill you."), voiced_lines
     assert voiced_lines[-1].endswith("Make them stop bothering us.'"), voiced_lines
+
+    cellar = (
+        "你沿著陡峭的臺階走進黑暗之中。\n"
+        "酒窖\n"
+        "這是一間堆滿桶子和箱子的陰暗潮濕酒窖。\n"
+        "沿著一面牆，稻草被鋪成床，角落水桶散發出難聞氣味。 | "
+        "You make your way down the steep steps into the gloom.\n"
+        "Cellar\n"
+        "A dark and damp cellar filled with barrels and crates. Along one wall a\n"
+        "pile of straw has been fashioned into a bed and there is an unpleasant aroma."
+    )
+    cellar_lines = present(cellar).splitlines()
+    assert len(cellar_lines) == 4, cellar_lines
+    assert cellar_lines[0].endswith("You make your way down the steep steps into the gloom."), cellar_lines
+    assert cellar_lines[1] == "酒窖 | Cellar", cellar_lines
+    assert cellar_lines[-1].endswith("there is an unpleasant aroma."), cellar_lines
+
+    hawkins = (
+        "你將一個裝滿綠色粘液的樣品罐交給霍金斯，煉金術士。"
+        "霍金斯用長金屬鉗子接過罐子，並放在工作臺上。"
+        "『這正是我需要的。我想出了穩定釀造過程的方法。"
+        "我需要一些石灰藻類。我知道朋友維格會有。"
+        "他是龍牙城的藥劑師。你能去和他談談嗎？"
+        "他一定會提供藻類。請快點，時間至關重要。』 | "
+        "You give a sample jar full of green slime to Hawkins, the alchemist. "
+        "Hawkins takes the jar with long metal tongs and puts it on his workbench. "
+        "'This is just what I need. I worked out how to stabilise the brew. "
+        "I need some limestone algae. I know my friend Vig will have some. "
+        "He is a herbalist in Dragontooth. Could you go and talk with him please? "
+        "He will provide some algae. Please hurry, time is of the essence.'"
+    )
+    hawkins_lines = present(hawkins).splitlines()
+    assert len(hawkins_lines) == 10, hawkins_lines
+    assert hawkins_lines[0].startswith("你將一個裝滿綠色粘液的樣品罐"), hawkins_lines
+    assert hawkins_lines[-1].endswith("Please hurry, time is of the essence.'"), hawkins_lines
 
     mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
     assert present(mismatched_dialogue) == mismatched_dialogue

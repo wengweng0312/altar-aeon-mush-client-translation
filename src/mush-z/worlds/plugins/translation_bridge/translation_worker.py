@@ -2645,6 +2645,9 @@ def translate_cached_phrase(text, c):
     reviewed = reviewed_phrase_translation(text)
     if reviewed:
         return reviewed
+    deterministic = deterministic_translate(text)
+    if deterministic is not None:
+        return deterministic
     field_config = dict(c)
     field_config["translation_cache_version"] = (
         int(c.get("translation_cache_version", 12)) * 1000 + STRUCTURED_FIELD_CACHE_VERSION

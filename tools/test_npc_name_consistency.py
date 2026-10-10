@@ -28,6 +28,7 @@ def main() -> None:
             "source_language": "en",
             "target_language": "zh-TW",
         }
+        assert module.translate_cached_phrase("A kobold druid", config) == "一名狗頭人德魯伊"
 
         first_source = "Gimthen says, 'Welcome to me shop.'"
         first = module.normalize_npc_names(first_source, "金騰說：「歡迎來到我的店。」")

@@ -490,6 +490,55 @@ def _translationPairedDialogueLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationPairedRoomLines(chinese, english):
+	"""Pair an aligned room only when movement, title and prose all agree."""
+	englishRows = [line.strip() for line in english.splitlines() if line.strip()]
+	titleIndex = _englishRoomTitleIndex(englishRows)
+	if titleIndex < 0:
+		return []
+
+	def sentences(rows):
+		value = " ".join(rows).strip()
+		if not value:
+			return []
+		return [row.strip() for row in re.split(r"(?<=[.!?])\s+", value) if row.strip()]
+
+	englishUnits = (
+		sentences(englishRows[:titleIndex]) +
+		[englishRows[titleIndex]] +
+		sentences(englishRows[titleIndex + 1:])
+	)
+	chineseUnits = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(englishUnits) < 2 or len(chineseUnits) != len(englishUnits):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseUnits, englishUnits)]
+
+
+def _translationPairedProseLines(chinese, english):
+	"""Pair ordinary narrative/dialogue only when every sentence aligns."""
+	def splitSentences(value, terminators, requireWhitespace):
+		value = " ".join(value.split()).strip()
+		rows, start = [], 0
+		pattern = r"[" + re.escape(terminators) + r"]+[”’\"'）】》〕』」]*"
+		if requireWhitespace:
+			pattern += r"(?=\s|$)"
+		for match in re.finditer(pattern, value):
+			row = value[start:match.end()].strip()
+			if row:
+				rows.append(row)
+			start = match.end()
+		tail = value[start:].strip()
+		if tail:
+			rows.append(tail)
+		return rows
+
+	chineseRows = splitSentences(chinese, "。！？!?", False)
+	englishRows = splitSentences(english, ".!?", True)
+	if len(chineseRows) < 2 or len(chineseRows) != len(englishRows) or len(chineseRows) > 20:
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationEnglishPresentationLines(english):
 	"""Keep help fields and semantic paragraphs separate; rooms stay one line."""
 	english = english.strip()
@@ -576,6 +625,16 @@ def _translationReviewPresentation(text):
 		pairedDialogue = _translationPairedDialogueLines(chinese, english)
 		if pairedDialogue:
 			return "\n".join(pairedDialogue)
+		pairedRoom = _translationPairedRoomLines(chinese, english)
+		if pairedRoom:
+			return "\n".join(pairedRoom)
+		englishRows = [line.strip() for line in english.splitlines() if line.strip()]
+		# A room that failed exact movement/title/prose alignment must stay intact;
+		# generic sentence pairing could otherwise attach its title to prose.
+		if _englishRoomTitleIndex(englishRows) < 0:
+			pairedProse = _translationPairedProseLines(chinese, english)
+			if pairedProse:
+				return "\n".join(pairedProse)
 		return chineseLine + " | " + englishLine
 	chineseLines = _translationChinesePresentationLines(chinese, english)
 	keys = _translationEnglishKeys(english)
