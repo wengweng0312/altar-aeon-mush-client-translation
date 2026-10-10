@@ -395,7 +395,7 @@ def _translationChinesePresentationLines(chinese, english):
 	chinese = chinese.strip()
 	if not chinese:
 		return []
-	if re.match(r"^[^\r\n]+?\s+(?:says|asks),\s*['\"]", english.strip(), re.I) or re.match(
+	if re.match(r"^[^\r\n]+?\s+(?:says(?:\s+in\s+an?\s+[^,\r\n]{1,80}\s+voice)?|asks),\s*['\"]", english.strip(), re.I) or re.match(
 		r"^[^\r\n]+?\s+tells?\s+[^\r\n]+?,\s*['\"]", english.strip(), re.I
 	):
 		return [" ".join(chinese.split())]
@@ -460,7 +460,7 @@ def _translationPairedDialogueLines(chinese, english):
 	if not chineseValue or not englishValue:
 		return []
 	if not (
-		re.match(r"^[^\r\n]+?\s+(?:says|asks|replies|exclaims),\s*['\"]", englishValue, re.I)
+		re.match(r"^[^\r\n]+?\s+(?:says(?:\s+in\s+an?\s+[^,\r\n]{1,80}\s+voice)?|asks|replies|exclaims),\s*['\"]", englishValue, re.I)
 		or re.match(r"^[^\r\n]+?\s+tells?\s+[^\r\n]+?,\s*['\"]", englishValue, re.I)
 	):
 		return []

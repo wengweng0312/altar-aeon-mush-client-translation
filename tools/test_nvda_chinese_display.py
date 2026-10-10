@@ -198,6 +198,24 @@ def main() -> None:
     assert ceska_lines[0].endswith("I skin animals the pack hunts."), ceska_lines
     assert ceska_lines[-1].endswith("I make something for you.'"), ceska_lines
 
+    voiced_dialogue = (
+        "Dractoz Clawheart 用惱怒的語氣說：「入侵我們的領地，還想讓我們殺了你。"
+        "仙子們已經越界了。我想是時候有人跟女王們談談了。"
+        "女王們住在森林裡的堡壘裡，中央橋以西。"
+        "Kindri 女士是最年輕的女王，也可能是最安全的起點。"
+        "仙女法律禁止走私，所以你有情報可以提供。讓他們別再煩我們了。」 | "
+        "Dractoz Clawheart says in an irritated voice, 'Invading our territory, and trying to make us kill you. "
+        "The fairies have crossed lines. I think it is time someone talks to the Queens. "
+        "Queens live in a fortress in the forest, west of the central bridge. "
+        "Lady Kindri is the youngest Queen and probably safest to start with. "
+        "Smuggling is not allowed by fairy laws, so you have information to offer. "
+        "Make them stop bothering us.'"
+    )
+    voiced_lines = present(voiced_dialogue).splitlines()
+    assert len(voiced_lines) == 7, voiced_lines
+    assert voiced_lines[0].endswith("trying to make us kill you."), voiced_lines
+    assert voiced_lines[-1].endswith("Make them stop bothering us.'"), voiced_lines
+
     mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
     assert present(mismatched_dialogue) == mismatched_dialogue
 
