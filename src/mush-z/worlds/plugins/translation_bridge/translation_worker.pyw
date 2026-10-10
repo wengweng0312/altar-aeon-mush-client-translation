@@ -1926,7 +1926,7 @@ def completion_once(text, c, n_predict=384, force_robust=False, force_simple=Fal
 
 
 OUTGOING_DIRECT_CHANNELS = frozenset({
-    "arena", "auction", "bovine", "chat", "gossip", "newbie", "xp", "zt",
+    "arena", "auction", "bovine", "chat", "gossip", "newbie", "questinfo", "xp", "zt",
 })
 OUTGOING_MESSAGE_COMMANDS = frozenset({"say", "reply", "gtell", "ctell"})
 

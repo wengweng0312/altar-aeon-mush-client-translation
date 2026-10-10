@@ -37,6 +37,12 @@ class OutgoingChatIntegrationTests(unittest.TestCase):
             "chat Hello",
         )
 
+    def test_questinfo_channel_from_live_trace(self):
+        self.assertEqual(
+            MODULE.translate_outgoing_chat("questinfo 你好", NO_CACHE, fake_completion),
+            "questinfo Hello",
+        )
+
     def test_tell_target_and_english_place_name_are_protected(self):
         self.assertEqual(
             MODULE.translate_outgoing_chat(
