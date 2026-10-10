@@ -727,6 +727,7 @@ def deterministic_translate(text):
     # or uses of "kobold" elsewhere in room descriptions and dialogue.
     kobold_professions = {
         "warrior": "戰士",
+        "war leader": "戰爭領袖",
         "mage": "法師",
         "cleric": "牧師",
         "thief": "盜賊",
@@ -734,7 +735,7 @@ def deterministic_translate(text):
         "druid": "德魯伊",
     }
     kobold_match = re.fullmatch(
-        r"(?:(a|an|the)\s+)?kobold\s+(warrior|mage|cleric|thief|necromancer|druid)",
+        r"(?:(a|an|the)\s+)?kobold\s+(warrior|war leader|mage|cleric|thief|necromancer|druid)",
         source.strip(),
         re.IGNORECASE,
     )

@@ -514,6 +514,27 @@ def _translationPairedRoomLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseUnits, englishUnits)]
 
 
+def _translationPairedMonsterLoreLines(chinese, english):
+	"""Pair a line-preserving monster-lore report without guessing."""
+	englishRows = [line.strip() for line in english.splitlines() if line.strip()]
+	if not any(re.match(r"^You use your knowledge of monster lore:", row, re.I) for row in englishRows):
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	# LMT commonly joins the report heading and the following creature label.
+	# Split that one known boundary, but only accept it if every resulting row
+	# aligns exactly with the original report.
+	for index, row in enumerate(chineseRows):
+		if not re.search(r"怪物(?:知識|傳說)", row):
+			continue
+		match = re.match(r"^(.+?[：:])\s*(.+)$", row)
+		if match:
+			chineseRows[index:index + 1] = [match.group(1).strip(), match.group(2).strip()]
+		break
+	if len(chineseRows) < 2 or len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationPairedProseLines(chinese, english):
 	"""Pair ordinary narrative/dialogue only when every sentence aligns."""
 	def splitSentences(value, terminators, requireWhitespace):
@@ -625,6 +646,9 @@ def _translationReviewPresentation(text):
 		pairedDialogue = _translationPairedDialogueLines(chinese, english)
 		if pairedDialogue:
 			return "\n".join(pairedDialogue)
+		pairedMonsterLore = _translationPairedMonsterLoreLines(chinese, english)
+		if pairedMonsterLore:
+			return "\n".join(pairedMonsterLore)
 		pairedRoom = _translationPairedRoomLines(chinese, english)
 		if pairedRoom:
 			return "\n".join(pairedRoom)

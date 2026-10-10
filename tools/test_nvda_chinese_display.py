@@ -21,6 +21,7 @@ FUNCTIONS = {
     "_translationEnglishKeys",
     "_splitMergedChineseRoomTitle",
 	"_translationPairedRoomLines",
+    "_translationPairedMonsterLoreLines",
     "_translationPairedProseLines",
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
@@ -252,6 +253,24 @@ def main() -> None:
     assert len(hawkins_lines) == 10, hawkins_lines
     assert hawkins_lines[0].startswith("你將一個裝滿綠色粘液的樣品罐"), hawkins_lines
     assert hawkins_lines[-1].endswith("Please hurry, time is of the essence.'"), hawkins_lines
+
+    monster_lore = (
+        "這是一個 0。\n"
+        "完美搭配！不要連續兩次嘗試……\n"
+        "你的盔甲無法抵擋狗頭人戰爭領袖的攻擊。\n"
+        "你運用了關於怪物知識：一名狗頭人戰爭領袖……\n"
+        "可能對火比較敏感。 | "
+        "it's a 0.\n"
+        "The perfect match! Don't try it twice in a row...\n"
+        "Your armor would be no defense against A kobold war leader's attacks.\n"
+        "You use your knowledge of monster lore:\n"
+        "A kobold war leader...\n"
+        "Might be somewhat vulnerable to fire."
+    )
+    monster_lore_lines = present(monster_lore).splitlines()
+    assert len(monster_lore_lines) == 6, monster_lore_lines
+    assert monster_lore_lines[3].endswith("You use your knowledge of monster lore:"), monster_lore_lines
+    assert monster_lore_lines[4].endswith("A kobold war leader..."), monster_lore_lines
 
     mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
     assert present(mismatched_dialogue) == mismatched_dialogue
