@@ -1080,16 +1080,18 @@ def clear_recent_translation_cache(limit=5):
 NPC_SOURCE_SUBJECT = re.compile(
     r"^([A-Z][A-Za-z'’-]*(?:\s+(?:the\s+)?[A-Za-z][A-Za-z'’-]*){0,5})\s+"
     r"(says|asks|yells|whispers|shouts|exclaims|gives|bows|waves|leaves|arrives|"
-    r"sighs|starts|stretches|concentrates|watches|stands|sits|goes|moves)\b",
+    r"sighs|starts|has|stretches|concentrates|watches|stands|sits|goes|moves)\b",
     re.I,
 )
 NPC_TALK_TARGET = re.compile(r"^You try to talk to\s+(.+?)\.{3}\s*$", re.I)
+NPC_GROUP_ADD_TARGET = re.compile(r"^You add\s+(.+?)\s+to your group\.\s*$", re.I)
 NPC_MAP_TARGET = re.compile(r"^([A-Z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,5})\s*->")
 NPC_RESULT_MARKERS = {
     "says": r"說道|說", "asks": r"問道|問", "yells": r"大喊|喊道|喊",
     "whispers": r"低語|耳語", "shouts": r"大喊|喊道|喊", "exclaims": r"驚呼|喊道",
     "gives": r"給|交|將", "bows": r"鞠躬", "waves": r"揮", "leaves": r"離開|前往",
-    "arrives": r"抵達|來了|到達", "sighs": r"嘆", "starts": r"驚|嚇",
+    "arrives": r"抵達|來了|到達", "sighs": r"嘆", "starts": r"開始|驚|嚇",
+    "has": r"加入|成為",
     "stretches": r"伸展|伸", "concentrates": r"專注|集中", "watches": r"守望|守|看",
     "stands": r"站", "sits": r"坐", "goes": r"回|走|前往", "moves": r"移動|走",
 }
@@ -1109,6 +1111,9 @@ def npc_source_identity(line):
     talk = NPC_TALK_TARGET.match(value)
     if talk:
         return talk.group(1).strip(), "talk"
+    group_add = NPC_GROUP_ADD_TARGET.match(value)
+    if group_add:
+        return group_add.group(1).strip(), "group_add"
     mapped = NPC_MAP_TARGET.match(value)
     if mapped:
         return mapped.group(1).strip(), "map"
@@ -1154,6 +1159,9 @@ def translated_npc_span(line, context):
         return match.span(1) if match else None
     if context == "map":
         match = re.match(r"^\s*(.{1,40}?)\s*(?=->)", value)
+        return match.span(1) if match else None
+    if context == "group_add":
+        match = re.match(r"^\s*你將(.{1,40}?)(?=加入隊伍)", value)
         return match.span(1) if match else None
     marker = NPC_RESULT_MARKERS.get(context)
     if not marker:

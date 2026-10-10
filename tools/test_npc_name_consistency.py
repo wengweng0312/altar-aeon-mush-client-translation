@@ -63,6 +63,26 @@ def main() -> None:
         stable = module.normalize_npc_names(second_source, "金騰說：「把零件帶給我。」")
         assert stable.startswith("吉姆森說"), stable
 
+        linkas_source = (
+            "You try to talk to Linkas...\n"
+            "Linkas starts following you.\n"
+            "You add Linkas to your group.\n"
+            "Linkas has become a member of the group."
+        )
+        linkas_result = module.normalize_npc_names(
+            linkas_source,
+            "你試著和林卡斯說話……\n"
+            "鏈接開始跟隨你。\n"
+            "你將鏈接加入隊伍。\n"
+            "鏈接加入了隊伍。",
+        )
+        assert linkas_result.splitlines() == [
+            "你試著和林卡斯說話……",
+            "林卡斯開始跟隨你。",
+            "你將林卡斯加入隊伍。",
+            "林卡斯加入了隊伍。",
+        ], linkas_result
+
         module.CACHE_CONNECTION.close()
         module.CACHE_CONNECTION = None
 
