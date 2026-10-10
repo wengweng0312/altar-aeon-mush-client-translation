@@ -34,6 +34,11 @@ def rows(value: str) -> list[str]:
 def existing_route(worker, source: str) -> str:
     """Return the first important production route that already owns source."""
     checks = (
+        ("peer_room_title_preview", worker.is_peer_room_title_preview),
+        ("level_advance", worker.is_level_advance_block),
+        ("character_creation", worker.is_character_creation_welcome),
+        ("login_menu", worker.is_login_menu),
+        ("available_level_skills", worker.is_available_level_skills_block),
         ("quest_list", worker.is_quest_list_block),
         ("quest_structured", worker.is_quest_structured_block),
         ("wrapped_dialogue", worker.is_wrapped_dialogue_block),
@@ -57,6 +62,7 @@ def existing_route(worker, source: str) -> str:
         ("practice", worker.is_practice_table),
         ("library", worker.is_library_catalog),
         ("directions", worker.is_direction_listing),
+        ("structured_blocks", lambda value: worker.structured_block_kind(value) is not None),
         ("numeric_report", worker.is_numeric_report_block),
         ("repeated_rows", worker.has_repeated_source_lines),
         ("mixed_deterministic", worker.has_deterministic_lines),
@@ -165,6 +171,12 @@ def main() -> int:
             if contextual:
                 totals["generic_contextual"] += 1
                 candidate_reasons[contextual_reason] += 1
+                if len(examples["generic_contextual"]) < args.examples:
+                    examples["generic_contextual"].append({
+                        "line": line_number, "timestamp": record.get("ts", ""), "route": route,
+                        "reason": contextual_reason,
+                        "source": clipped(source), "result": clipped(result),
+                    })
                 continue
             candidate, reason = conservative_event_candidate(worker, source)
             candidate_reasons[reason] += 1
@@ -178,6 +190,12 @@ def main() -> int:
                     })
             else:
                 totals["generic_opaque"] += 1
+                if len(examples["generic_opaque"]) < args.examples:
+                    examples["generic_opaque"].append({
+                        "line": line_number, "timestamp": record.get("ts", ""), "route": route,
+                        "reason": reason,
+                        "source": clipped(source), "result": clipped(result),
+                    })
 
     report = {
         "schema_version": 1,
