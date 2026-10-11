@@ -3843,6 +3843,7 @@ def should_bypass_whole_block_cache(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     return (is_peer_room_title_preview(text) or is_level_advance_block(text) or
             is_where_location_row(text) or is_quest_structured_block(text) or
+            is_consider_report(text) or
             is_room_prose_candidate(text) or
             any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
             any(reviewed_phrase_translation(line.strip()) is not None for line in lines if line.strip()) or
@@ -4448,6 +4449,205 @@ def translate_combat_template_block(text, c):
     result = "\n".join(output)
     if len(result.split("\n")) != len(lines):
         raise RuntimeError("COMBAT_TEMPLATE_LINE_COUNT_MISMATCH")
+    return result
+
+
+def is_consider_report(text):
+    """Recognize Alter Aeon's multi-line consider/monster-lore report."""
+    lines = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(lines) < 3 or not re.fullmatch(r"it's a\s+-?\d+\.", lines[0], re.I):
+        return False
+    markers = sum(bool(re.search(pattern, line, re.I)) for line in lines for pattern in (
+        r"\barmor\b", r"\bweaponry\b", r"\bmonster lore\b",
+        r"\bwide open to ranged attacks\b", r"\bability to do damage\b",
+        r"\bcapable of dishing out\b",
+    ))
+    return markers >= 2
+
+
+def translate_consider_line(line, c):
+    """Translate one stable consider row without letting a model merge rows."""
+    value = str(line).strip()
+    match = re.fullmatch(r"it's a\s+(-?\d+)\.", value, re.I)
+    if match:
+        return "這是 %s。" % match.group(1)
+    fixed = {
+        "The perfect match! Don't try it twice in a row...": "勢均力敵！不要連續嘗試兩次……",
+        "Do you feel lucky, punk?": "你覺得自己走運嗎，傢伙？",
+        "You use your knowledge of monster lore:": "你運用怪物知識進行判斷：",
+        "You become better at monster lore!": "你的怪物知識進步了！",
+        "You learn from your mistakes, and become more adept at monster lore.": "你從錯誤中學習，怪物知識變得更加熟練。",
+        "You have sudden insight, and become much better at monster lore!": "你突然有所領悟，怪物知識大幅提升！",
+    }
+    if value in fixed:
+        return fixed[value]
+    deterministic = deterministic_translate(value)
+    if deterministic is not None:
+        return deterministic
+    knowledge = re.fullmatch(r"You use your (?:knowledge of|mechanical) (.+?):", value, re.I)
+    if knowledge:
+        subject = knowledge.group(1).lower()
+        subject_zh = {
+            "monster lore": "怪物知識", "plants": "植物知識",
+            "dragon lore": "龍族知識", "aptitude": "機械天賦",
+        }.get(subject, subject)
+        return "你運用%s進行判斷：" % subject_zh
+    match = re.fullmatch(r"You could kill (.+?) (quite easily|naked and weaponless)\.", value, re.I)
+    if match:
+        target, ease = match.groups()
+        ending = "相當輕鬆地擊敗" if ease.lower() == "quite easily" else "即使赤手空拳也能擊敗"
+        return "你%s%s。" % (ending, translate_cached_phrase(target, c))
+    match = re.fullmatch(r"\((.+?) is too low level for you to get full experience\.\)", value, re.I)
+    if match:
+        return "（%s的等級太低，你無法獲得完整經驗值。）" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?)'s (light|medium|heavy) armor would not present much of a problem\.", value, re.I)
+    if match:
+        target, armor = match.groups()
+        armor_zh = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[armor.lower()]
+        return "%s的%s不會對你造成太大阻礙。" % (translate_cached_phrase(target, c), armor_zh)
+    match = re.fullmatch(r"(.+?) could hurt you a lot worse than you could hurt (?:him|her|it), given the chance\.", value, re.I)
+    if match:
+        return "如果有機會，%s能對你造成的傷害遠高於你能對其造成的傷害。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"You feel able to dish out as much damage as (.+?)\.", value, re.I)
+    if match:
+        return "你感覺自己能造成與%s相當的傷害。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"Your ability to do damage far exceeds that of (.+?)\.", value, re.I)
+    if match:
+        return "你造成傷害的能力遠高於%s。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?) would put up a fight, but you are confident you would win the battle\.", value, re.I)
+    if match:
+        return "%s會奮力抵抗，但你有信心贏得戰鬥。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?)'s armor (?:would not defend well against|is vulnerable to) ranged attacks such as (.+?)\.", value, re.I)
+    if match:
+        target, examples = match.groups()
+        return "%s的護甲難以抵擋%s等遠程攻擊。" % (translate_cached_phrase(target, c), examples)
+    match = re.fullmatch(r"(.+?) has parrying defenses!\s+Bypass it with (.+?) weapons\.", value, re.I)
+    if match:
+        return "%s具備招架防禦！可使用%s類武器繞過。" % (translate_cached_phrase(match.group(1), c), match.group(2))
+    match = re.fullmatch(r"(.+?) can probably throw lightning!", value, re.I)
+    if match:
+        return "%s可能會施放閃電！" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"You would have little difficulty penetrating (.+?)'s (light|medium|heavy) armor\.", value, re.I)
+    if match:
+        target, armor = match.groups()
+        armor_zh = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[armor.lower()]
+        return "你要穿透%s的%s並不困難。" % (translate_cached_phrase(target, c), armor_zh)
+    match = re.fullmatch(r"You are armored fairly well against (.+?)\.", value, re.I)
+    if match:
+        return "你的護甲對%s提供了不錯的防護。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"Your attacks would do little damage against (.+?)'s (light|medium|heavy) armor\.", value, re.I)
+    if match:
+        target, armor = match.groups()
+        armor_zh = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[armor.lower()]
+        return "你的攻擊很難穿透%s的%s。" % (translate_cached_phrase(target, c), armor_zh)
+    match = re.fullmatch(r"(.+?) looks demoralized\.", value, re.I)
+    if match:
+        return "%s看起來士氣低落。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?)'s (light|medium|heavy) armor is (.+?) against your weaponry\.", value, re.I)
+    if match:
+        target, armor, effectiveness = match.groups()
+        armor_zh = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[armor.lower()]
+        effect_zh = {
+            "not very effective": "效果不大", "somewhat effective": "有一定效果",
+            "very effective": "非常有效", "extremely effective": "極為有效",
+        }.get(effectiveness.lower())
+        if effect_zh is None:
+            effect_zh = translate_piece(effectiveness, c, force_simple=True)
+        return "%s的%s對你的武器%s。" % (translate_cached_phrase(target, c), armor_zh, effect_zh)
+    match = re.fullmatch(r"Your attacks would be (.+?) by (.+?)'s (light|medium|heavy) armor\.", value, re.I)
+    if match:
+        degree, target, armor = match.groups()
+        armor_zh = {"light": "輕甲", "medium": "中甲", "heavy": "重甲"}[armor.lower()]
+        degree_zh = {"mostly absorbed": "大多被吸收", "partially absorbed": "部分被吸收"}.get(degree.lower())
+        if degree_zh is None:
+            degree_zh = translate_piece(degree, c, force_simple=True)
+        return "你的攻擊會被%s的%s%s。" % (translate_cached_phrase(target, c), armor_zh, degree_zh)
+    match = re.fullmatch(r"(.+?) is flying and is wide open to ranged attacks such as sling bullets, arrows and crossbow bolts\.", value, re.I)
+    if match:
+        return "%s正在飛行，容易受到投石索彈丸、箭矢和弩箭等遠程攻擊。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"Your armor would be no defense against (.+?)'s attacks\.", value, re.I)
+    if match:
+        return "你的護甲無法抵擋%s的攻擊。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"You are capable of dishing out more damage than (.+?)\.", value, re.I)
+    if match:
+        return "你能造成的傷害高於%s。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?)'s ability to do damage far exceeds yours\.", value, re.I)
+    if match:
+        return "%s造成傷害的能力遠高於你。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?) would not hesitate to come after you\.", value, re.I)
+    if match:
+        return "%s會毫不猶豫地追殺你。" % translate_cached_phrase(match.group(1), c)
+    match = re.fullmatch(r"(.+?)\.\.\.", value)
+    if match:
+        return "%s……" % translate_cached_phrase(match.group(1), c)
+    if value == "Has a clearly defined shadow, and would be vulnerable to shadow binding.":
+        return "具有清晰的影子，容易受到暗影束縛影響。"
+    lore = re.fullmatch(
+        r"(?:(Might be|Is probably|Is definitely|Is)\s+)?"
+        r"(?:(somewhat|moderately|very|highly|extremely|very highly)\s+)?"
+        r"(resistant|vulnerable) to (.+?)\.", value, re.I,
+    )
+    if lore:
+        lead, degree, relation, damage = lore.groups()
+        damage = re.sub(r"\s+damage$", "", damage, flags=re.I)
+        damage_zh = {
+            "breath": "吐息傷害", "fire": "火焰", "cold": "寒冷",
+            "electricity": "電擊", "toxins": "毒素", "poison": "毒素",
+            "magic": "魔法", "physical": "物理傷害",
+        }.get(damage.lower(), damage)
+        degree_zh = {
+            None: "", "somewhat": "一定程度", "moderately": "中等程度",
+            "very": "非常", "highly": "高度", "very highly": "極高程度",
+            "extremely": "極度",
+        }[degree.lower() if degree else None]
+        relation_zh = "具有%s抗性" if relation.lower() == "resistant" else "容易受到%s傷害"
+        prefix = {
+            "might be": "可能", "is probably": "很可能", "is definitely": "確定",
+            "is": "", None: "",
+        }[lead.lower() if lead else None]
+        if relation.lower() == "resistant":
+            return "%s對%s具有%s抗性。" % (prefix, damage_zh, degree_zh)
+        return "%s%s容易受到%s傷害。" % (prefix, degree_zh, damage_zh)
+    attack_lore = re.fullmatch(
+        r"Is (?:(somewhat|moderately|highly|extremely)\s+)?(resistant|vulnerable) to "
+        r"(edged|flexible|pointed|blunt) (?:attacks|damage) such as (.+?)\.", value, re.I,
+    )
+    if attack_lore:
+        degree, relation, kind, examples = attack_lore.groups()
+        degree_zh = {None: "", "somewhat": "一定程度", "moderately": "中等程度", "highly": "高度", "extremely": "極度"}[degree.lower() if degree else None]
+        kind_zh = {"edged": "刃器", "flexible": "軟性武器", "pointed": "尖刺武器", "blunt": "鈍器"}[kind.lower()]
+        relation_zh = "具有%s抗性" if relation.lower() == "resistant" else "容易受到%s傷害"
+        if relation.lower() == "resistant":
+            return "對%s攻擊具有%s抗性，例如 %s。" % (kind_zh, degree_zh, examples)
+        return "%s容易受到%s攻擊傷害，例如 %s。" % (degree_zh, kind_zh, examples)
+    if value == "Is magical in nature, and can be healed by magical damage and damaged by dispel magic.":
+        return "具有魔法本質；魔法傷害能治療它，而解除魔法能傷害它。"
+    if value == "Is made at least partially of lightning, and would benefit from electrical attacks.":
+        return "身體至少部分由閃電構成，電擊攻擊反而會使其受益。"
+    fixed_advice = {
+        "Your armor will offer you very little protection.": "你的護甲只能提供很少的保護。",
+        "What would you like your epitaph to say?": "你希望墓誌銘上寫些什麼？",
+        "You would need lots of luck and great equipment.": "你需要極佳的運氣和優秀的裝備。",
+    }
+    if value in fixed_advice:
+        return fixed_advice[value]
+    return translate_piece(value, c, force_robust=True, force_simple=True)
+
+
+def translate_consider_report(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        if not line.strip():
+            output.append("")
+            continue
+        indent = line[:len(line) - len(line.lstrip())]
+        output.append(indent + translate_consider_line(line, c))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("CONSIDER_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("CONSIDER_NUMERIC_ITEMS_MISSING")
     return result
 
 
@@ -5587,6 +5787,8 @@ def translate(text,c):
         return translate_action_template_block(text, c)
     if is_combat_template_block(text):
         return translate_combat_template_block(text, c)
+    if is_consider_report(text):
+        return translate_consider_report(text, c)
     if is_quest_help_block(text):
         return translate_quest_help_block(text)
     if is_available_level_skills_block(text):
