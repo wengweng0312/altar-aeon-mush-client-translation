@@ -591,7 +591,7 @@ def _isHelpUsageCommand(row):
 	if not value or len(value) > 140 or re.search(r"[.!?]", value):
 		return False
 	return bool(re.fullmatch(
-		r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
+		r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|-[a-z][a-z0-9-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
 		value,
 	))
 
@@ -652,6 +652,34 @@ def _translationHelpSemanticLines(english):
 def _translationPairedHelpLines(chinese, english):
 	"""Pair help rows only when worker and original semantic units align exactly."""
 	englishRows = _translationHelpSemanticLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
+def _translationCommandUsageLines(english):
+	"""Keep a standalone Usage command table as one review row per command."""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if len(rows) < 2 or rows[0].lower() != "usage:":
+		return []
+	root = None
+	for row in rows[1:]:
+		match = re.fullmatch(r"(.+?)\s+-\s+(.+)", row)
+		if not match or not _isHelpUsageCommand(match.group(1).strip()):
+			return []
+		commandRoot = match.group(1).strip().split(None, 1)[0].lower()
+		if root is None:
+			root = commandRoot
+		elif commandRoot != root:
+			return []
+	return rows
+
+
+def _translationPairedCommandUsageLines(chinese, english):
+	englishRows = _translationCommandUsageLines(english)
 	if not englishRows:
 		return []
 	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
@@ -843,6 +871,9 @@ def _translationReviewPresentation(text):
 	chineseLine = re.sub(r"\s+", " ", chinese).strip()
 	englishLine = re.sub(r"\s+", " ", english).strip()
 	if chineseLine and englishLine:
+		pairedCommandUsage = _translationPairedCommandUsageLines(chinese, english)
+		if pairedCommandUsage:
+			return "\n".join(pairedCommandUsage)
 		pairedNews = _translationPairedNewsLines(chinese, english)
 		if pairedNews:
 			return "\n".join(pairedNews)

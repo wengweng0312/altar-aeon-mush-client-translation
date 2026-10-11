@@ -26,6 +26,8 @@ FUNCTIONS = {
     "_isHelpUsageCommand",
     "_translationHelpSemanticLines",
     "_translationPairedHelpLines",
+    "_translationCommandUsageLines",
+    "_translationPairedCommandUsageLines",
     "_translationNewsSemanticLines",
     "_translationPairedNewsLines",
     "_translationChangesSemanticLines",
@@ -391,6 +393,21 @@ Most recent 1 entries displayed."""
     assert len(changes_lines) == 7, changes_lines
     assert changes_lines[3].endswith("them makes the curative effect stronger. (Morpheus)"), changes_lines[3]
     assert changes_lines[4].endswith("mind they may still be fragile. (Simo)"), changes_lines[4]
+
+    usage_english = """Usage:
+scan help            - this page
+scan                 - scan in all directions
+scan [direction]     - scan only in the designated direction
+scan -dclient [args] - look before scanning"""
+    usage_chinese = """用法：
+scan help - 此頁面
+scan - 向所有方向掃描
+scan [direction] - 只向指定方向掃描
+scan -dclient [args] - 掃描前查看"""
+    usage_lines = present(usage_chinese + " | " + usage_english).splitlines()
+    assert len(usage_lines) == 5, usage_lines
+    assert usage_lines[0] == "用法： | Usage:", usage_lines
+    assert usage_lines[-1].endswith("scan -dclient [args] - look before scanning"), usage_lines
 
     addon_source = MODULE.read_text(encoding="utf-8")
     navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]
