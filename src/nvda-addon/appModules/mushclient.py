@@ -660,6 +660,43 @@ def _translationPairedHelpLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationNewsSemanticLines(english):
+	"""Restore stable rows for Alter Aeon's news report.
+
+	The headline prose may be hard-wrapped by the MUD, while the remaining
+	labels and area table already form semantic rows.  Join only that wrapped
+	prose and preserve every fixed/news-table row.
+	"""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if len(rows) < 3 or rows[0].upper() != "ALTER AEON NEWS" or rows[1].upper() != "TODAY'S HEADLINE:":
+		return []
+	markers = (
+		"Happy Halloween!",
+		"Alter Aeon was last booted:",
+		"(Type 'changes'",
+		"Got Their Freak On:",
+		"Catch of the Day:",
+		"New and recently updated areas:",
+	)
+	markerIndex = next(
+		(index for index in range(2, len(rows)) if rows[index].startswith(markers)),
+		-1,
+	)
+	if markerIndex <= 2:
+		return []
+	return rows[:2] + [" ".join(rows[2:markerIndex])] + rows[markerIndex:]
+
+
+def _translationPairedNewsLines(chinese, english):
+	englishRows = _translationNewsSemanticLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationEnglishPresentationLines(english):
 	"""Keep help fields and semantic paragraphs separate; rooms stay one line."""
 	english = english.strip()
@@ -772,6 +809,9 @@ def _translationReviewPresentation(text):
 	chineseLine = re.sub(r"\s+", " ", chinese).strip()
 	englishLine = re.sub(r"\s+", " ", english).strip()
 	if chineseLine and englishLine:
+		pairedNews = _translationPairedNewsLines(chinese, english)
+		if pairedNews:
+			return "\n".join(pairedNews)
 		pairedHelp = _translationPairedHelpLines(chinese, english)
 		if pairedHelp:
 			return "\n".join(pairedHelp)
@@ -1260,11 +1300,18 @@ class AppModule(appModuleHandler.AppModule):
 					self._translationSentenceIndex = -1
 					ui.message(presentation[start:end])
 				return
+		def syncChangedHistoryEntry():
+			updated = _readTranslationReviewEntry()
+			if updated == text:
+				ui.message("已到最新一筆翻譯紀錄。" if direction > 0 else "已到最舊一筆翻譯紀錄。")
+				return
+			self._syncTranslationReviewPosition(True, atEnd=direction < 0)
+
 		_translationOrNative(
 			gesture,
 			translationGesture,
 			nativeScript,
-			lambda: self._syncTranslationReviewPosition(True, atEnd=direction < 0),
+			syncChangedHistoryEntry,
 		)
 
 	def chooseNVDAObjectOverlayClasses(self, obj, clsList):

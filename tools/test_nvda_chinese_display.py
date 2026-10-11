@@ -26,6 +26,8 @@ FUNCTIONS = {
     "_isHelpUsageCommand",
     "_translationHelpSemanticLines",
     "_translationPairedHelpLines",
+    "_translationNewsSemanticLines",
+    "_translationPairedNewsLines",
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
@@ -334,6 +336,38 @@ def main() -> None:
     assert len(huge_lines) >= 3, len(huge_lines)
     assert max(map(len, huge_lines)) <= 1250, max(map(len, huge_lines))
 
+    news_chinese = """ALTER AEON 新聞
+今日頭條：
+任務在再次重啟之前無法運作，問題已經找到。
+萬聖節快樂！尋找可雕刻的南瓜！
+Alter Aeon 上次重啟時間：Sat Oct 3 17:58:32 2026
+（輸入 changes 查看近期更新。）
+活動：Shadowheart，等級 60。
+今日漁獲：a wahoo，127 磅；捕獲者：Ozhka
+新增與近期更新區域：
+日期，等級，座標，名稱，創作者
+Aug 26 2026，Lvl 27，座標 -3929、56，泰拉尼德洞穴，創作者：alf
+Jul 29 2026，Lvl 32，座標 -32、-409，一座廢棄城堡，創作者：bloodlust
+Jul 14 2026，Tot 189，座標 -526、561，西海岸，創作者：morpheus"""
+    news_english = """ALTER AEON NEWS
+TODAY'S HEADLINE:
+The quest is not going to work until we get another
+reboot, but the problem has been found.
+Happy Halloween! Watch for carveable pumpkins when foraging!
+Alter Aeon was last booted: Sat Oct 3 17:58:32 2026
+(Type 'changes' to see recent updates.)
+Got Their Freak On: Shadowheart, level: 60.
+Catch of the Day: a wahoo, 127 lbs. - caught by Ozhka
+New and recently updated areas:
+Date Level [X, Y] Name Creators
+Aug 26 2026 Lvl 27 [-3929, 56] Tyranid caves alf
+Jul 29 2026 Lvl 32 [-32, -409] An Abandoned Citadel bloodlust
+Jul 14 2026 Tot 189 [-526, 561] The Cirustal Coast morpheus"""
+    news_lines = present(news_chinese + " | " + news_english).splitlines()
+    assert len(news_lines) == 13, news_lines
+    assert news_lines[2].endswith("The quest is not going to work until we get another reboot, but the problem has been found."), news_lines[2]
+    assert news_lines[-1].endswith("The Cirustal Coast morpheus"), news_lines[-1]
+
     addon_source = MODULE.read_text(encoding="utf-8")
     navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]
     assert "currentNavigator = api.getNavigatorObject()" in navigator_method
@@ -342,6 +376,10 @@ def main() -> None:
     assert navigator_method.index("isinstance(currentNavigator, TranslationReviewObject)") < navigator_method.index("api.setNavigatorObject(output)")
     bottom_script = addon_source.split("def script_translationHistoryBottom", 1)[1].split("\n\t@", 1)[0]
     assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
+
+    line_navigation = addon_source.split("def _moveTranslationHistoryLine", 1)[1].split("\n\tdef ", 1)[0]
+    assert "if updated == text:" in line_navigation
+    assert "已到最新一筆翻譯紀錄。" in line_navigation
 
     sync_method = addon_source.split("def _syncTranslationReviewPosition", 1)[1].split("\n\tdef ", 1)[0]
     assert "_translationReviewInfoAtOffset(obj, targetLine[0])" in sync_method
