@@ -3178,7 +3178,7 @@ def is_help_usage_command(row):
     if not value or len(value) > 140 or re.search(r"[.!?]", value):
         return False
     return bool(re.fullmatch(
-        r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
+        r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|-[a-z][a-z0-9-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
         value,
     ))
 
