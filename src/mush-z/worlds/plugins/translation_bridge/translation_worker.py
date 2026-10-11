@@ -3841,7 +3841,7 @@ def translate_level_advance_block(text):
 def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return (is_news_report(text) or is_peer_room_title_preview(text) or is_level_advance_block(text) or
+    return (is_news_report(text) or is_changes_report(text) or is_peer_room_title_preview(text) or is_level_advance_block(text) or
             is_where_location_row(text) or is_quest_structured_block(text) or
             is_consider_report(text) or
             is_room_prose_candidate(text) or
@@ -5705,6 +5705,61 @@ def translate_news_report(text, c):
     return result
 
 
+CHANGE_LOG_HEADER = re.compile(r"^\[(\d+)\]\s+----\s+(.+?)\s*$")
+CHANGE_LOG_AUTHOR = re.compile(r"^From\s+(.+?):\s*$", re.I)
+
+
+def is_changes_report(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    headers = sum(1 for row in rows if CHANGE_LOG_HEADER.fullmatch(row))
+    authors = sum(1 for row in rows if CHANGE_LOG_AUTHOR.fullmatch(row))
+    return headers >= 1 and authors >= 1 and headers == authors
+
+
+def translate_changes_report(text, c):
+    """Translate update notes without exposing their structure to a model."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if not is_changes_report(text):
+        raise RuntimeError("CHANGES_REPORT_PARSE_FAILED")
+    units = []
+    body = []
+
+    def flush_body():
+        if body:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(body)))
+            body[:] = []
+
+    for row in rows:
+        header = CHANGE_LOG_HEADER.fullmatch(row)
+        author = CHANGE_LOG_AUTHOR.fullmatch(row)
+        if header:
+            flush_body()
+            number, date = header.groups()
+            units.append(("fixed", "[%s] ---- %s" % (number, date)))
+        elif author:
+            flush_body()
+            units.append(("fixed", "來自 %s：" % author.group(1)))
+        elif re.fullmatch(r"Most recent\s+(\d+)\s+entries displayed\.", row, re.I):
+            flush_body()
+            count = re.fullmatch(r"Most recent\s+(\d+)\s+entries displayed\.", row, re.I).group(1)
+            units.append(("fixed", "目前顯示最近 %s 筆更新。" % count))
+        elif row == "To see recent area additions, use the 'area new' command.":
+            flush_body()
+            units.append(("fixed", "若要查看最近新增的區域，請使用 area new 指令。"))
+        else:
+            body.append(row)
+    flush_body()
+    result = translate_semantic_units(units, c, "changes")
+    source_headers = [match.group(1) for row in rows if (match := CHANGE_LOG_HEADER.fullmatch(row))]
+    result_headers = re.findall(r"^\[(\d+)\]\s+----", result, re.MULTILINE)
+    if source_headers != result_headers:
+        raise RuntimeError("CHANGES_HEADER_MISMATCH")
+    ok, reason = translation_sanity_ok(text, result)
+    if not ok:
+        raise RuntimeError("CHANGES_FINAL_SANITY_" + reason)
+    return result
+
+
 def translate_counter_stats_block(text):
     """Render the fixed scm counter table without model inference."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -5833,6 +5888,8 @@ def translate_character_status_block(text, c):
 def translate(text,c):
     if is_news_report(text):
         return translate_news_report(text, c)
+    if is_changes_report(text):
+        return translate_changes_report(text, c)
     if is_peer_room_title_preview(text):
         return translate_peer_room_title_preview(text, c)
     if is_level_advance_block(text):
