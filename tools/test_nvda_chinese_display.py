@@ -25,6 +25,7 @@ FUNCTIONS = {
     "_translationTaskListLines",
     "_translationPairedTaskListLines",
     "_translationPairedSalesLines",
+    "_translationPairedSyntaxLines",
     "_translationPairedProseLines",
     "_isHelpUsageCommand",
     "_translationHelpSemanticLines",
@@ -262,6 +263,23 @@ def main() -> None:
     assert len(sales_lines) == 4, sales_lines
     assert sales_lines[1].endswith("5% extra! - weightless expansions"), sales_lines
     assert sales_lines[2].endswith("40% off! - detect and protect spells - now 15 credits!"), sales_lines
+
+    syntax_english = (
+        "Syntax:\n"
+        "friends - show logged in friends and recent activity\n"
+        "friend replay [name] - see what your friends have done recently\n"
+        "What do you want to do with your friends list?"
+    )
+    syntax_chinese = (
+        "語法：\n"
+        "friends - 顯示已登入的朋友與近期活動\n"
+        "friend replay [name] - 查看朋友最近做過什麼\n"
+        "你想如何處理朋友清單？"
+    )
+    syntax_lines = present(syntax_chinese + " | " + syntax_english).splitlines()
+    assert len(syntax_lines) == 4, syntax_lines
+    assert syntax_lines[1].endswith("friends - show logged in friends and recent activity"), syntax_lines
+    assert syntax_lines[2].endswith("friend replay [name] - see what your friends have done recently"), syntax_lines
 
 	# Long NPC speech is split only when both languages have the same safe
 	# sentence count. It remains one history entry, with one bilingual row per

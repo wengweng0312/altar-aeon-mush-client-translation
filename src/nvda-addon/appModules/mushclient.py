@@ -601,6 +601,17 @@ def _translationPairedSalesLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationPairedSyntaxLines(chinese, english):
+	"""Keep Syntax command tables as one bilingual row per source row."""
+	englishRows = [line.strip() for line in english.splitlines() if line.strip()]
+	if len(englishRows) < 2 or not englishRows[0].startswith("Syntax:"):
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationPairedProseLines(chinese, english):
 	"""Pair ordinary narrative/dialogue only when every sentence aligns."""
 	def splitSentences(value, terminators, requireWhitespace):
@@ -918,6 +929,9 @@ def _translationReviewPresentation(text):
 		pairedSales = _translationPairedSalesLines(chinese, english)
 		if pairedSales:
 			return "\n".join(pairedSales)
+		pairedSyntax = _translationPairedSyntaxLines(chinese, english)
+		if pairedSyntax:
+			return "\n".join(pairedSyntax)
 		pairedCommandUsage = _translationPairedCommandUsageLines(chinese, english)
 		if pairedCommandUsage:
 			return "\n".join(pairedCommandUsage)

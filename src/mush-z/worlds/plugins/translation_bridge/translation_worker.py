@@ -148,6 +148,10 @@ NEARBY_MAP_DISTANCES = {
     "far away": "距離很遠",
 }
 SCAN_HEADER = re.compile(r"^You scan the surrounding area\.\.\.$", re.IGNORECASE)
+SYNTAX_COMMAND_ROW = re.compile(
+    r"^(\s*)([A-Za-z][A-Za-z0-9'/_-]*(?:\s+(?:[A-Za-z][A-Za-z0-9'/_-]*|<[^>]+>|\[[^\]]+\]))*)"
+    r"\s+-\s+(.+?)(\s*)$"
+)
 SCAN_ENTITY_ROW = re.compile(
     r"^(North|South|East|West|Northeast|Northwest|Southeast|Southwest|Up|Down)"
     r"\s+(\d+)\s+-\s+(.+?)\s*$",
@@ -3712,20 +3716,30 @@ def is_syntax_help_block(text):
 
 
 def translate_syntax_help_block(text, c):
-    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    output, body = [], []
+    rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    descriptions = [match.group(3).strip() for row in rows if (match := SYNTAX_COMMAND_ROW.match(row))]
+    prefetch_cached_phrases(descriptions, c)
+    output = []
     for row in rows:
-        if row.startswith("Syntax:"):
-            if body:
-                output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(body)))
-                body = []
-            # Commands and argument punctuation must remain exact.
-            output.append("語法：" + row[len("Syntax:"):].strip())
+        stripped = row.strip()
+        command = SYNTAX_COMMAND_ROW.match(row)
+        if stripped.startswith("Syntax:"):
+            indent = row[:len(row) - len(row.lstrip())]
+            output.append(indent + "語法：" + stripped[len("Syntax:"):].strip())
+        elif command:
+            indent, command_text, description, trailing = command.groups()
+            output.append("%s%s - %s%s" % (
+                indent, command_text, translate_cached_phrase(description.strip(), c), trailing,
+            ))
+        elif stripped:
+            indent = row[:len(row) - len(row.lstrip())]
+            output.append(indent + translate_cached_phrase(stripped, c))
         else:
-            body.append(row)
-    if body:
-        output.extend(translate_safe_display_row(chunk, c) for chunk in semantic_display_chunks("\n".join(body)))
-    return "\n".join(output)
+            output.append("")
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(rows):
+        raise RuntimeError("SYNTAX_HELP_LINE_COUNT_MISMATCH")
+    return result
 
 
 def is_book_text_block(text):
