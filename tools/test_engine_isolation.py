@@ -61,6 +61,9 @@ def main() -> None:
     cache, local_calls = {}, []
     translate_room.__globals__.update({
         "room_semantic_chunks": lambda _text: chunks,
+        "room_title_index": lambda _rows: -1,
+        "place_name_get": lambda _source: None,
+        "place_name_put": lambda _source, translated, _origin, _config: translated,
         "cache_get": lambda key, _config: cache.get(key),
         "cache_put": lambda key, value, _config: cache.__setitem__(key, value),
         "cloud_translate_many_partial": lambda _values: [None, "它位於北方兩座巨大石塔附近。",

@@ -186,6 +186,7 @@ NEARBY_DIRECTION_HEADER = re.compile(r"^\s*Dir\s+Nearby (Landmarks|Shops)\s*$", 
 NEARBY_DIRECTION_ROW = re.compile(
     r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
 )
+WHERE_LOCATION_ROW = re.compile(r"^(\s*)(.+?)(\s*->\s*)(.+?)(\s*)$")
 DENSE_ITEM_ROW = re.compile(
     r"^(\s*(?:R\s+)?\((?:(?:lvl|tot)\s+)?\s*\d+\)\s*)(.+?)(\s*)$", re.IGNORECASE
 )
@@ -1073,6 +1074,90 @@ def cache_put(text,out,c):
     except Exception as e:log("cache write failed: %r"%e,True)
 
 
+RANGER_GUILD_PLACE = re.compile(
+    r"^(.*?)(?:\s+)(?:Ranger's|Rangers'|Rangers)\s+Guild$", re.IGNORECASE
+)
+
+
+def ensure_place_name_table(db):
+    """Create the local canonical place-name registry without making it required."""
+    db.execute("""CREATE TABLE IF NOT EXISTS place_names(
+      source_name TEXT PRIMARY KEY, translated_name TEXT NOT NULL,
+      origin TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
+
+
+def place_name_get(source):
+    db = cache_connection()
+    if db is None:
+        return None
+    try:
+        ensure_place_name_table(db)
+        row = db.execute(
+            "SELECT translated_name FROM place_names WHERE source_name=?",
+            (str(source).strip(),),
+        ).fetchone()
+        return row[0] if row else None
+    except Exception as error:
+        log("place registry lookup failed: %r" % error, True)
+        return None
+
+
+def canonical_place_translation(source, translated, c):
+    """Apply reviewed place terminology before a discovered name is locked."""
+    source = str(source).strip()
+    reviewed = reviewed_phrase_translation(source)
+    if reviewed:
+        return reviewed
+    ranger_guild = RANGER_GUILD_PLACE.fullmatch(source)
+    if ranger_guild:
+        prefix = ranger_guild.group(1).strip()
+        translated_prefix = translate_piece(prefix, c, force_robust=True) if prefix else ""
+        return (" ".join(str(translated_prefix).splitlines()).strip() + "遊俠公會").strip()
+    return " ".join(str(translated).splitlines()).strip()
+
+
+def place_name_put(source, translated, origin, c):
+    source = str(source).strip()
+    translated = canonical_place_translation(source, translated, c)
+    if not source or not translated:
+        return translated
+    db = cache_connection()
+    if db is None:
+        return translated
+    try:
+        ensure_place_name_table(db)
+        now = int(time.time())
+        db.execute(
+            "INSERT OR IGNORE INTO place_names(source_name,translated_name,origin,updated_at) "
+            "VALUES(?,?,?,?)",
+            (source, translated, str(origin), now),
+        )
+        db.execute("UPDATE place_names SET updated_at=? WHERE source_name=?", (now, source))
+        db.commit()
+        return place_name_get(source) or translated
+    except Exception as error:
+        log("place registry write failed: %r" % error, True)
+        return translated
+
+
+def translate_place_name(source, c, origin):
+    """Resolve an exact structured place once and reuse it across all contexts."""
+    source = str(source).strip()
+    known = place_name_get(source)
+    if known:
+        return known
+    reviewed = reviewed_phrase_translation(source)
+    if reviewed:
+        return place_name_put(source, reviewed, origin, c)
+    ranger_guild = RANGER_GUILD_PLACE.fullmatch(source)
+    if ranger_guild:
+        # Translate only the geographic prefix. The institutional suffix is a
+        # reviewed game term and must never become rifle club or wanderer guild.
+        return place_name_put(source, "", origin, c)
+    translated = translate_piece(source, c, force_robust=True)
+    return place_name_put(source, translated, origin, c)
+
+
 def clear_recent_translation_cache(limit=5):
     """Delete recently used translation rows on the owning worker connection."""
     db = cache_connection()
@@ -1087,7 +1172,25 @@ def clear_recent_translation_cache(limit=5):
     for _cache_key, source_text in rows:
         npc_names.update(npc_names_in_source(source_text, db))
     if rows:
+        ensure_place_name_table(db)
+        recent_sources = [str(source_text).lower() for _cache_key, source_text in rows]
+        place_names = [name for (name,) in db.execute("SELECT source_name FROM place_names")]
+        affected_places = [
+            name for name in place_names
+            if any(name.lower() in source_text for source_text in recent_sources)
+        ]
         db.executemany("DELETE FROM translations WHERE cache_key=?", [(row[0],) for row in rows])
+        if affected_places:
+            all_rows = db.execute("SELECT cache_key,source_text FROM translations").fetchall()
+            stale_place_keys = [
+                cache_key for cache_key, source_text in all_rows
+                if any(name.lower() in str(source_text).lower() for name in affected_places)
+            ]
+            if stale_place_keys:
+                db.executemany("DELETE FROM translations WHERE cache_key=?",
+                               [(key,) for key in stale_place_keys])
+            db.executemany("DELETE FROM place_names WHERE source_name=?",
+                           [(name,) for name in affected_places])
         if npc_names:
             # A name lock is derived from translation output, so clearing the
             # triggering translations must also let the player choose it
@@ -2399,7 +2502,16 @@ def translate_room_prose_cached(text, c):
     chunks = room_semantic_chunks(text)
     if len(chunks) < 2:
         return translate_piece(text, c, force_robust=len(text) >= 180)
-    cached = [cache_get(chunk, c) for chunk in chunks]
+    rows = [
+        line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if line.strip()
+    ]
+    title_index = room_title_index(rows)
+    room_title = rows[title_index] if title_index >= 0 else None
+    cached = [
+        place_name_get(chunk) if room_title and chunk == room_title else cache_get(chunk, c)
+        for chunk in chunks
+    ]
     missing_indexes = [index for index, value in enumerate(cached) if value is None]
     if missing_indexes:
         missing_sources = [chunks[index] for index in missing_indexes]
@@ -2430,6 +2542,10 @@ def translate_room_prose_cached(text, c):
                 log("room aligned translation fallback: %s" % reason, True)
                 return translate_piece(text, c, force_robust=True)
             translated_chunk = " ".join(translated_chunk.splitlines()).strip()
+            if room_title and chunks[index] == room_title:
+                translated_chunk = place_name_put(
+                    chunks[index], translated_chunk, "room_title", c
+                )
             cache_put(chunks[index], translated_chunk, c)
             cached[index] = translated_chunk
 
@@ -3293,6 +3409,9 @@ def translate_semantic_units(units, c, context="semantic"):
         if kind in {"fixed", "raw"}:
             output.append(source)
             continue
+        if kind == "place":
+            output.append(translate_place_name(source, c, context))
+            continue
         if kind == "help":
             output.append(translate_help_metadata_unit(source, c))
             continue
@@ -3401,7 +3520,7 @@ def parse_room_preview_units(text):
     if not payload:
         return units
     if len(payload[0]) <= 100 and not re.search(r"[.!?。！？]$", payload[0]):
-        units.append(("translate", payload.pop(0)))
+        units.append(("place", payload.pop(0)))
     if not payload:
         return units
     trailing = trailing_independent_row_start("\n".join(payload))
@@ -3518,7 +3637,7 @@ def translate_room_with_doors(text, c):
     output, body = [], []
     # At most two leading punctuation-free rows are area/room titles.
     while rows and len(output) < 2 and len(rows[0]) <= 90 and not re.search(r"[.!?]$", rows[0]):
-        output.append(translate_safe_display_row(rows.pop(0), c))
+        output.append(translate_place_name(rows.pop(0), c, "room_with_doors"))
     doors = []
     while rows and re.match(r"^Doors?\s+", rows[-1], re.I):
         doors.insert(0, rows.pop())
@@ -3723,6 +3842,7 @@ def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     return (is_peer_room_title_preview(text) or is_level_advance_block(text) or
+            is_where_location_row(text) or is_quest_structured_block(text) or
             is_room_prose_candidate(text) or
             any(deterministic_translate(line.strip()) is not None for line in lines if line.strip()) or
             any(reviewed_phrase_translation(line.strip()) is not None for line in lines if line.strip()) or
@@ -5122,6 +5242,22 @@ def is_nearby_direction_listing(text):
     )
 
 
+def is_where_location_row(text):
+    """Recognize Mush-Z's single-line ``entity -> room`` where result."""
+    value = str(text).strip()
+    return "\n" not in value and bool(WHERE_LOCATION_ROW.fullmatch(value))
+
+
+def translate_where_location_row(text, c):
+    match = WHERE_LOCATION_ROW.fullmatch(str(text))
+    if not match:
+        raise RuntimeError("WHERE_LOCATION_PARSE_FAILED")
+    indent, entity, arrow, place, trailing = match.groups()
+    translated_entity = translate_cached_phrase(entity.strip(), c)
+    translated_place = translate_place_name(place.strip(), c, "where")
+    return "%s%s%s%s%s" % (indent, translated_entity, arrow, translated_place, trailing)
+
+
 def translate_nearby_direction_listing(text, c):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     output = []
@@ -5132,7 +5268,7 @@ def translate_nearby_direction_listing(text, c):
             output.append("方向　附近%s" % ("地標" if header.group(1).lower() == "landmarks" else "商店"))
         elif row:
             indent, direction, description, trailing = row.groups()
-            zh = translate_piece(description.strip(), c, force_robust=True)
+            zh = translate_place_name(description.strip(), c, "nearby_direction")
             output.append("%s%s　%s%s" % (indent, DIRECTION_NAMES[direction.upper()], zh, trailing))
         elif line.strip():
             fixed = deterministic_translate(line.strip())
@@ -5204,7 +5340,7 @@ def translate_nearby_map_listing(text, c):
             output.append("等級　名稱／方向")
         elif row:
             indent, level, area_name, distance, direction, trailing = row.groups()
-            zh_name = translate_piece(area_name.strip(), c, force_robust=True)
+            zh_name = translate_place_name(area_name.strip(), c, "nearby_map")
             zh_distance = NEARBY_MAP_DISTANCES[distance.lower()]
             zh_direction = NEARBY_MAP_DIRECTIONS[direction.lower()]
             output.append("%s等級 %s　%s，位於%s方，%s。%s" % (
@@ -5263,6 +5399,8 @@ def translate_quest_structured_block(text, c):
             zh_label = QUEST_DETAIL_LABELS[label.lower()]
             if label.lower() in {"area level", "creator", "editors", "approximate difficulty (scale from 1 to 10)"}:
                 zh_value = value
+            elif label.lower() == "location":
+                zh_value = translate_place_name(value, c, "quest_location") if value else ""
             else:
                 zh_value = translate_semantic_units(
                     [("translate", value)], c, "quest_field"
@@ -5428,6 +5566,8 @@ def translate(text,c):
     # provider as one paragraph.
     if is_quest_list_block(text):
         return translate_task_list_block(text, c, "quest")
+    if is_where_location_row(text):
+        return translate_where_location_row(text, c)
     # Quest detail blocks often contain several quoted NPC conversations.
     # Preserve their deterministic fields before the generic wrapped-dialogue
     # detector can claim the entire quest as one prose request.
