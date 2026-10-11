@@ -343,6 +343,10 @@ def main() -> None:
     bottom_script = addon_source.split("def script_translationHistoryBottom", 1)[1].split("\n\t@", 1)[0]
     assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
 
+    overlay_method = addon_source.split("def chooseNVDAObjectOverlayClasses", 1)[1].split("\n\t@", 1)[0]
+    for attribute in ("windowClassName", "windowControlID", "IAccessibleRole"):
+        assert f'getattr(obj, "{attribute}", None)' in overlay_method, overlay_method
+
     print("NVDA_CHINESE_DISPLAY_OK safe_dialogue_pairing=yes structured_translation_preserved=yes")
 
 

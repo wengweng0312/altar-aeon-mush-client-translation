@@ -1255,9 +1255,9 @@ class AppModule(appModuleHandler.AppModule):
 
 	def chooseNVDAObjectOverlayClasses(self, obj, clsList):
 		if (
-			obj.windowClassName == "Edit"
-			and obj.windowControlID == 59664
-			and obj.IAccessibleRole == oleacc.ROLE_SYSTEM_TEXT
+			getattr(obj, "windowClassName", None) == "Edit"
+			and getattr(obj, "windowControlID", None) == 59664
+			and getattr(obj, "IAccessibleRole", None) == oleacc.ROLE_SYSTEM_TEXT
 		):
 			clsList.insert(0, Input)
 
