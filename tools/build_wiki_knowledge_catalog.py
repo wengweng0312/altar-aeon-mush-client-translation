@@ -114,13 +114,32 @@ def page_categories(titles: list[str]) -> dict[str, list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--glossary", type=Path, required=True)
+    parser.add_argument("--reviewed-additions", type=Path)
+    parser.add_argument("--glossary-output", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--snapshot-output", type=Path)
     args = parser.parse_args()
 
     glossary = json.loads(args.glossary.read_text(encoding="utf-8-sig"))
     glossary = {str(k).strip().lower(): str(v).strip() for k, v in glossary.items()}
+    original_glossary = dict(glossary)
+    additions = {}
+    if args.reviewed_additions:
+        additions = json.loads(args.reviewed_additions.read_text(encoding="utf-8-sig"))
+        additions = {str(k).strip().lower(): str(v).strip() for k, v in additions.items()}
+        conflicts = sorted(
+            key for key in set(glossary) & set(additions) if glossary[key] != additions[key]
+        )
+        if conflicts:
+            raise RuntimeError("reviewed Wiki additions conflict with existing keys: %s" % ", ".join(conflicts))
+        glossary.update(additions)
     titles = sorted(set(category_pages(ABILITY_CATEGORY)), key=str.casefold)
+    wiki_keys = {title.casefold() for title in titles}
+    unknown = sorted(set(additions) - wiki_keys)
+    if unknown:
+        raise RuntimeError("reviewed additions absent from Wiki catalog: %s" % ", ".join(unknown))
+    if any(glossary[key] != value for key, value in original_glossary.items()):
+        raise RuntimeError("existing reviewed translations changed unexpectedly")
     categories = page_categories(titles)
     rows = []
     for title in titles:
@@ -209,6 +228,11 @@ def main() -> int:
         }
         args.snapshot_output.write_text(
             json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    if args.glossary_output:
+        args.glossary_output.write_text(
+            json.dumps(dict(sorted(glossary.items())), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
         )
     print("WIKI_CATALOG_OK abilities=%d reviewed=%d missing=%d" % (
         len(rows), sum(row["reviewed"] for row in rows),

@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "src/mush-z/worlds/plugins/translation_bridge"
 DB = BRIDGE / "wiki_knowledge_catalog.sqlite3"
+ADDITIONS = ROOT / "tools/reviewed_wiki_ability_additions.json"
 
 
 def scalar(db: sqlite3.Connection, sql: str, args=()):
@@ -25,6 +26,10 @@ def main() -> int:
         "reviewed_game_data_over_wiki_over_model"
     )
     glossary = json.loads((BRIDGE / "skill_glossary_zh_tw.json").read_text(encoding="utf-8-sig"))
+    additions = json.loads(ADDITIONS.read_text(encoding="utf-8-sig"))
+    assert len(additions) == 119
+    for english, chinese in additions.items():
+        assert glossary.get(english) == chinese
     for english, chinese in glossary.items():
         row = db.execute(
             "SELECT traditional_chinese, translation_reviewed FROM abilities WHERE ability_key=?",
@@ -52,7 +57,13 @@ def main() -> int:
         "WHERE guild_name='Smiths Guild' AND ability_key='forge armor'"
     ).fetchone() == (18, "jewelrysmithing")
     assert scalar(db, "SELECT COUNT(*) FROM classes") == 6
-    assert scalar(db, "SELECT COUNT(*) FROM abilities WHERE translation_reviewed=0") > 0
+    assert scalar(db, "SELECT COUNT(*) FROM abilities WHERE translation_reviewed=0") == 0
+    assert db.execute(
+        "SELECT traditional_chinese FROM abilities WHERE ability_key='remise'"
+    ).fetchone() == ("格擋後續擊",)
+    assert db.execute(
+        "SELECT traditional_chinese FROM abilities WHERE ability_key='diamantaire'"
+    ).fetchone() == ("鑽石工匠",)
     db.close()
     print("WIKI_KNOWLEDGE_CATALOG_REGRESSION_OK")
     return 0
