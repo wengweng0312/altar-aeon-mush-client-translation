@@ -186,6 +186,13 @@ NEARBY_DIRECTION_HEADER = re.compile(r"^\s*Dir\s+Nearby (Landmarks|Shops)\s*$", 
 NEARBY_DIRECTION_ROW = re.compile(
     r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
 )
+SALES_LIST_HEADER = "There are the following sales running:"
+SALES_LIST_FOOTER = "Use the 'credit buy' command to take advantage of these deals."
+SALES_LIST_ROW = re.compile(
+    r"^(\s*)(\d+)%\s+(extra|off)!\s*-\s*(.+?)"
+    r"(?:\s+-\s+now\s+(\d[\d,]*)\s+credits!)?(\s*)$",
+    re.IGNORECASE,
+)
 WHERE_LOCATION_ROW = re.compile(r"^(\s*)(.+?)(\s*->\s*)(.+?)(\s*)$")
 DENSE_ITEM_ROW = re.compile(
     r"^(\s*(?:R\s+)?\((?:(?:lvl|tot)\s+)?\s*\d+\)\s*)(.+?)(\s*)$", re.IGNORECASE
@@ -5335,6 +5342,53 @@ def translate_inventory_block(text, c):
     return translate_structured_line_block(text, c)
 
 
+def is_sales_listing(text):
+    """Recognize the credit-shop sale table by its complete stable shape."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    nonempty = [line for line in lines if line.strip()]
+    return bool(
+        len(nonempty) >= 3
+        and nonempty[0].strip() == SALES_LIST_HEADER
+        and nonempty[-1].strip() == SALES_LIST_FOOTER
+        and all(SALES_LIST_ROW.match(line) for line in nonempty[1:-1])
+    )
+
+
+def translate_sales_listing(text, c):
+    """Translate sale names while preserving discounts, prices and row order."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            output.append("")
+            continue
+        if stripped == SALES_LIST_HEADER:
+            output.append("目前有以下促銷活動：")
+            continue
+        if stripped == SALES_LIST_FOOTER:
+            output.append("請使用 'credit buy' 指令購買這些優惠。")
+            continue
+        match = SALES_LIST_ROW.match(line)
+        if not match:
+            raise RuntimeError("SALES_LIST_ROW_UNRECOGNIZED")
+        indent, percent, sale_kind, offer, credits, trailing = match.groups()
+        translated_offer = reviewed_phrase_translation(offer) or cache_get(offer, c)
+        if translated_offer is None:
+            translated_offer = translate_piece(offer, c, force_robust=True)
+            cache_put(offer, translated_offer, c)
+        translated_offer = " ".join(translated_offer.splitlines()).strip()
+        prefix = "額外 %s%%！" % percent if sale_kind.lower() == "extra" else "優惠 %s%%！" % percent
+        suffix = " - 現在 %s credits！" % credits if credits else ""
+        output.append("%s%s - %s%s%s" % (indent, prefix, translated_offer, suffix, trailing))
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("SALES_LIST_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("SALES_LIST_NUMERIC_ITEMS_MISSING")
+    return result
+
+
 def seed_structured_line_cache(source, translated, c):
     """Learn safe row pairs from a valid whole-block cache hit."""
     if not structured_block_kind(source):
@@ -5943,6 +5997,8 @@ def translate(text,c):
         return translate_available_level_skills_block(text, c)
     if is_command_usage_listing(text):
         return translate_command_usage_listing(text, c)
+    if is_sales_listing(text):
+        return translate_sales_listing(text, c)
     if is_craftable_material_listing(text):
         return translate_craftable_material_listing(text, c)
     if is_room_preview_block(text):

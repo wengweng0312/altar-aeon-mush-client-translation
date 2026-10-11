@@ -24,6 +24,7 @@ FUNCTIONS = {
     "_translationPairedMonsterLoreLines",
     "_translationTaskListLines",
     "_translationPairedTaskListLines",
+    "_translationPairedSalesLines",
     "_translationPairedProseLines",
     "_isHelpUsageCommand",
     "_translationHelpSemanticLines",
@@ -244,6 +245,23 @@ def main() -> None:
     assert nearby_lines[2].endswith("Free a special mushroom for an alchemist."), nearby_lines
     assert nearby_lines[3].endswith("Give a troll a chance."), nearby_lines
     assert nearby_lines[-1].endswith("For example, 'quest nearby 1'."), nearby_lines
+
+    sales_english = (
+        "There are the following sales running:\n"
+        " 5% extra! - weightless expansions\n"
+        "40% off! - detect and protect spells - now 15 credits!\n"
+        "Use the 'credit buy' command to take advantage of these deals."
+    )
+    sales_chinese = (
+        "目前有以下促銷活動：\n"
+        "額外 5%！- 無重量擴充\n"
+        "優惠 40%！- 偵測與防護法術 - 現在 15 credits！\n"
+        "請使用 'credit buy' 指令購買這些優惠。"
+    )
+    sales_lines = present(sales_chinese + " | " + sales_english).splitlines()
+    assert len(sales_lines) == 4, sales_lines
+    assert sales_lines[1].endswith("5% extra! - weightless expansions"), sales_lines
+    assert sales_lines[2].endswith("40% off! - detect and protect spells - now 15 credits!"), sales_lines
 
 	# Long NPC speech is split only when both languages have the same safe
 	# sentence count. It remains one history entry, with one bilingual row per

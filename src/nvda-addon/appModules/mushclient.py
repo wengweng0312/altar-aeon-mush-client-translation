@@ -586,6 +586,21 @@ def _translationPairedTaskListLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationPairedSalesLines(chinese, english):
+	"""Pair the line-preserving credit sale table without prose guessing."""
+	englishRows = [line.strip() for line in english.splitlines() if line.strip()]
+	if not (
+		len(englishRows) >= 3
+		and englishRows[0] == "There are the following sales running:"
+		and englishRows[-1] == "Use the 'credit buy' command to take advantage of these deals."
+	):
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationPairedProseLines(chinese, english):
 	"""Pair ordinary narrative/dialogue only when every sentence aligns."""
 	def splitSentences(value, terminators, requireWhitespace):
@@ -900,6 +915,9 @@ def _translationReviewPresentation(text):
 		pairedTaskList = _translationPairedTaskListLines(chinese, english)
 		if pairedTaskList:
 			return "\n".join(pairedTaskList)
+		pairedSales = _translationPairedSalesLines(chinese, english)
+		if pairedSales:
+			return "\n".join(pairedSales)
 		pairedCommandUsage = _translationPairedCommandUsageLines(chinese, english)
 		if pairedCommandUsage:
 			return "\n".join(pairedCommandUsage)
