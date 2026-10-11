@@ -23,6 +23,9 @@ FUNCTIONS = {
 	"_translationPairedRoomLines",
     "_translationPairedMonsterLoreLines",
     "_translationPairedProseLines",
+    "_isHelpUsageCommand",
+    "_translationHelpSemanticLines",
+    "_translationPairedHelpLines",
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
@@ -117,6 +120,33 @@ def main() -> None:
     assert " | Dragon Tooth way Following the dusty path" in lines[0], lines
     assert lines[0].endswith("willing to speak to anybody."), lines
     assert original(bilingual) == english
+
+    helpEnglish = (
+        "Keywords are:  'cleric spell breath of life'\n"
+        "Spell: breath of life           Mana:  25  Wis: 32  Chr: 28  Lvl 31 Cler  (28%)\n"
+        "                                (important)   Requires: major heal\n"
+        "                                Group: Cleric healing spellgroup\n"
+        "Usage:\n"
+        "cast breath of life <character>\n"
+        "This very powerful healing spell can be used on seriously injured targets,\n"
+        "and can sometimes heal the injured completely in one cast.\n"
+        "It generally cannot be cast on targets with only minor injuries."
+    )
+    helpChinese = (
+        "關鍵詞：'cleric spell breath of life'\n"
+        "咒語：生命氣息；法力：25；智慧：32；魅力：28；等級：31；職業：牧師（28%）\n"
+        "重要；前置需求：強效治療\n"
+        "分組：牧師治療法術組\n"
+        "用法：\n"
+        "cast breath of life <character>\n"
+        "這個強大的治療咒語可用於重傷目標，有時能一次完全治癒傷者。\n"
+        "它通常不能對僅受輕傷的目標施放。"
+    )
+    helpLines = present(helpChinese + " | " + helpEnglish).splitlines()
+    assert len(helpLines) == 8, helpLines
+    assert helpLines[1].endswith("Lvl 31 Cler  (28%)"), helpLines
+    assert helpLines[5] == "cast breath of life <character> | cast breath of life <character>", helpLines
+    assert helpLines[-1].endswith("It generally cannot be cast on targets with only minor injuries."), helpLines
 
     merged = (
         "龍牙之路繼續以東西走向延伸，周圍有許多矮人巡邏。"

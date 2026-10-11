@@ -2993,14 +2993,98 @@ def is_skill_help_detail(text):
                 any(re.match(r"^(?:Skill|Spell):\s+", line, re.I) for line in head))
 
 
+HELP_CLASS_ZH = {
+    "mage": "法師", "cler": "牧師", "thie": "盜賊",
+    "warr": "戰士", "necr": "死靈法師", "drui": "德魯伊",
+}
+HELP_STAT_ZH = {
+    "mana": "法力", "int": "智力", "wis": "智慧", "chr": "魅力",
+    "str": "力量", "dex": "敏捷", "con": "體質",
+}
+HELP_IMPORTANCE_ZH = {
+    "critical": "關鍵", "important": "重要", "helpful": "有幫助",
+    "useful": "有用", "obscure": "冷門", "guild": "公會技能",
+}
+
+
+def is_help_usage_command(row):
+    """Recognize command syntax after Usage without confusing it with prose."""
+    value = str(row).strip()
+    if not value or len(value) > 140 or re.search(r"[.!?]", value):
+        return False
+    return bool(re.fullmatch(
+        r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
+        value,
+    ))
+
+
+def translate_help_metadata_unit(row, c):
+    """Translate stable help fields deterministically; models handle values only."""
+    value = str(row).strip()
+    page = re.fullmatch(r"Showing page\s+(\d+)\.", value, re.I)
+    if page:
+        return "顯示第 %s 頁。" % page.group(1)
+    keywords = re.fullmatch(r"Keywords are:\s*(.*)", value, re.I)
+    if keywords:
+        # Keywords are commands/search terms. Keep them typeable and visible.
+        return "關鍵詞：%s" % keywords.group(1).strip()
+    header = re.fullmatch(
+        r"(Skill|Spell):\s+(.+?)\s+(Mana:\s*\d+.*|Lvl\s+\d+.*)", value, re.I
+    )
+    if header:
+        kind, name, tail = header.groups()
+        level = re.search(r"\bLvl\s+(\d+)\s+([A-Za-z]+)\s+\((\d+%)\)", tail, re.I)
+        if not level or level.group(2).lower() not in HELP_CLASS_ZH:
+            raise RuntimeError("HELP_HEADER_UNKNOWN_CLASS")
+        fields = [
+            ("技能" if kind.lower() == "skill" else "咒語") + "：" +
+            translate_cached_phrase(name.strip(), c)
+        ]
+        for key, number in re.findall(r"\b(Mana|Int|Wis|Chr|Str|Dex|Con):\s*(\d+)", tail, re.I):
+            fields.append("%s：%s" % (HELP_STAT_ZH[key.lower()], number))
+        fields.extend((
+            "等級：%s" % level.group(1),
+            "職業：%s（%s）" % (HELP_CLASS_ZH[level.group(2).lower()], level.group(3)),
+        ))
+        return "；".join(fields)
+    importance = re.fullmatch(
+        r"\((critical|important|helpful|useful|obscure|guild)\)"
+        r"(?:\s+Requires:\s*(.+))?", value, re.I
+    )
+    if importance:
+        result = HELP_IMPORTANCE_ZH[importance.group(1).lower()]
+        if importance.group(2):
+            result += "；前置需求：" + translate_cached_phrase(importance.group(2).strip(), c)
+        return result
+    group = re.fullmatch(r"Group:\s*(.+)", value, re.I)
+    if group:
+        return "分組：" + translate_cached_phrase(group.group(1).strip(), c)
+    speed = re.fullmatch(r"Speed:\s*(.+)", value, re.I)
+    if speed:
+        return "速度：" + translate_cached_phrase(speed.group(1).strip(), c)
+    fixed = {
+        "usage:": "用法：",
+        "(can be groupcast)": "可群體施放",
+        "(can be maintained)": "可維持",
+    }
+    if value.lower() in fixed:
+        return fixed[value.lower()]
+    usable = re.fullmatch(r"You can use (.+) while:", value, re.I)
+    if usable:
+        return "可在以下狀態使用%s：" % translate_cached_phrase(usable.group(1).strip(), c)
+    raise RuntimeError("HELP_METADATA_UNKNOWN")
+
+
 def parse_help_semantic_units(text):
     """Turn display-wrapped help into ordered, independently verifiable units."""
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     units, body = [], []
     in_usage = False
+    after_usable = False
     metadata = re.compile(
         r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
-        r"\((?:critical|important|helpful|useful)\)|Group:|Speed:|Usage:|"
+        r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
+        r"\(Can Be (?:Groupcast|Maintained)\)|Group:|Speed:|Usage:|"
         r"You can use .* while:)", re.I
     )
 
@@ -3012,15 +3096,19 @@ def parse_help_semantic_units(text):
     for row in rows:
         if metadata.match(row):
             flush_body()
-            units.append(("fixed", "用法：") if row == "Usage:" else ("translate", row))
+            units.append(("help", row))
             in_usage = row == "Usage:"
+            after_usable = bool(re.match(r"^You can use .* while:$", row, re.I))
             continue
-        if in_usage and re.fullmatch(
-            r"(?:[a-z][a-z-]*|[a-z][a-z-]*(?:\s+<[^>]+>)+)", row, re.I
-        ):
+        if in_usage and is_help_usage_command(row):
             units.append(("raw", row))
             continue
         in_usage = False
+        if after_usable:
+            flush_body()
+            units.append(("translate", row))
+            after_usable = False
+            continue
         body.append(row)
     flush_body()
     return units
@@ -3051,6 +3139,9 @@ def translate_semantic_units(units, c, context="semantic"):
     for kind, source in units:
         if kind in {"fixed", "raw"}:
             output.append(source)
+            continue
+        if kind == "help":
+            output.append(translate_help_metadata_unit(source, c))
             continue
         translated = prepared.get(source)
         # Old per-sentence cache rows can contain a model echo in English.  A

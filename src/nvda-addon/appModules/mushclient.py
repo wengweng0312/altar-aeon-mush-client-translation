@@ -560,6 +560,81 @@ def _translationPairedProseLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _isHelpUsageCommand(row):
+	"""Match command syntax following Usage, including multi-word spells."""
+	value = row.strip()
+	if not value or len(value) > 140 or re.search(r"[.!?]", value):
+		return False
+	return bool(re.fullmatch(
+		r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
+		value,
+	))
+
+
+def _translationHelpSemanticLines(english):
+	"""Mirror the worker's stable help fields, commands and prose units."""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if not (
+		any(row.startswith("Keywords are:") for row in rows[:6])
+		and any(re.match(r"^(?:Skill|Spell):\s+", row, re.I) for row in rows[:6])
+	):
+		return []
+	metadata = re.compile(
+		r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
+		r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
+		r"\(Can Be (?:Groupcast|Maintained)\)|Group:|Speed:|Usage:|"
+		r"You can use .* while:)",
+		re.I,
+	)
+	units, prose = [], []
+	inUsage = False
+	afterUsable = False
+
+	def flushProse():
+		if not prose:
+			return
+		current = []
+		for line in prose:
+			current.append(line)
+			if re.search(r"[.!?][\"')\]]*\s*$", line):
+				units.append(" ".join(current))
+				current[:] = []
+		if current:
+			units.append(" ".join(current))
+		prose[:] = []
+
+	for row in rows:
+		if metadata.match(row):
+			flushProse()
+			units.append(row)
+			inUsage = row.lower() == "usage:"
+			afterUsable = bool(re.match(r"^You can use .* while:$", row, re.I))
+			continue
+		if inUsage and _isHelpUsageCommand(row):
+			units.append(row)
+			continue
+		inUsage = False
+		if afterUsable:
+			flushProse()
+			units.append(row)
+			afterUsable = False
+			continue
+		prose.append(row)
+	flushProse()
+	return units
+
+
+def _translationPairedHelpLines(chinese, english):
+	"""Pair help rows only when worker and original semantic units align exactly."""
+	englishRows = _translationHelpSemanticLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationEnglishPresentationLines(english):
 	"""Keep help fields and semantic paragraphs separate; rooms stay one line."""
 	english = english.strip()
@@ -643,6 +718,9 @@ def _translationReviewPresentation(text):
 	chineseLine = re.sub(r"\s+", " ", chinese).strip()
 	englishLine = re.sub(r"\s+", " ", english).strip()
 	if chineseLine and englishLine:
+		pairedHelp = _translationPairedHelpLines(chinese, english)
+		if pairedHelp:
+			return "\n".join(pairedHelp)
 		pairedDialogue = _translationPairedDialogueLines(chinese, english)
 		if pairedDialogue:
 			return "\n".join(pairedDialogue)
