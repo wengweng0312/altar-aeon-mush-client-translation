@@ -172,7 +172,7 @@ def main():
     print(
         "LOCATION_REGISTRY_PROTOTYPE_OK "
         "where_before_room=yes room_before_where=yes quest_before_room=yes "
-        "nearby=yes prose_rejected=yes ranger_guild=遊俠公會 "
+        "nearby=yes prose_rejected=yes ranger_guild=reviewed "
         "player_trace=%s" % ("verified" if actual_sources else "not_available")
     )
 
