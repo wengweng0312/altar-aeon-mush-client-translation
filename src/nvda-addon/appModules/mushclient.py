@@ -1127,8 +1127,10 @@ class AppModule(appModuleHandler.AppModule):
 			)
 			lineRanges = _translationPresentationLineRanges(presentation)
 			targetLine = lineRanges[-1] if atEnd and lineRanges else (lineRanges[0] if lineRanges else (0, 0))
-			info = obj.makeTextInfo(textInfos.POSITION_FIRST)
-			info.move(textInfos.UNIT_CHARACTER, targetLine[0])
+			# Construct the collapsed range at the target offset directly. Moving
+			# from offset zero makes NVDA/Uniscribe calculate every preceding
+			# character and can freeze the main thread on a long single-line entry.
+			info = obj.makeTextInfo((targetLine[0], targetLine[0]))
 			if api.setReviewPosition(info):
 				self._translationReviewObject = obj
 				self._translationSentenceIndex = -1

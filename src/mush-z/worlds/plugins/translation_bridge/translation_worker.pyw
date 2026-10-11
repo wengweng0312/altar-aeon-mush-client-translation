@@ -3841,7 +3841,7 @@ def translate_level_advance_block(text):
 def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return (is_peer_room_title_preview(text) or is_level_advance_block(text) or
+    return (is_news_report(text) or is_peer_room_title_preview(text) or is_level_advance_block(text) or
             is_where_location_row(text) or is_quest_structured_block(text) or
             is_consider_report(text) or
             is_room_prose_candidate(text) or
@@ -5628,6 +5628,83 @@ def is_counter_stats_block(text):
     return value.startswith("Counters since ") and "To reset the counters, type scm reset." in value
 
 
+NEWS_AREA_ROW = re.compile(
+    r"^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{4})\s+(Lvl|Tot)\s+(\d+)\s+"
+    r"\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]\s+(.+?)\s{2,}(.+?)\s*$"
+)
+
+
+def is_news_report(text):
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    return len(rows) >= 3 and rows[0] == "ALTER AEON NEWS" and rows[1] == "TODAY'S HEADLINE:"
+
+
+def translate_news_report(text, c):
+    """Render the dynamic news report as bounded review rows."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if not is_news_report(text):
+        raise RuntimeError("NEWS_REPORT_PARSE_FAILED")
+    units = [("fixed", "ALTER AEON 新聞"), ("fixed", "今日頭條：")]
+    prose = []
+
+    def flush_prose():
+        if prose:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose)))
+            prose[:] = []
+
+    for row in rows[2:]:
+        booted = re.fullmatch(r"Alter Aeon was last booted:\s*(.+)", row, re.I)
+        if booted:
+            flush_prose()
+            units.append(("fixed", "Alter Aeon 上次重啟時間：%s" % booted.group(1)))
+        elif re.fullmatch(r"\(Type 'changes' to see recent updates to the game's codebase\.\)", row, re.I):
+            flush_prose()
+            units.append(("fixed", "（輸入 changes 可查看遊戲程式的近期更新。）"))
+        elif (match := re.fullmatch(r"Got Their Freak On:\s*(.+?),\s*level:\s*(\d+)\.", row, re.I)):
+            flush_prose()
+            units.append(("fixed", "Got Their Freak On：%s，等級 %s。" % match.groups()))
+        elif (match := re.fullmatch(r"Catch of the Day:\s*(.+?),\s*(\d+)\s*lbs\.\s*-\s*caught by\s+(.+)", row, re.I)):
+            flush_prose()
+            fish, weight, player = match.groups()
+            units.append(("fixed", "今日漁獲：%s，%s 磅；捕獲者：%s" % (fish, weight, player)))
+        elif row == "New and recently updated areas:":
+            flush_prose()
+            units.append(("fixed", "新增與近期更新區域："))
+        elif re.fullmatch(r"Date\s+Level\s+\[\s*X,\s*Y\]\s+Name\s+Creators", row, re.I):
+            flush_prose()
+            units.append(("fixed", "日期，等級，座標，名稱，創作者"))
+        elif (match := NEWS_AREA_ROW.fullmatch(row)):
+            flush_prose()
+            date, level_kind, level, x_value, y_value, name, creators = match.groups()
+            translated_name = translate_place_name(name, c, "news_area")
+            units.append(("fixed", "%s，%s %s，座標 %s、%s，%s，創作者：%s" % (
+                date, level_kind, level, x_value, y_value, translated_name, creators,
+            )))
+        else:
+            prose.append(row)
+    flush_prose()
+
+    missing = []
+    for kind, source in units:
+        if kind == "translate" and cache_get(source, c) is None and source not in missing:
+            missing.append(source)
+    if missing:
+        translated = cloud_translate_many(missing)
+        if translated is None:
+            try:
+                translated = translate_numbered_fields_once(missing, c) if len(missing) > 1 else [translate_piece(missing[0], c, force_robust=True)]
+            except Exception as error:
+                log("news field batch fallback: %r" % error, True)
+                translated = None
+        if translated is not None:
+            for source, result in zip(missing, translated):
+                cache_put(source, result, c)
+    result = translate_semantic_units(units, c, "news")
+    if len(result.splitlines()) != len(units):
+        raise RuntimeError("NEWS_LINE_COUNT_MISMATCH")
+    return result
+
+
 def translate_counter_stats_block(text):
     """Render the fixed scm counter table without model inference."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -5754,6 +5831,8 @@ def translate_character_status_block(text, c):
 
 
 def translate(text,c):
+    if is_news_report(text):
+        return translate_news_report(text, c)
     if is_peer_room_title_preview(text):
         return translate_peer_room_title_preview(text, c)
     if is_level_advance_block(text):
