@@ -41,6 +41,41 @@ It generally cannot be cast on targets with only minor injuries."""
     assert module.is_help_usage_command("'clobber'")
     assert not module.is_help_usage_command("This is ordinary explanatory prose")
 
+    lapidary = """Usage:
+lapidary help                  - this screen
+lapidary check                 - check stones and gems in your inventory
+lapidary list minerals         - list of lapidary minerals you've mined
+lapidary create <item> <stone> - start cutting a new stone item or gemstone"""
+    woodcraft = """Usage:
+woodcraft help                 - this screen
+woodcraft list woods           - list the kinds of woods you've gathered
+woodcraft create <type> <wood> - craft a new wooden item
+woodcraft saw <object>         - saw a wooden object into lumber"""
+    for listing, root in ((lapidary, "lapidary"), (woodcraft, "woodcraft")):
+        entries = module.parse_command_usage_listing(listing)
+        assert entries and len(entries) == 4, entries
+        assert all(command.startswith(root + " ") for command, _description in entries), entries
+        assert module.is_command_usage_listing(listing)
+        assert module.should_bypass_whole_block_cache(listing)
+
+        original_units = module.translate_semantic_units
+        module.translate_semantic_units = lambda units, _config, _context: "\n".join(
+            "中譯：" + source for _kind, source in units
+        )
+        try:
+            rendered = module.translate_command_usage_listing(listing, {})
+        finally:
+            module.translate_semantic_units = original_units
+        rendered_rows = rendered.splitlines()
+        assert len(rendered_rows) == len(listing.splitlines()), rendered_rows
+        assert rendered_rows[0] == "用法：", rendered_rows
+        assert rendered_rows[1].startswith(root + " help - 中譯："), rendered_rows
+        assert "<" in rendered_rows[-1] and " - 中譯：" in rendered_rows[-1], rendered_rows
+
+    assert not module.is_command_usage_listing(
+        "Usage:\nlook - inspect something\nsay hello - talk\nget sword - take it\nother help - mixed root"
+    )
+
     translations = {
         "breath of life": "生命氣息",
         "major heal": "強效治療",

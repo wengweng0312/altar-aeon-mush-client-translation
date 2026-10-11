@@ -3067,6 +3067,58 @@ def is_help_usage_command(row):
     ))
 
 
+def parse_command_usage_listing(text):
+    """Parse a multi-row ``command - description`` Usage screen safely."""
+    rows = [
+        line.strip()
+        for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if line.strip()
+    ]
+    if len(rows) < 4 or rows[0].lower() != "usage:":
+        return None
+    entries = []
+    root = None
+    for row in rows[1:]:
+        match = re.fullmatch(r"(.+?)\s+-\s+(.+)", row)
+        if not match:
+            return None
+        command, description = (part.strip() for part in match.groups())
+        if not is_help_usage_command(command) or not description:
+            return None
+        command_root = command.split(None, 1)[0].lower()
+        if root is None:
+            root = command_root
+        elif command_root != root:
+            return None
+        entries.append((command, description))
+    return entries if len(entries) >= 3 else None
+
+
+def is_command_usage_listing(text):
+    return parse_command_usage_listing(text) is not None
+
+
+def translate_command_usage_listing(text, c):
+    """Translate descriptions in one batch while preserving typeable commands."""
+    entries = parse_command_usage_listing(text)
+    if not entries:
+        raise RuntimeError("COMMAND_USAGE_PARSE_FAILED")
+    descriptions = [description for _command, description in entries]
+    translated = translate_semantic_units(
+        [("translate", description) for description in descriptions],
+        c,
+        "command_usage",
+    ).splitlines()
+    if len(translated) != len(entries):
+        raise RuntimeError("COMMAND_USAGE_LINE_COUNT_MISMATCH")
+    output = ["用法："]
+    output.extend(
+        "%s - %s" % (command, description_zh)
+        for (command, _description), description_zh in zip(entries, translated)
+    )
+    return "\n".join(output)
+
+
 def translate_help_metadata_unit(row, c):
     """Translate stable help fields deterministically; models handle values only."""
     value = str(row).strip()
@@ -3627,6 +3679,7 @@ def should_bypass_whole_block_cache(text):
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
+            is_command_usage_listing(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
             is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
             is_numeric_report_block(text) or
@@ -5346,6 +5399,8 @@ def translate(text,c):
         return translate_quest_help_block(text)
     if is_available_level_skills_block(text):
         return translate_available_level_skills_block(text, c)
+    if is_command_usage_listing(text):
+        return translate_command_usage_listing(text, c)
     if is_room_preview_block(text):
         return translate_room_preview_block(text, c)
     if is_quest_information_block(text):
