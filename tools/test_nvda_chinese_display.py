@@ -28,6 +28,8 @@ FUNCTIONS = {
     "_translationPairedHelpLines",
     "_translationNewsSemanticLines",
     "_translationPairedNewsLines",
+    "_translationChangesSemanticLines",
+    "_translationPairedChangesLines",
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
@@ -367,6 +369,28 @@ Jul 14 2026 Tot 189 [-526, 561] The Cirustal Coast morpheus"""
     assert len(news_lines) == 13, news_lines
     assert news_lines[2].endswith("The quest is not going to work until we get another reboot, but the problem has been found."), news_lines[2]
     assert news_lines[-1].endswith("The Cirustal Coast morpheus"), news_lines[-1]
+
+    changes_english = """[3413] ---- Sep 20, 26
+From Draak:
+Add 'help' option to the scan command.
+Casting detect poison before using remove poison on
+them makes the curative effect stronger. (Morpheus)
+Mobs should no longer bleed to death. Keep in
+mind they may still be fragile. (Simo)
+Non-aggressive animals should now be more receptive to
+being touched.
+Most recent 1 entries displayed."""
+    changes_chinese = """[3413] ---- Sep 20, 26
+來自 Draak：
+新增 help 選項。
+先偵測毒素會增強治療效果。（Morpheus）
+怪物不再因流血死亡。（Simo）
+非攻擊性動物更能接受觸摸。
+目前顯示最近 1 筆更新。"""
+    changes_lines = present(changes_chinese + " | " + changes_english).splitlines()
+    assert len(changes_lines) == 7, changes_lines
+    assert changes_lines[3].endswith("them makes the curative effect stronger. (Morpheus)"), changes_lines[3]
+    assert changes_lines[4].endswith("mind they may still be fragile. (Simo)"), changes_lines[4]
 
     addon_source = MODULE.read_text(encoding="utf-8")
     navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]

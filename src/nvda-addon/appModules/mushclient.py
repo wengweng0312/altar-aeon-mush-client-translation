@@ -697,6 +697,40 @@ def _translationPairedNewsLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationChangesSemanticLines(english):
+	"""Restore one row per change-log header, author and complete update item."""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if not rows or not re.match(r"^\[\d+\]\s+----\s+", rows[0]):
+		return []
+	output, prose = [], []
+
+	def flushProse():
+		if prose:
+			output.append(" ".join(prose))
+			prose[:] = []
+
+	for row in rows:
+		if re.match(r"^\[\d+\]\s+----\s+", row) or re.match(r"^From\s+.+?:$", row, re.I):
+			flushProse()
+			output.append(row)
+			continue
+		prose.append(row)
+		if re.search(r"(?:[.!?][\"')\]]*|[.!?]\s+\([^)]+\))\s*$", row):
+			flushProse()
+	flushProse()
+	return output
+
+
+def _translationPairedChangesLines(chinese, english):
+	englishRows = _translationChangesSemanticLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationEnglishPresentationLines(english):
 	"""Keep help fields and semantic paragraphs separate; rooms stay one line."""
 	english = english.strip()
@@ -812,6 +846,9 @@ def _translationReviewPresentation(text):
 		pairedNews = _translationPairedNewsLines(chinese, english)
 		if pairedNews:
 			return "\n".join(pairedNews)
+		pairedChanges = _translationPairedChangesLines(chinese, english)
+		if pairedChanges:
+			return "\n".join(pairedChanges)
 		pairedHelp = _translationPairedHelpLines(chinese, english)
 		if pairedHelp:
 			return "\n".join(pairedHelp)

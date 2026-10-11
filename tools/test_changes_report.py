@@ -36,6 +36,12 @@ globals_["cache_put"] = lambda key, value, _config: cache.__setitem__(key, value
 globals_["cloud_translate_many"] = lambda fields: ["中文更新內容 %d。" % index for index, _ in enumerate(fields, 1)]
 
 assert module["is_changes_report"](source)
+semantic = module["semantic_display_chunks"](
+    "Casting detect poison makes the effect stronger. (Morpheus)\n"
+    "Mobs should no longer bleed to death. (Simo)\n"
+    "Non-aggressive animals should be more receptive to being touched."
+)
+assert len(semantic) == 3, semantic
 result = module["translate_changes_report"](source, {})
 lines = result.splitlines()
 assert [line for line in lines if line.startswith("[")] == [

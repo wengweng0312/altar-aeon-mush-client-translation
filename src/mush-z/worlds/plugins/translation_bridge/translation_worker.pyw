@@ -2271,7 +2271,7 @@ def semantic_display_chunks(text):
                 current = []
             continue
         current.append(stripped)
-        if re.search(r"[.!?][\"')\]]*\s*$", stripped):
+        if re.search(r"(?:[.!?][\"')\]]*|[.!?]\s+\([^)]+\))\s*$", stripped):
             chunks.append(" ".join(current))
             current = []
     if current:
