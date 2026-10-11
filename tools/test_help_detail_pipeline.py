@@ -76,6 +76,48 @@ woodcraft saw <object>         - saw a wooden object into lumber"""
         "Usage:\nlook - inspect something\nsay hello - talk\nget sword - take it\nother help - mixed root"
     )
 
+    extended_cases = {
+        "forge": """Usage:
+forge help - this screen
+forge smelt <ore> - refine metal ingots from ore
+forge create <item> <metal> - forge a new item
+To get an estimate for creating objects,
+add '-cost' at the end of the command.""",
+        "leathercraft": """Usage:
+leathercraft help - this screen
+leathercraft list - list leather item types
+leathercraft create <type> <skin> - craft a new leather item
+Most leathercrafted items require a hide of double the list size to create.""",
+        "skin": """Usage:
+skin <corpse> - cut skin from a corpse
+Skinning is used to get skins from corpses. The more skilled you are
+at skinning, the more intact the corpse will be.""",
+    }
+    for root, listing in extended_cases.items():
+        parts = module._command_usage_parts(listing)
+        assert parts, (root, parts)
+        entries, trailing = parts
+        assert entries[0][0].startswith(root), entries
+        assert trailing, (root, trailing)
+        assert module.should_bypass_whole_block_cache(listing)
+
+    craftable = """A branch can be crafted into...
+ [bowl                ]
+ [dish                ]
+ [fishing pole        ]
+ [mask                ]
+ [walking cane        ]
+It is flexible. It will be good for crafting bows and crossbows.
+Use 'woodcraft create' to start crafting."""
+    assert module.is_craftable_material_listing(craftable)
+    craft_units = module.craftable_material_units(craftable)
+    assert [value for kind, value in craft_units if kind == "raw"] == [
+        "[bowl]", "[dish]", "[fishing pole]", "[mask]", "[walking cane]",
+    ], craft_units
+    assert craft_units[0] == ("translate", "A branch can be crafted into..."), craft_units
+    assert craft_units[-1][0] == "translate", craft_units
+    assert module.should_bypass_whole_block_cache(craftable)
+
     translations = {
         "breath of life": "生命氣息",
         "major heal": "強效治療",

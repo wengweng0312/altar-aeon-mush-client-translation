@@ -3067,21 +3067,23 @@ def is_help_usage_command(row):
     ))
 
 
-def parse_command_usage_listing(text):
-    """Parse a multi-row ``command - description`` Usage screen safely."""
+def _command_usage_parts(text):
+    """Return command rows and optional wrapped explanatory prose."""
     rows = [
         line.strip()
         for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
     ]
-    if len(rows) < 4 or rows[0].lower() != "usage:":
+    if len(rows) < 2 or rows[0].lower() != "usage:":
         return None
     entries = []
     root = None
-    for row in rows[1:]:
+    trailing = []
+    for index, row in enumerate(rows[1:], 1):
         match = re.fullmatch(r"(.+?)\s+-\s+(.+)", row)
         if not match:
-            return None
+            trailing = rows[index:]
+            break
         command, description = (part.strip() for part in match.groups())
         if not is_help_usage_command(command) or not description:
             return None
@@ -3091,7 +3093,15 @@ def parse_command_usage_listing(text):
         elif command_root != root:
             return None
         entries.append((command, description))
-    return entries if len(entries) >= 3 else None
+    if not entries or (len(entries) < 3 and not trailing):
+        return None
+    return entries, semantic_display_chunks("\n".join(trailing))
+
+
+def parse_command_usage_listing(text):
+    """Parse a ``command - description`` Usage screen safely."""
+    parts = _command_usage_parts(text)
+    return parts[0] if parts else None
 
 
 def is_command_usage_listing(text):
@@ -3100,23 +3110,65 @@ def is_command_usage_listing(text):
 
 def translate_command_usage_listing(text, c):
     """Translate descriptions in one batch while preserving typeable commands."""
-    entries = parse_command_usage_listing(text)
-    if not entries:
+    parts = _command_usage_parts(text)
+    if not parts:
         raise RuntimeError("COMMAND_USAGE_PARSE_FAILED")
+    entries, trailing = parts
     descriptions = [description for _command, description in entries]
+    units = [("translate", description) for description in descriptions]
+    units.extend(("translate", paragraph) for paragraph in trailing)
     translated = translate_semantic_units(
-        [("translate", description) for description in descriptions],
+        units,
         c,
         "command_usage",
     ).splitlines()
-    if len(translated) != len(entries):
+    if len(translated) != len(entries) + len(trailing):
         raise RuntimeError("COMMAND_USAGE_LINE_COUNT_MISMATCH")
     output = ["用法："]
     output.extend(
         "%s - %s" % (command, description_zh)
         for (command, _description), description_zh in zip(entries, translated)
     )
+    output.extend(translated[len(entries):])
     return "\n".join(output)
+
+
+CRAFTABLE_KEYWORD_ROW = re.compile(r"^\s*\[\s*([^\]]+?)\s*\]\s*$")
+
+
+def is_craftable_material_listing(text):
+    rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return sum(bool(CRAFTABLE_KEYWORD_ROW.fullmatch(row)) for row in rows) >= 5
+
+
+def craftable_material_units(text):
+    """Keep typeable bracket keywords separate from translated material prose."""
+    rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    units, prose = [], []
+
+    def flush_prose():
+        if prose:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose)))
+            prose[:] = []
+
+    for row in rows:
+        match = CRAFTABLE_KEYWORD_ROW.fullmatch(row)
+        if match:
+            flush_prose()
+            units.append(("raw", "[%s]" % match.group(1).strip()))
+        elif row.strip():
+            prose.append(row.strip())
+    flush_prose()
+    if sum(kind == "raw" for kind, _value in units) < 5:
+        return []
+    return units
+
+
+def translate_craftable_material_listing(text, c):
+    units = craftable_material_units(text)
+    if not units:
+        raise RuntimeError("CRAFTABLE_MATERIAL_PARSE_FAILED")
+    return translate_semantic_units(units, c, "craftable_material")
 
 
 def translate_help_metadata_unit(row, c):
@@ -3679,7 +3731,7 @@ def should_bypass_whole_block_cache(text):
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
-            is_command_usage_listing(text) or
+            is_command_usage_listing(text) or is_craftable_material_listing(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
             is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
             is_numeric_report_block(text) or
@@ -5401,6 +5453,8 @@ def translate(text,c):
         return translate_available_level_skills_block(text, c)
     if is_command_usage_listing(text):
         return translate_command_usage_listing(text, c)
+    if is_craftable_material_listing(text):
+        return translate_craftable_material_listing(text, c)
     if is_room_preview_block(text):
         return translate_room_preview_block(text, c)
     if is_quest_information_block(text):

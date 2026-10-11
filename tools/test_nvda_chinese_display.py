@@ -29,6 +29,8 @@ FUNCTIONS = {
     "_translationChinesePresentationLines",
     "_translationPairedDialogueLines",
     "_isStructuredTranslationReview",
+    "_boundedReviewChunks",
+    "_boundedBilingualFallback",
     "_translationReviewMetadata",
     "_translationReviewPresentation",
     "_translationPresentationChineseStart",
@@ -326,6 +328,11 @@ def main() -> None:
     assert period_room_lines[0].endswith("At the base of a large tree."), period_room_lines
     assert period_room_lines[1].endswith("You're at the base of a huge tree."), period_room_lines
     assert period_room_lines[-1].endswith("A flying bit of fluff just dive-bombed you!"), period_room_lines
+
+    huge_fallback = (("很長的未分類內容，" * 90) + " | " + ("unknown structured output " * 90)).strip()
+    huge_lines = present(huge_fallback).splitlines()
+    assert len(huge_lines) >= 3, len(huge_lines)
+    assert max(map(len, huge_lines)) <= 1250, max(map(len, huge_lines))
 
     addon_source = MODULE.read_text(encoding="utf-8")
     navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]

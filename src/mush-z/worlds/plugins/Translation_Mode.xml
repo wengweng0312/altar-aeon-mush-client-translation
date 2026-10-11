@@ -1187,6 +1187,62 @@ local function wrapped_semantic_source_lines(lines)
   return output
 end
 
+local function command_usage_semantic_source_lines(lines)
+  local rows = {}
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then rows[#rows + 1] = value end
+  end
+  if #rows < 2 or rows[1]:lower() ~= "usage:" then return nil end
+  local output = {rows[1]}
+  local root, command_count, trailing_start = nil, 0, nil
+  for i = 2, #rows do
+    local command = rows[i]:match("^(.-)%s+%-%s+.+$")
+    if not command then trailing_start = i break end
+    command = command:gsub("%s+$", "")
+    local command_root = command:match("^([%a][%w'%-]*)%f[%W]")
+    if not command_root then return nil end
+    command_root = command_root:lower()
+    if not root then root = command_root elseif root ~= command_root then return nil end
+    output[#output + 1] = rows[i]
+    command_count = command_count + 1
+  end
+  if command_count == 0 or (command_count < 3 and not trailing_start) then return nil end
+  if trailing_start then
+    local trailing = {}
+    for i = trailing_start, #rows do trailing[#trailing + 1] = rows[i] end
+    local semantic = wrapped_semantic_source_lines(trailing)
+    for _, value in ipairs(semantic) do output[#output + 1] = value end
+  end
+  return output
+end
+
+local function craftable_material_semantic_source_lines(lines)
+  local output, prose, keyword_count = {}, {}, 0
+  local function flush_prose()
+    if #prose == 0 then return end
+    local semantic = wrapped_semantic_source_lines(prose)
+    for _, value in ipairs(semantic) do output[#output + 1] = value end
+    prose = {}
+  end
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      local keyword = value:match("^%[%s*(.-)%s*%]$")
+      if keyword then
+        flush_prose()
+        output[#output + 1] = "[" .. keyword .. "]"
+        keyword_count = keyword_count + 1
+      else
+        prose[#prose + 1] = value
+      end
+    end
+  end
+  flush_prose()
+  if keyword_count < 5 then return nil end
+  return output
+end
+
 -- "In the next room you see:" blocks contain three different kinds of rows:
 -- a fixed header, an optional room title, display-wrapped prose, and trailing
 -- NPC/object rows.  The worker preserves those meanings, but the physical
@@ -1356,6 +1412,22 @@ local function collect_accessible_history(original, translated)
     end
   end
   local translated_lines = split_lines(translated_text)
+  local command_usage_source = command_usage_semantic_source_lines(source_lines)
+  if command_usage_source and #command_usage_source == #translated_lines then
+    for i, en in ipairs(command_usage_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
+  local craftable_source = craftable_material_semantic_source_lines(source_lines)
+  if craftable_source and #craftable_source == #translated_lines then
+    for i, en in ipairs(craftable_source) do
+      local zh = translated_lines[i]:gsub("^%s+", ""):gsub("%s+$", "")
+      if zh ~= "" then entries[#entries + 1] = zh .. " | " .. en end
+    end
+    return entries
+  end
   local dialogue_source = wrapped_dialogue_source_lines(source_lines)
   if dialogue_source and #dialogue_source == #translated_lines then
     for i, en in ipairs(dialogue_source) do

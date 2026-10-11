@@ -722,6 +722,35 @@ def _isStructuredTranslationReview(english):
 	return bool(re.search(r"\b\d{1,3}%\b", value) or re.search(r"(?:^|\s)--(?:\s|$)", value))
 
 
+def _boundedReviewChunks(value, limit=600):
+	"""Bound malformed legacy single rows so NVDA text ranges stay responsive."""
+	value = (value or "").strip()
+	chunks = []
+	while len(value) > limit:
+		window = value[:limit + 1]
+		breaks = [match.end() for match in re.finditer(r"[。！？!?；;，,\]\)]\s*|\s+", window)]
+		cut = max((point for point in breaks if point >= limit // 2), default=limit)
+		chunks.append(value[:cut].strip())
+		value = value[cut:].strip()
+	if value:
+		chunks.append(value)
+	return chunks
+
+
+def _boundedBilingualFallback(chinese, english):
+	chineseChunks = _boundedReviewChunks(chinese)
+	englishChunks = _boundedReviewChunks(english)
+	count = max(len(chineseChunks), len(englishChunks))
+	if count <= 1:
+		return chinese + " | " + english
+	rows = []
+	for index in range(count):
+		left = chineseChunks[index] if index < len(chineseChunks) else ""
+		right = englishChunks[index] if index < len(englishChunks) else ""
+		rows.append((left + " | " + right).strip())
+	return "\n".join(rows)
+
+
 def _translationReviewMetadata(text):
 	"""Remove Translation Mode's private category marker from review text."""
 	match = re.match(r"^\x1eTMREVIEW:(quest|job|skills)\x1e", text or "")
@@ -762,7 +791,7 @@ def _translationReviewPresentation(text):
 			pairedProse = _translationPairedProseLines(chinese, english)
 			if pairedProse:
 				return "\n".join(pairedProse)
-		return chineseLine + " | " + englishLine
+		return _boundedBilingualFallback(chineseLine, englishLine)
 	chineseLines = _translationChinesePresentationLines(chinese, english)
 	keys = _translationEnglishKeys(english)
 	englishLines = [line.strip() for line in english.splitlines() if line.strip()]
