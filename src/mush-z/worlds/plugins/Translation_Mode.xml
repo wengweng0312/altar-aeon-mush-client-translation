@@ -1080,30 +1080,87 @@ local function room_semantic_source_lines(value)
     if cleaned ~= "" then rows[#rows + 1] = cleaned end
   end
   if #rows < 3 then return nil end
-  local title = rows[1]
-  if #title > 100 or title:match("[%.%!%?%:%;]$") then return nil end
-  local body = table.concat(rows, " ", 2)
-  local sentences, start = {}, 1
-  while start <= #body do
-    local nearest_start, nearest_end = nil, nil
-    for _, delimiter in ipairs({".", "!", "?"}) do
-      local a, b = body:find(delimiter, start, true)
-      if a and (not nearest_start or a < nearest_start) then nearest_start, nearest_end = a, b end
-    end
-    if not nearest_start then break end
-    local finish = nearest_end
-    while finish < #body do
-      local next_byte = body:sub(finish + 1, finish + 1)
-      if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end
-    end
-    local sentence = body:sub(start, finish):gsub("^%s+", ""):gsub("%s+$", "")
-    if sentence ~= "" then sentences[#sentences + 1] = sentence end
-    start = finish + 1
+  local function prefix_complete(text)
+    return text:match("[%.%!%?][\"'%)%]]*$") ~= nil
+      or text == "In the next room you see:"
+      or text == "Nearby you see:"
+      or text:lower():match("^your next cheapest level%f[%W]") ~= nil
   end
-  local tail = body:sub(start):gsub("^%s+", ""):gsub("%s+$", "")
-  if tail ~= "" then sentences[#sentences + 1] = tail end
+  local function starts_with_word(text, words)
+    for _, word in ipairs(words) do
+      if text:match("^" .. word .. "%f[%W]") then return true end
+    end
+    return false
+  end
+  local function contains_word(text, words)
+    for _, word in ipairs(words) do
+      if text:match("%f[%a]" .. word .. "%f[%A]") then return true end
+    end
+    return false
+  end
+  local function sentence_parts(text)
+    local sentences, start = {}, 1
+    while start <= #text do
+      local nearest_start, nearest_end = nil, nil
+      for _, delimiter in ipairs({".", "!", "?"}) do
+        local a, b = text:find(delimiter, start, true)
+        if a and (not nearest_start or a < nearest_start) then nearest_start, nearest_end = a, b end
+      end
+      if not nearest_start then break end
+      local finish = nearest_end
+      while finish < #text do
+        local next_byte = text:sub(finish + 1, finish + 1)
+        if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end
+      end
+      local sentence = text:sub(start, finish):gsub("^%s+", ""):gsub("%s+$", "")
+      if sentence ~= "" then sentences[#sentences + 1] = sentence end
+      start = finish + 1
+    end
+    local tail = text:sub(start):gsub("^%s+", ""):gsub("%s+$", "")
+    if tail ~= "" then sentences[#sentences + 1] = tail end
+    return sentences
+  end
+  local title_index = nil
+  for i = 1, math.min(9, #rows - 1) do
+    local row = rows[i]
+    local lower = row:lower()
+    local excluded_start = starts_with_word(lower,
+      {"you", "your", "there", "exit", "exits", "mob", "mobs", "level", "experience"})
+    local non_title = contains_word(lower,
+      {"cast", "casts", "attack", "attacks", "strike", "strikes", "kill", "kills", "assist", "assists"})
+      or lower:find(" is dead", 1, true) ~= nil
+    local prefixes_ok = true
+    for p = 1, i - 1 do if not prefix_complete(rows[p]) then prefixes_ok = false break end end
+    local ordinary = row:match("[%.%!%?%:%;]$") == nil
+    local word_count = 0
+    for _ in row:gsub("%.$", ""):gmatch("%S+") do word_count = word_count + 1 end
+    local period_start = starts_with_word(lower,
+      {"a", "an", "the", "near", "inside", "outside", "at", "in", "before", "beyond", "overlooking", "climbing", "heading", "following"})
+    local period_title = row:match("%.$") ~= nil and word_count <= 12 and (i == 1 or period_start)
+    local body = {}
+    for j = i + 1, math.min(i + 4, #rows) do body[#body + 1] = rows[j] end
+    local wrapped = false
+    if #body >= 2 then
+      for j = 1, math.min(3, #body) do
+        if #body[j] >= 35 and not prefix_complete(body[j]) then wrapped = true break end
+      end
+    end
+    if #row <= 70 and not excluded_start and not non_title and prefixes_ok
+        and (ordinary or period_title) and wrapped then
+      title_index = i
+      break
+    end
+  end
+  if not title_index then return nil end
+  local output = {}
+  if title_index > 1 then
+    local prefix = sentence_parts(table.concat(rows, " ", 1, title_index - 1))
+    for _, sentence in ipairs(prefix) do output[#output + 1] = sentence end
+  end
+  output[#output + 1] = rows[title_index]
+  local body = table.concat(rows, " ", title_index + 1)
+  local sentences = sentence_parts(body)
   if #sentences < 2 then return nil end
-  local output = {title}
   for _, sentence in ipairs(sentences) do output[#output + 1] = sentence end
   return output
 end

@@ -305,6 +305,28 @@ def main() -> None:
     mismatched_dialogue = "守衛說：「快走。現在！」 | A guard says, 'Leave now.'"
     assert present(mismatched_dialogue) == mismatched_dialogue
 
+    period_room_english = (
+        "At the base of a large tree.\n"
+        "You're at the base of a huge tree. Looking up it seems to go up forever, almost\n"
+        "like one of those giant sequoia trees you've read about in your science\n"
+        "books. You feel, for a moment, like you're standing next to living history,\n"
+        "but then your adventurous nature takes over, and you simply have to climb it!\n"
+        "A flying bit of fluff just dive-bombed you!"
+    )
+    period_room_chinese = (
+        "在一棵大樹的樹根旁。\n"
+        "你站在一棵大樹的底部。\n"
+        "看起來像是永遠向上生長，幾乎就像你在科學書中讀到的那些巨大的紅杉樹一樣。\n"
+        "你會覺得，有一瞬間你站在了活生生的歷史旁邊，但隨後你的冒險天性就會占據主導地位，你就不得不爬上去！\n"
+        "一隻飛舞的毛絨小東西剛剛向你投擲了一枚炸彈！"
+    )
+    assert module["_englishRoomTitleIndex"](period_room_english.splitlines()) == 0
+    period_room_lines = present(period_room_chinese + " | " + period_room_english).splitlines()
+    assert len(period_room_lines) == 5, period_room_lines
+    assert period_room_lines[0].endswith("At the base of a large tree."), period_room_lines
+    assert period_room_lines[1].endswith("You're at the base of a huge tree."), period_room_lines
+    assert period_room_lines[-1].endswith("A flying bit of fluff just dive-bombed you!"), period_room_lines
+
     addon_source = MODULE.read_text(encoding="utf-8")
     navigator_method = addon_source.split("\tdef setNavigator(self):", 1)[1].split("\n\n\nclass AppModule", 1)[0]
     assert "currentNavigator = api.getNavigatorObject()" in navigator_method

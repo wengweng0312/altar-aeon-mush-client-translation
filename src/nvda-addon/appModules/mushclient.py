@@ -205,16 +205,41 @@ def _safeEntityKey(value):
 
 
 def _englishRoomTitleIndex(rows):
-	"""Find a room title even when a status line precedes the room block."""
-	for index, row in enumerate(rows[:-1]):
-		if not row or len(row) > 80 or re.search(r"[.!?:;]$", row):
+	"""Mirror the worker's conservative room-title boundary detection."""
+	prefixEnd = re.compile(r"[.!?][\"')\]]*$")
+	safePrefix = re.compile(
+		r"^(?:(?:In the next room you see|Nearby you see):|Your next cheapest level\b.*)$",
+		re.I,
+	)
+	nonTitle = re.compile(r"\b(?:casts?|attacks?|strikes?|kills?|is DEAD|assists?)\b", re.I)
+	periodStart = re.compile(
+		r"^(?:A|An|The|Near|Inside|Outside|At|In|Before|Beyond|Overlooking|"
+		r"Climbing|Heading|Following)\b",
+		re.I,
+	)
+	for index, row in enumerate(rows[:9]):
+		if index >= len(rows) - 1 or not row or len(row) > 70:
 			continue
 		if re.match(r"^(?:you|your|there|exits?|mobs?|level|experience)\b", row, re.I):
 			continue
-		nextRow = rows[index + 1]
-		# A title is normally followed by prose substantially longer than itself.
-		# This rejects an unpunctuated status line followed by the actual title.
-		if len(nextRow) >= len(row) + 8 or re.search(r"[.!?]$", nextRow):
+		if nonTitle.search(row):
+			continue
+		if index and not all(prefixEnd.search(prefix) or safePrefix.match(prefix) for prefix in rows[:index]):
+			continue
+		ordinaryTitle = not re.search(r"[.!?:;]$", row)
+		periodTitle = (
+			row.endswith(".")
+			and len(row[:-1].split()) <= 12
+			and (index == 0 or periodStart.match(row))
+		)
+		if not (ordinaryTitle or periodTitle):
+			continue
+		body = rows[index + 1:index + 5]
+		hasImmediateDisplayWrap = len(body) >= 2 and any(
+			len(line) >= 35 and not prefixEnd.search(line) for line in body[:3]
+		)
+		hasSemanticBody = bool(body) and bool(prefixEnd.search(body[0]))
+		if hasImmediateDisplayWrap or hasSemanticBody:
 			return index
 	return -1
 
