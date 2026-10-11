@@ -2196,15 +2196,58 @@ def semantic_sentence_chunks(text):
     return chunks
 
 
+ROOM_PREFIX_END = re.compile(r"[.!?][\"')\]]*$")
+ROOM_SAFE_PREFIX = re.compile(
+    r"^(?:In the next room you see|Nearby you see):$", re.I
+)
+ROOM_NON_TITLE = re.compile(
+    r"\b(?:casts?|attacks?|strikes?|kills?|is DEAD|assists?)\b", re.I
+)
+ROOM_PERIOD_TITLE_START = re.compile(
+    r"^(?:A|An|The|Near|Inside|Outside|At|In|Before|Beyond|Overlooking|"
+    r"Climbing|Heading|Following)\b",
+    re.I,
+)
+ROOM_NON_PROSE_BLOCK = re.compile(
+    r"(?:^|\n)(?:keywords are:|skill:|spell:|usage:|syntax:|quest name:|"
+    r"current goal|previous goal|on ground contains:|"
+    r"you know the following skills:|you are carrying:|"
+    r"you have discovered or been given the following quests:)",
+    re.I,
+)
+
+
 def room_title_index(rows):
-    """Find a room title even when movement/status text precedes it."""
-    for index, row in enumerate(rows[:-1]):
-        if not row or len(row) > 100 or re.search(r"[.!?:;。！？：；]$", row):
+    """Find a conservatively shaped room title after up to eight complete notices."""
+    for index, row in enumerate(rows[:9]):
+        if index >= len(rows) - 1 or not row or len(row) > 70:
             continue
         if re.match(r"^(?:you|your|there|exits?|mobs?|level|experience)\b", row, re.I):
             continue
-        following = rows[index + 1]
-        if len(following) >= len(row) + 8 or re.search(r"[.!?。！？]$", following):
+        if ROOM_NON_TITLE.search(row):
+            continue
+        if index and not all(
+            ROOM_PREFIX_END.search(prefix) or ROOM_SAFE_PREFIX.match(prefix)
+            for prefix in rows[:index]
+        ):
+            continue
+        ordinary_title = not re.search(r"[.!?:;。！？：；]$", row)
+        period_title = (
+            row.endswith(".")
+            and len(row.rstrip(".").split()) <= 12
+            and (index == 0 or ROOM_PERIOD_TITLE_START.match(row))
+        )
+        if not (ordinary_title or period_title):
+            continue
+        body = rows[index + 1:index + 5]
+        has_immediate_display_wrap = (
+            len(body) >= 2
+            and any(
+                len(line) >= 35 and not ROOM_PREFIX_END.search(line)
+                for line in body[:3]
+            )
+        )
+        if has_immediate_display_wrap:
             return index
     return -1
 
@@ -2319,6 +2362,12 @@ def is_room_prose_candidate(text):
     if len(value) < 180 or len(rows) < 3:
         return False
     if room_title_index(rows) < 0:
+        return False
+    if re.match(r"^it's a\s+", value, re.I):
+        return False
+    if ROOM_NON_PROSE_BLOCK.search(value):
+        return False
+    if any(re.search(r"-{8,}|\s{3,}\w+\s{3,}", row) for row in rows[:6]):
         return False
     if re.search(r"\b(?:says|asks|tells|exclaims|yells|whispers),?\s*['\"]", value, re.I):
         return False
