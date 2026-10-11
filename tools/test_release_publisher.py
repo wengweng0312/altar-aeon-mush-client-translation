@@ -22,6 +22,19 @@ assert "release not found|HTTP 404" in publisher
 assert "SysWOW64\\WindowsPowerShell" in publisher
 assert "RELEASE COMPLETED AND PLAYER UPDATE CHECK PASSED" in publisher
 assert "wengweng0312" not in publisher  # destination comes from origin
+assert "function Assert-RemoteBranchContained" in publisher
+assert "git -C $Root fetch origin $BranchName" in publisher
+assert 'merge-base --is-ancestor "origin/$BranchName" HEAD' in publisher
+assert "Assert-RemoteBranchContained $Branch" in publisher
+assert publisher.index("Assert-RemoteBranchContained $Branch") < publisher.index("WriteAllText($repositoryFile")
+assert "force-with-lease" not in publisher
+assert "force push" in publisher
+
+# Tests intentionally run before build_release. The Git-aware validator must
+# ignore their ignored runtime logs while retaining the source safety scan.
+validator = (ROOT / "tools/validate_source.py").read_text(encoding="utf-8-sig")
+assert '"ls-files", "-z", "--cached", "--others", "--exclude-standard"' in validator
+assert "BANNED_NAMES" in validator and "validate_names()" in validator
 
 assert "python tools/build_release.py" in workflow
 assert '--repository "${{ github.repository }}"' in workflow

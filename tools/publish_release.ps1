@@ -66,6 +66,31 @@ function Normalize-Version([string]$Value) {
     return $clean
 }
 
+function Assert-RemoteBranchContained([string]$BranchName) {
+    # Fetch before touching version files or creating a release commit.  The
+    # release workflow commits its updater manifest back to main, so a checkout
+    # that was current before the previous release can legitimately be behind.
+    Invoke-Checked { git -C $Root fetch origin $BranchName } "Unable to refresh origin/$BranchName. Publishing stopped before changing any release files."
+    Invoke-Checked { git -C $Root rev-parse --verify "refs/remotes/origin/$BranchName" } "Remote branch origin/$BranchName is unavailable. Publishing stopped safely."
+
+    & git -C $Root merge-base --is-ancestor "origin/$BranchName" HEAD
+    if ($LASTEXITCODE -eq 0) { return }
+    if ($LASTEXITCODE -ne 1) {
+        throw "Unable to compare HEAD with origin/$BranchName. Publishing stopped before changing any release files."
+    }
+
+    & git -C $Root merge-base --is-ancestor HEAD "origin/$BranchName"
+    $relation = if ($LASTEXITCODE -eq 0) { "the remote branch is ahead of this checkout" } else { "the local and remote branches have diverged" }
+    throw @"
+Publishing stopped safely before changing the version or creating a release commit because $relation.
+Your local commits were not removed or overwritten.
+Synchronize the checkout first, for example:
+  git fetch origin
+  git rebase origin/$BranchName
+If rebase reports a conflict, stop and ask Codex or another experienced Git user to resolve it; do not force push.
+"@
+}
+
 Set-Location $Root
 Invoke-Checked { gh auth status } "GitHub login is unavailable. Run gh auth login first."
 $Repository = Get-Repository
@@ -76,6 +101,7 @@ if (-not $Branch) { throw "The repository is in detached HEAD state." }
 $DefaultBranch = (& gh repo view $Repository --json defaultBranchRef --jq .defaultBranchRef.name).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $DefaultBranch) { throw "Unable to determine the default branch." }
 if ($Branch -ne $DefaultBranch) { throw "Publishing is allowed only from the default branch '$DefaultBranch'. Current branch: '$Branch'." }
+Assert-RemoteBranchContained $Branch
 
 $latestCheck = Invoke-GhCaptured @("release", "view", "--repo", $Repository, "--json", "tagName", "--jq", ".tagName")
 $LatestTag = if ($latestCheck.ExitCode -eq 0) { $latestCheck.Output } else { "" }
@@ -128,6 +154,10 @@ if ($DryRun) {
 
 $answer = Read-Host "Publish to this repository? Type Y to continue"
 if ($answer -notmatch '^[Yy]$') { throw "Publishing cancelled by user." }
+
+# Check again after the interactive prompts.  A previous workflow could have
+# published its manifest while the user was choosing the version/package.
+Assert-RemoteBranchContained $Branch
 
 $repositoryFile = Join-Path $Bridge "release_repository.txt"
 [System.IO.File]::WriteAllText($repositoryFile, $Repository + "`n", [System.Text.UTF8Encoding]::new($false))

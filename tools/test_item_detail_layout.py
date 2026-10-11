@@ -69,7 +69,24 @@ def main() -> None:
     rendered = icebringer.replace("2_WIELD", "雙手持握")
     assert (module.Decimal("2"), False) not in module.numeric_values(icebringer)
     assert module.numeric_items_preserved(icebringer, rendered)
-    print("ITEM_DETAIL_LAYOUT_OK fields=13 internal_component_comma=preserved")
+    total_levels = (
+        "a cloak of concealment, Total levels: 61 (and 20 thief), "
+        "Comp: TEXTILE, FABRIC, Type: ARMOR, Weight: 12 RARE ANTI_GOOD THIEF, "
+        "AC: 2, ABOUT_BODY, HIDE by 1, DAMROLL by 2, THIEF_SKILL_LEVEL by 1, "
+        "Quality: WELL CRAFTED, This item is bound to you."
+    )
+    assert module.is_numeric_report_block(total_levels)
+    total_fields = module.split_item_detail_fields(total_levels)
+    assert total_fields and total_fields[1] == "Total levels: 61 (and 20 thief)", total_fields
+    assert module.translate_item_detail_field(total_fields[1], {}) == "總等級：61（另含 20 級盜賊）"
+    module.cache_get = lambda source, config: None
+    module.cache_put = lambda source, translated, config: None
+    module.translate_piece = lambda source, config, **kwargs: "譯：" + source
+    translated_total = module.translate_item_detail_line(total_levels, {})
+    assert translated_total and len(translated_total.splitlines()) >= 10, translated_total
+    assert "總等級：61（另含 20 級盜賊）" in translated_total
+    assert module.numeric_items_preserved(total_levels, translated_total)
+    print("ITEM_DETAIL_LAYOUT_OK fields=13 total_levels=yes internal_component_comma=preserved")
 
 
 if __name__ == "__main__":

@@ -560,6 +560,32 @@ def _translationPairedMonsterLoreLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationTaskListLines(english):
+	"""Return task-list rows only for worker-owned line-preserving formats."""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if len(rows) < 2:
+		return []
+	first = rows[0].lower()
+	isTaskList = (
+		first == "you have discovered or been given the following quests:"
+		or "following quests are available to you at this time:" in first
+		or first == "there are the following unfinished quests nearby:"
+		or first == "currently accepted jobs:"
+	)
+	return rows if isTaskList else []
+
+
+def _translationPairedTaskListLines(chinese, english):
+	"""Pair task tables by exact row; never reinterpret rows as prose."""
+	englishRows = _translationTaskListLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationPairedProseLines(chinese, english):
 	"""Pair ordinary narrative/dialogue only when every sentence aligns."""
 	def splitSentences(value, terminators, requireWhitespace):
@@ -871,6 +897,9 @@ def _translationReviewPresentation(text):
 	chineseLine = re.sub(r"\s+", " ", chinese).strip()
 	englishLine = re.sub(r"\s+", " ", english).strip()
 	if chineseLine and englishLine:
+		pairedTaskList = _translationPairedTaskListLines(chinese, english)
+		if pairedTaskList:
+			return "\n".join(pairedTaskList)
 		pairedCommandUsage = _translationPairedCommandUsageLines(chinese, english)
 		if pairedCommandUsage:
 			return "\n".join(pairedCommandUsage)

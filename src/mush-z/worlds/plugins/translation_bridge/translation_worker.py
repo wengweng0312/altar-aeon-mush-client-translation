@@ -2775,7 +2775,11 @@ def is_numeric_report_block(text):
         return False
     if len(lines) >= 2 and lines[0].startswith("Comparing objects "):
         return True
-    return any(", Level:" in line and ", Type:" in line for line in lines)
+    return any(
+        re.search(r",\s*(?:Level|Total levels):", line, re.I)
+        and re.search(r",\s*Type:", line, re.I)
+        for line in lines
+    )
 
 
 ITEM_AFFECT_CODES = (
@@ -2794,14 +2798,14 @@ ITEM_WEAR_CODES = (
     "BODY", "ON_BODY", "ABOUT_BODY", "WAIST", "LEGS", "FEET", "SHIELD", "2_WIELD",
 )
 ITEM_DETAIL_FIELD_BOUNDARY = re.compile(
-    r",\s*(?=(?:Level|Comp|Type|Weight|AC|Damage|Speed|Damage Type|Quality):"
+    r",\s*(?=(?:Level|Total levels|Comp|Type|Weight|AC|Damage|Speed|Damage Type|Quality):"
     r"|\d+\s+wield strength(?:\b|$)|(?:" + "|".join(ITEM_AFFECT_CODES) + r")\s+by\b"
     r"|(?:" + "|".join(ITEM_WEAR_CODES) + r")(?:\b|$)|This item\b|Spells? on wearer:)",
     re.I,
 )
 
 ITEM_FIELD_LABELS_ZH = {
-    "level": "等級", "comp": "材質", "type": "類型", "weight": "重量",
+    "level": "等級", "total levels": "總等級", "comp": "材質", "type": "類型", "weight": "重量",
     "ac": "護甲值", "damage": "傷害", "speed": "速度",
     "damage type": "傷害類型", "quality": "品質",
 }
@@ -2816,7 +2820,7 @@ ITEM_DAMAGE_WORDS_ZH = {
 def split_item_detail_fields(line):
     """Split a dense identify row only at known field boundaries."""
     value = str(line).strip()
-    if ", Level:" not in value or ", Type:" not in value:
+    if not re.search(r",\s*(?:Level|Total levels):", value, re.I) or not re.search(r",\s*Type:", value, re.I):
         return None
     fields = [field.strip(" ,") for field in ITEM_DETAIL_FIELD_BOUNDARY.split(value)]
     fields = [field for field in fields if field]
@@ -2850,7 +2854,15 @@ def translate_item_detail_field(field, c):
         raw_label, value = label.groups()
         key = raw_label.lower()
         zh_label = ITEM_FIELD_LABELS_ZH.get(key, raw_label)
-        if key == "comp":
+        if key == "total levels":
+            total = re.fullmatch(r"(\d+)\s*\(and\s+(\d+)\s+([a-z]+)\)", value, re.I)
+            if total:
+                class_name = {
+                    "mage": "法師", "cleric": "牧師", "thief": "盜賊",
+                    "warrior": "戰士", "necromancer": "死靈法師", "druid": "德魯伊",
+                }.get(total.group(3).lower(), total.group(3))
+                value = "%s（另含 %s 級%s）" % (total.group(1), total.group(2), class_name)
+        elif key == "comp":
             parts = [item_glossary_value("composition", token) or token for token in value.split(",")]
             value = "、".join(part.strip() for part in parts)
         elif key == "type":

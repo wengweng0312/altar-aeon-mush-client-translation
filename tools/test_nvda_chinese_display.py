@@ -22,6 +22,8 @@ FUNCTIONS = {
     "_splitMergedChineseRoomTitle",
 	"_translationPairedRoomLines",
     "_translationPairedMonsterLoreLines",
+    "_translationTaskListLines",
+    "_translationPairedTaskListLines",
     "_translationPairedProseLines",
     "_isHelpUsageCommand",
     "_translationHelpSemanticLines",
@@ -221,6 +223,27 @@ def main() -> None:
     assert "TMREVIEW" not in present(job_marked)
     assert present(job_marked) == "目前接受的工作： | Currently accepted jobs:"
     assert original(job_marked) == "Currently accepted jobs:"
+
+    nearby_english = (
+        "There are the following unfinished quests nearby:\n"
+        "Num  Level  Name\n"
+        "  1     27  Free a special mushroom for an alchemist.\n"
+        "  2     28  Give a troll a chance.\n"
+        "For details on a quest, use 'quest nearby'. For example, 'quest nearby 1'."
+    )
+    nearby_chinese = (
+        "附近有以下尚未完成的任務：\n"
+        "編號　等級　名稱\n"
+        "  1　27　為煉金術士釋放一種特殊蘑菇。\n"
+        "  2　28　給巨魔一次機會。\n"
+        "若要查看任務詳情，請使用 quest nearby，例如 quest nearby 1。"
+    )
+    nearby_lines = present(nearby_chinese + " | " + nearby_english).splitlines()
+    assert len(nearby_lines) == 5, nearby_lines
+    assert nearby_lines[0].endswith("There are the following unfinished quests nearby:"), nearby_lines
+    assert nearby_lines[2].endswith("Free a special mushroom for an alchemist."), nearby_lines
+    assert nearby_lines[3].endswith("Give a troll a chance."), nearby_lines
+    assert nearby_lines[-1].endswith("For example, 'quest nearby 1'."), nearby_lines
 
 	# Long NPC speech is split only when both languages have the same safe
 	# sentence count. It remains one history entry, with one bilingual row per

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -38,8 +39,34 @@ def fail(message: str) -> None:
     raise RuntimeError(message)
 
 
+def repository_source_paths() -> list[Path]:
+    """Return files Git would include, plus non-ignored untracked source files.
+
+    Regression tests import the worker and can create ignored runtime logs in
+    ``src``.  Those files are not part of a commit or release checkout and must
+    not make a later source validation fail.  Tracked artifacts and unignored
+    new files remain visible, so the privacy/generated-file guard stays active.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "src"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return sorted(
+            ROOT / item.decode("utf-8", errors="surrogateescape")
+            for item in result.stdout.split(b"\0")
+            if item
+        )
+    except (OSError, subprocess.SubprocessError):
+        # Source archives without .git metadata still receive the conservative
+        # filesystem scan used before this Git-aware CI fix.
+        return sorted(path for path in SOURCE.rglob("*") if path.is_file())
+
+
 def validate_names() -> None:
-    for path in SOURCE.rglob("*"):
+    for path in repository_source_paths():
         lowered = path.name.lower()
         if lowered in BANNED_NAMES:
             fail(f"private/generated file present: {path.relative_to(ROOT)}")
@@ -79,7 +106,7 @@ def validate_data() -> None:
 
 
 def validate_secrets() -> None:
-    for path in SOURCE.rglob("*"):
+    for path in repository_source_paths():
         if not path.is_file() or path.suffix.lower() not in {
             ".txt", ".json", ".xml", ".py", ".pyw", ".ps1", ".cmd", ".ini"
         }:
