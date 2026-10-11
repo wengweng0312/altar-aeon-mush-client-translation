@@ -62,6 +62,8 @@ backup_*
 .test-tmp/
 artifacts/
 deployment_backups/
+/analysis/
+/analysis_output/
 
 # Sanitized, intentionally versioned examples may use these names
 !cloud_translation_config.example.txt
