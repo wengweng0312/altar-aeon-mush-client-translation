@@ -89,9 +89,24 @@ You can see more information with the 'quest info' command."""
     worker.translate_task_list_block = lambda text, config, kind: "QUEST_LIST"
     assert worker.translate(nearby, {}) == "QUEST_LIST"
     assert worker.translate(available, {}) == "QUEST_LIST"
+
+    reward_tasks = """Complete the 3 tasks below to gain a reward.
+ Milk an animal.
+ Reveal a curse on a creature.
+ Kill a mob with a backstab."""
+    assert worker.is_reward_task_block(reward_tasks)
+    reward_result = worker.translate_reward_task_block(reward_tasks, {})
+    assert reward_result.splitlines() == [
+        "完成以下 3 項任務即可獲得獎勵。",
+        " 替動物擠奶。",
+        " 揭露一個生物身上的詛咒。",
+        " 使用「背刺」殺死一隻怪物。",
+    ], reward_result
+    assert worker.numeric_items_preserved(reward_tasks, reward_result)
+    assert not worker.is_reward_task_block(reward_tasks.replace("Complete the 3 tasks", "Complete the 4 tasks"))
     print(
         "QUEST_LONG_DESCRIPTION_LAYOUT_OK semantic_rows=3 "
-        "display_wraps_joined=yes quest_lists_prioritized=yes"
+        "display_wraps_joined=yes quest_lists_prioritized=yes reward_tasks=yes"
     )
 
 

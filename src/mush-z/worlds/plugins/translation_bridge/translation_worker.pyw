@@ -182,6 +182,8 @@ QUEST_LIST_ROW = re.compile(r"^(\s*)Quest\s+(\d+)\s+-\s+(.*?)(\s+\[ACTIVE\])?(\s
 QUEST_AVAILABLE_ROW = re.compile(r"^(\s*)\[\s*(\d+)\]\s*(.*?)(\s*)$", re.IGNORECASE)
 JOB_LIST_ROW = re.compile(r"^(\s*)Job\s+(\d+)\s*:\s*(.*?)(\s*)$", re.IGNORECASE)
 NEARBY_QUEST_ROW = re.compile(r"^(\s*)(\d+)\s+(\d+)\s+(.+?)(\s*)$")
+REWARD_TASK_HEADER = re.compile(r"^(\s*)Complete the (\d+) tasks below to gain a reward\.(\s*)$", re.I)
+REWARD_TASK_SKILL_KILL = re.compile(r"^(\s*)Kill a mob with (?:a|an) (.+?)\.(\s*)$", re.I)
 NEARBY_DIRECTION_HEADER = re.compile(r"^\s*Dir\s+Nearby (Landmarks|Shops)\s*$", re.IGNORECASE)
 NEARBY_DIRECTION_ROW = re.compile(
     r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
@@ -5419,6 +5421,51 @@ def is_quest_structured_block(text):
     )
 
 
+def is_reward_task_block(text):
+    lines = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(lines) < 2 or not REWARD_TASK_HEADER.match(lines[0]):
+        return False
+    expected = int(REWARD_TASK_HEADER.match(lines[0]).group(2))
+    return len(lines[1:]) == expected
+
+
+def translate_reward_task_block(text, c):
+    """Translate daily reward tasks per row and lock known skill terminology."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    fixed_tasks = {
+        "milk an animal.": "替動物擠奶。",
+        "reveal a curse on a creature.": "揭露一個生物身上的詛咒。",
+    }
+    skill_glossary = load_skill_glossary()
+    for line in lines:
+        header = REWARD_TASK_HEADER.match(line)
+        skill_kill = REWARD_TASK_SKILL_KILL.match(line)
+        if header:
+            indent, count, trailing = header.groups()
+            output.append("%s完成以下 %s 項任務即可獲得獎勵。%s" % (indent, count, trailing))
+        elif line.strip().lower() in fixed_tasks:
+            indent = line[:len(line) - len(line.lstrip())]
+            trailing = line[len(line.rstrip()):]
+            output.append(indent + fixed_tasks[line.strip().lower()] + trailing)
+        elif skill_kill:
+            indent, skill_name, trailing = skill_kill.groups()
+            translated_skill = skill_glossary.get(skill_name.strip().lower())
+            if translated_skill is None:
+                translated_skill = translate_skill_names([skill_name.strip()], c)[0]
+            output.append("%s使用「%s」殺死一隻怪物。%s" % (indent, translated_skill, trailing))
+        elif line.strip():
+            output.append(line[:len(line) - len(line.lstrip())] + translate_piece(line.strip(), c, force_robust=True))
+        else:
+            output.append("")
+    result = "\n".join(output)
+    if len(result.split("\n")) != len(lines):
+        raise RuntimeError("REWARD_TASK_LINE_COUNT_MISMATCH")
+    if not numeric_items_preserved(text, result):
+        raise RuntimeError("REWARD_TASK_NUMERIC_ITEMS_MISSING")
+    return result
+
+
 def is_quest_list_block(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if len(lines) < 2:
@@ -5630,6 +5677,8 @@ def translate_nearby_map_listing(text, c):
 
 def translate_quest_structured_block(text, c):
     """Preserve quest metadata/status and translate only semantic fields."""
+    if is_reward_task_block(text):
+        return translate_reward_task_block(text, c)
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     output, paragraph = [], []
 
