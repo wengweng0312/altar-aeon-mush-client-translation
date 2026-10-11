@@ -51,7 +51,7 @@ units = module["parse_room_preview_units"](preview)
 assert units == [
     ("translate", "You see the entrance to a large cave, made of stones and boulders piled up."),
     ("fixed", "在附近你可以看到："),
-    ("translate", "A stealthy spider guard"),
+    ("place", "A stealthy spider guard"),
     ("translate", "A stealthy spider guard"),
 ]
 

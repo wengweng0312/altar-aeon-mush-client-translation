@@ -27,6 +27,7 @@ log_archive/
 *.sqlite
 *.sqlite3
 !src/mush-z/worlds/plugins/translation_bridge/mush_structure_catalog.sqlite3
+!src/mush-z/worlds/plugins/translation_bridge/wiki_knowledge_catalog.sqlite3
 *.db-wal
 *.db-shm
 worker.lock
