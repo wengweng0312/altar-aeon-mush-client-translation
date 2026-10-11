@@ -36,6 +36,28 @@ It generally cannot be cast on targets with only minor injuries."""
         ("raw", "cast breath of life <character>"),
     ], units
     assert len(units) == 8, units
+
+    generic_help = """Showing page 1.
+Keywords are:  'reboots resets repops'
+A reboot is when the mud is shut down and restarted. This takes approximately
+15 seconds, after which time you can log back in and play again.
+There are 11 other help pages that may be related to your search.
+See 'help search reboot' for a list."""
+    assert module.is_skill_help_detail(generic_help)
+    generic_units = module.parse_help_semantic_units(generic_help)
+    assert generic_units[:2] == [
+        ("help", "Showing page 1."),
+        ("help", "Keywords are:  'reboots resets repops'"),
+    ], generic_units
+    assert len(generic_units) == 5, generic_units
+
+    quoted_skills = "Thieves start with the 'trip', 'bloodletting stab' and 'dodge' skills."
+    protected, occurrences = module.protect_known_entity_names(quoted_skills)
+    assert len(occurrences) == 3, occurrences
+    assert all(marker in protected for marker, _source, _translated, kind in occurrences if kind == "skill")
+    restored = module.restore_known_entity_names(protected, occurrences)
+    assert "'絆倒'" in restored and "'放血刺擊'" in restored and "'閃避'" in restored, restored
+    assert module.quoted_skill_pairs("Do not trip over the 'unknown phrase'.") == []
     assert module.is_help_usage_command("call list")
     assert module.is_help_usage_command("throw <object> <direction>")
     assert module.is_help_usage_command("'clobber'")

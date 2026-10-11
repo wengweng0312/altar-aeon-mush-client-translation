@@ -1293,16 +1293,15 @@ def ensure_npc_name_tables(db):
 
 
 def protect_known_entity_names(source):
-    """Replace locally confirmed proper names and mob types with opaque markers."""
+    """Protect confirmed entities and exactly quoted skill names with markers."""
     db = cache_connection()
-    if db is None:
-        return str(source), []
-    ensure_npc_name_tables(db)
     rows = []
-    rows.extend((name, translated, "npc") for name, translated in
-                db.execute("SELECT source_name,translated_name FROM npc_names"))
-    rows.extend((name, translated, "mob") for name, translated in
-                db.execute("SELECT source_name,translated_name FROM mob_types"))
+    if db is not None:
+        ensure_npc_name_tables(db)
+        rows.extend((name, translated, "npc") for name, translated in
+                    db.execute("SELECT source_name,translated_name FROM npc_names"))
+        rows.extend((name, translated, "mob") for name, translated in
+                    db.execute("SELECT source_name,translated_name FROM mob_types"))
     rows.sort(key=lambda row: len(row[0]), reverse=True)
     protected = str(source)
     occurrences = []
@@ -1313,7 +1312,31 @@ def protect_known_entity_names(source):
             occurrences.append((marker, source_name, translated_name, kind))
             return marker
         protected = pattern.sub(replace, protected)
+    # Quotation marks provide a conservative semantic boundary: only a whole
+    # quoted phrase that exactly matches the reviewed skill glossary is locked.
+    # Ordinary prose containing words such as "trip" remains untouched.
+    skill_glossary = load_skill_glossary()
+    def replace_quoted_skill(match):
+        quote, source_name = match.group(1), match.group(2)
+        translated_name = skill_glossary.get(source_name.strip().lower())
+        if translated_name is None:
+            return match.group(0)
+        marker = "ZXQNPC%04dQXZ" % len(occurrences)
+        occurrences.append((marker, source_name, translated_name, "skill"))
+        return quote + marker + quote
+    protected = re.sub(r"(['\"])([^'\"\r\n]{1,80})\1", replace_quoted_skill, protected)
     return protected, occurrences
+
+
+def quoted_skill_pairs(source):
+    """Return reviewed skill translations for exact quoted source terms."""
+    glossary = load_skill_glossary()
+    output = []
+    for match in re.finditer(r"(['\"])([^'\"\r\n]{1,80})\1", str(source)):
+        translated = glossary.get(match.group(2).strip().lower())
+        if translated is not None:
+            output.append((match.group(2), translated))
+    return output
 
 
 def restore_known_entity_names(translated, occurrences):
@@ -3178,9 +3201,10 @@ def translate_friends_listing(text, c):
 def is_skill_help_detail(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     head = rows[:6]
-    return bool(len(rows) >= 3 and
-                any(line.startswith("Keywords are:") for line in head) and
-                any(re.match(r"^(?:Skill|Spell):\s+", line, re.I) for line in head))
+    has_keywords = any(line.startswith("Keywords are:") for line in head)
+    has_typed_header = any(re.match(r"^(?:Skill|Spell):\s+", line, re.I) for line in head)
+    has_page_header = bool(rows and re.match(r"^Showing page \d+\.$", rows[0], re.I))
+    return bool(len(rows) >= 3 and has_keywords and (has_typed_header or has_page_header))
 
 
 HELP_CLASS_ZH = {
@@ -3416,6 +3440,9 @@ def translate_semantic_units(units, c, context="semantic"):
         if kind != "translate" or source in prepared or source in missing:
             continue
         translated = cache_get(source, c)
+        locked_skills = quoted_skill_pairs(source)
+        if translated is not None and any(zh not in translated for _en, zh in locked_skills):
+            translated = None
         if translated is not None and not any("\u3400" <= ch <= "\u9fff" for ch in translated):
             translated = None
         if translated is None:

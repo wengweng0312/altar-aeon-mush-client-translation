@@ -651,10 +651,11 @@ def _isHelpUsageCommand(row):
 def _translationHelpSemanticLines(english):
 	"""Mirror the worker's stable help fields, commands and prose units."""
 	rows = [line.strip() for line in english.splitlines() if line.strip()]
-	if not (
-		any(row.startswith("Keywords are:") for row in rows[:6])
-		and any(re.match(r"^(?:Skill|Spell):\s+", row, re.I) for row in rows[:6])
-	):
+	head = rows[:6]
+	hasKeywords = any(row.startswith("Keywords are:") for row in head)
+	hasTypedHeader = any(re.match(r"^(?:Skill|Spell):\s+", row, re.I) for row in head)
+	hasPageHeader = bool(rows and re.match(r"^Showing page \d+\.$", rows[0], re.I))
+	if not (hasKeywords and (hasTypedHeader or hasPageHeader)):
 		return []
 	metadata = re.compile(
 		r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"

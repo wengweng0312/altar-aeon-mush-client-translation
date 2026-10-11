@@ -160,6 +160,25 @@ def main() -> None:
     assert helpLines[5] == "cast breath of life <character> | cast breath of life <character>", helpLines
     assert helpLines[-1].endswith("It generally cannot be cast on targets with only minor injuries."), helpLines
 
+    generic_help_english = (
+        "Showing page 1.\n"
+        "Keywords are: 'reboots resets repops'\n"
+        "A reboot restarts the mud.\n"
+        "There are 11 other help pages related to your search.\n"
+        "See 'help search reboot' for a list."
+    )
+    generic_help_chinese = (
+        "顯示第 1 頁。\n"
+        "關鍵詞：'reboots resets repops'\n"
+        "重新啟動會重啟 MUD。\n"
+        "還有 11 個其他相關說明頁面。\n"
+        "請使用 'help search reboot' 查看清單。"
+    )
+    generic_help_lines = present(generic_help_chinese + " | " + generic_help_english).splitlines()
+    assert len(generic_help_lines) == 5, generic_help_lines
+    assert generic_help_lines[0].endswith("Showing page 1."), generic_help_lines
+    assert generic_help_lines[-1].endswith("See 'help search reboot' for a list."), generic_help_lines
+
     merged = (
         "龍牙之路繼續以東西走向延伸，周圍有許多矮人巡邏。"
         "西北方向可以看到一個巨大的傳送門。 | "
