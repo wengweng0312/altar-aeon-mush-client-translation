@@ -730,26 +730,31 @@ local exit_words = {
 
 local function strip_exit_heading(text)
   local patterns = {
-    {"^exits%s*:%s*", "exit"}, {"^exit%s*:%s*", "exit"},
-    {"^doors%s*:%s*", "door"}, {"^door%s*:%s*", "door"},
-    {"^doors%s+", "door"}, {"^door%s+", "door"}
+    {"^exits%s*:%s*", "exit", false}, {"^exit%s*:%s*", "exit", false},
+    {"^doors%s*:%s*", "door", false}, {"^door%s*:%s*", "door", false},
+    -- Mush-Z's proven sound/mapper path consumes
+    -- "[Exits: ...] [Doors: ...]" and re-emits "Doors north west".
+    -- Accept that generated form only after validating every remaining token
+    -- as a direction.  A wrapped room sentence such as "door is a wooden..."
+    -- must stay in the translation buffer.
+    {"^exits%s+", "exit", true}, {"^doors%s+", "door", true}
   }
   for _, item in ipairs(patterns) do
     local stripped, count = text:gsub(item[1], "", 1)
-    if count > 0 then return stripped, item[2] end
+    if count > 0 then return stripped, item[2], item[3] end
   end
-  return text, nil
+  return text, nil, false
 end
 
 local function is_exit_line(line)
   local text = clean(line):lower():gsub("^%s+", ""):gsub("%s+$", "")
-  local heading
-  text, heading = strip_exit_heading(text)
+  local heading, directions_only
+  text, heading, directions_only = strip_exit_heading(text)
   if text == "" then return false end
   -- A labelled exit/door may have a world-specific name such as portal,
   -- hatch or trail. Preserve it immediately instead of asking the model to
   -- guess or silently omit it.
-  if heading then return true end
+  if heading and not directions_only then return true end
   local count = 0
   for word in text:gmatch("%S+") do
     word = word:gsub("^[%[%(%{]+", ""):gsub("[%]%)%},%.]+$", "")
