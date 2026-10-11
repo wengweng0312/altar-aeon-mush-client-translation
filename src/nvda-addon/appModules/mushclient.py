@@ -983,6 +983,22 @@ class TranslationReviewObject(NVDAObject):
 			return None
 
 
+def _translationReviewInfoAtOffset(obj, offset):
+	"""Create a collapsed virtual TextInfo without walking through preceding text.
+
+	NVDAObjectTextInfo only accepts NVDA position constants when it is created;
+	passing an ``(offset, offset)`` tuple silently breaks review navigation on NVDA
+	2026.2.  Calling ``move`` from the first character is valid but can make
+	Uniscribe scan a very large entry on NVDA's main thread.  Initialising the
+	valid object first and then setting its native offsets avoids both failures.
+	"""
+	info = obj.makeTextInfo(textInfos.POSITION_FIRST)
+	target = max(0, min(len(obj.basicText), int(offset)))
+	info._startOffset = target
+	info._endOffset = target
+	return info
+
+
 def _readTranslationReviewEntry():
 	if not _translationReviewIsActive():
 		return None
@@ -1127,10 +1143,9 @@ class AppModule(appModuleHandler.AppModule):
 			)
 			lineRanges = _translationPresentationLineRanges(presentation)
 			targetLine = lineRanges[-1] if atEnd and lineRanges else (lineRanges[0] if lineRanges else (0, 0))
-			# Construct the collapsed range at the target offset directly. Moving
-			# from offset zero makes NVDA/Uniscribe calculate every preceding
-			# character and can freeze the main thread on a long single-line entry.
-			info = obj.makeTextInfo((targetLine[0], targetLine[0]))
+			# Avoid TextInfo.move here: long entries can make NVDA/Uniscribe scan
+			# every preceding character on the main thread.
+			info = _translationReviewInfoAtOffset(obj, targetLine[0])
 			if api.setReviewPosition(info):
 				self._translationReviewObject = obj
 				self._translationSentenceIndex = -1
@@ -1175,8 +1190,7 @@ class AppModule(appModuleHandler.AppModule):
 				min(len(segments) - 1, self._translationSentenceIndex + direction),
 			)
 		start, end = segments[self._translationSentenceIndex]
-		info = self._translationReviewObject.makeTextInfo(textInfos.POSITION_FIRST)
-		info.move(textInfos.UNIT_CHARACTER, start)
+		info = _translationReviewInfoAtOffset(self._translationReviewObject, start)
 		if api.setReviewPosition(info):
 			# Speak the selected Chinese sentence or English word explicitly. Do
 			# not route this through
@@ -1216,8 +1230,7 @@ class AppModule(appModuleHandler.AppModule):
 		if lineIndexes:
 			self._translationSentenceIndex = lineIndexes[-1] if toEnd else lineIndexes[0]
 		target = max(lineStart, lineEnd - 1) if toEnd else lineStart
-		info = self._translationReviewObject.makeTextInfo(textInfos.POSITION_FIRST)
-		info.move(textInfos.UNIT_CHARACTER, target)
+		info = _translationReviewInfoAtOffset(self._translationReviewObject, target)
 		api.setReviewPosition(info)
 
 	def _moveTranslationHistoryLine(self, gesture, direction, translationGesture, nativeScript):
@@ -1242,8 +1255,7 @@ class AppModule(appModuleHandler.AppModule):
 			target = current + direction
 			if 0 <= target < len(lineRanges):
 				start, end = lineRanges[target]
-				info = self._translationReviewObject.makeTextInfo(textInfos.POSITION_FIRST)
-				info.move(textInfos.UNIT_CHARACTER, start)
+				info = _translationReviewInfoAtOffset(self._translationReviewObject, start)
 				if api.setReviewPosition(info):
 					self._translationSentenceIndex = -1
 					ui.message(presentation[start:end])

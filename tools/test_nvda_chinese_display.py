@@ -344,8 +344,14 @@ def main() -> None:
     assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
 
     sync_method = addon_source.split("def _syncTranslationReviewPosition", 1)[1].split("\n\tdef ", 1)[0]
-    assert "makeTextInfo((targetLine[0], targetLine[0]))" in sync_method
+    assert "_translationReviewInfoAtOffset(obj, targetLine[0])" in sync_method
     assert "info.move(textInfos.UNIT_CHARACTER, targetLine[0])" not in sync_method
+
+    offset_helper = addon_source.split("def _translationReviewInfoAtOffset", 1)[1].split("\ndef ", 1)[0]
+    assert "makeTextInfo(textInfos.POSITION_FIRST)" in offset_helper
+    assert "info._startOffset = target" in offset_helper
+    assert "info._endOffset = target" in offset_helper
+    assert ".move(" not in offset_helper
 
     overlay_method = addon_source.split("def chooseNVDAObjectOverlayClasses", 1)[1].split("\n\t@", 1)[0]
     for attribute in ("windowClassName", "windowControlID", "IAccessibleRole"):
