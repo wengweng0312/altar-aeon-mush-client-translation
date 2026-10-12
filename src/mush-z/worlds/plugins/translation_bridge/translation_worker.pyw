@@ -1861,6 +1861,8 @@ NUMERIC_MULTIPLIERS = {
     "": Decimal(1), "k": Decimal(1000), "m": Decimal(1000000), "b": Decimal(1000000000),
 }
 NUMERIC_PATTERN = re.compile(r"(?<![A-Za-z])([-+]?\d[\d,]*(?:\.\d+)?)([kKmMbB]?)(%?)(?!_)")
+FRACTION_PATTERN = re.compile(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)")
+CHINESE_DIGITS = ("零", "一", "二", "三", "四", "五", "六", "七", "八", "九")
 
 
 def numeric_values(value):
@@ -1874,9 +1876,35 @@ def numeric_values(value):
     return output
 
 
+def chinese_small_number(value):
+    """Return the conventional Chinese form for an integer from 0 through 99."""
+    value = int(value)
+    if not 0 <= value <= 99:
+        return None
+    if value < 10:
+        return CHINESE_DIGITS[value]
+    tens, ones = divmod(value, 10)
+    prefix = "十" if tens == 1 else CHINESE_DIGITS[tens] + "十"
+    return prefix if ones == 0 else prefix + CHINESE_DIGITS[ones]
+
+
 def numeric_items_preserved(source, translated):
+    expected = numeric_values(source)
+    # Chinese normally renders 1/5 as 「五分之一」.  Treat that as an exact
+    # preservation of the fraction rather than forcing the whole Help unit
+    # back to English merely because it no longer contains ASCII digits.
+    for numerator, denominator in FRACTION_PATTERN.findall(str(source)):
+        numerator_zh = chinese_small_number(numerator)
+        denominator_zh = chinese_small_number(denominator)
+        if (numerator_zh and denominator_zh and
+                denominator_zh + "分之" + numerator_zh in str(translated)):
+            for value in (Decimal(numerator), Decimal(denominator)):
+                try:
+                    expected.remove((value, False))
+                except ValueError:
+                    break
     remaining = numeric_values(translated)
-    for number in numeric_values(source):
+    for number in expected:
         try:
             remaining.remove(number)
         except ValueError:
@@ -3220,6 +3248,7 @@ HELP_CLASS_ZH = {
     # It is an eligibility field, not an unknown class and must never turn a
     # valid Help page into an English fallback.
     "any": "不限職業",
+    "general": "通用",
 }
 HELP_STAT_ZH = {
     "mana": "法力", "int": "智力", "wis": "智慧", "chr": "魅力",
@@ -3243,6 +3272,8 @@ HELP_SWITCH_ROW = re.compile(
 )
 HELP_LIST_ROW = re.compile(r"^(\s*)-\s+(.+?)\s*$")
 HELP_TAG_ROW = re.compile(r"^(\s*)(%[A-Za-z%][A-Za-z0-9%]*)(\s{2,})(.+?)(\s*)$")
+HELP_VALUE_OPTION_ROW = re.compile(r"^(\s*)(\d+\s*-\s*)(.+?)(\s*)$")
+HELP_DEFINITION_ROW = re.compile(r"^(\s*)([a-z][a-z0-9_-]*)(\s+-\s+)(.+?)(\s*)$", re.I)
 HELP_TIMEOUT_ROW = re.compile(
     r"^(\d+)\s+months for a level\s+(\d+),\s+all levels\s+(\d+)\s+char$",
     re.I,
@@ -3407,7 +3438,7 @@ def translate_help_metadata_unit(row, c):
     if header:
         kind, name, tail = header.groups()
         level = re.search(r"\bLvl\s+(\d+)\s+([A-Za-z]+)\s+\((\d+%)\)", tail, re.I)
-        if not level or level.group(2).lower() not in HELP_CLASS_ZH:
+        if not level:
             raise RuntimeError("HELP_HEADER_UNKNOWN_CLASS")
         fields = [
             ("技能" if kind.lower() == "skill" else "咒語") + "：" +
@@ -3417,7 +3448,13 @@ def translate_help_metadata_unit(row, c):
             fields.append("%s：%s" % (HELP_STAT_ZH[key.lower()], number))
         fields.extend((
             "等級：%s" % level.group(1),
-            "職業：%s（%s）" % (HELP_CLASS_ZH[level.group(2).lower()], level.group(3)),
+            "職業：%s（%s）" % (
+                HELP_CLASS_ZH.get(
+                    level.group(2).lower(),
+                    translate_cached_phrase(level.group(2), c),
+                ),
+                level.group(3),
+            ),
         ))
         return "；".join(fields)
     importance = re.fullmatch(
@@ -3432,6 +3469,15 @@ def translate_help_metadata_unit(row, c):
     group = re.fullmatch(r"Group:\s*(.+)", value, re.I)
     if group:
         return "分組：" + translate_cached_phrase(group.group(1).strip(), c)
+    guild_rank = re.fullmatch(r"Guild:\s*(.+?)\s+Rank:\s*(.+)", value, re.I)
+    if guild_rank:
+        return "公會：%s；階級：%s" % (
+            translate_cached_phrase(guild_rank.group(1).strip(), c),
+            translate_cached_phrase(guild_rank.group(2).strip(), c),
+        )
+    guild = re.fullmatch(r"Guild:\s*(.+)", value, re.I)
+    if guild:
+        return "公會：" + translate_cached_phrase(guild.group(1).strip(), c)
     speed = re.fullmatch(r"Speed:\s*(.+)", value, re.I)
     if speed:
         return "速度：" + translate_cached_phrase(speed.group(1).strip(), c)
@@ -3468,6 +3514,8 @@ def translate_help_metadata_unit(row, c):
         if choices.lower() == "enabled / disabled":
             choices = "啟用／停用"
         return "可用值：" + choices
+    if value.lower() == "possible values:":
+        return "可用值："
     fixed = {
         "usage:": "用法：",
         "syntax:": "語法：",
@@ -3483,7 +3531,17 @@ def translate_help_metadata_unit(row, c):
     usable = re.fullmatch(r"You can use (.+) while:", value, re.I)
     if usable:
         return "可在以下狀態使用%s：" % translate_cached_phrase(usable.group(1).strip(), c)
-    raise RuntimeError("HELP_METADATA_UNKNOWN")
+    # Help gains new headings over time.  A single unfamiliar heading must
+    # never discard an otherwise valid page.  Preserve its boundary and let
+    # the ordinary phrase cache/model translate that field only.
+    field = re.fullmatch(r"([^:]{1,80}):\s*(.*)", value)
+    if field:
+        label, field_value = field.groups()
+        translated_label = translate_cached_phrase(label.strip(), c)
+        if not field_value:
+            return translated_label + "："
+        return translated_label + "：" + translate_cached_phrase(field_value.strip(), c)
+    return translate_cached_phrase(value, c)
 
 
 def parse_help_semantic_units(text):
@@ -3493,24 +3551,36 @@ def parse_help_semantic_units(text):
     in_usage = False
     in_command_table = False
     after_usable = False
+    in_possible_values = False
     metadata = re.compile(
         r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
         r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
         r"\(Can Be (?:Groupcast|Maintained|Bloodcast)\)|\(Requires Favor\)|"
         r"Group:|Speed:|Damage Type:|Damage:|Usage:|Syntax:|Format:|"
-        r"Summary:|Possible Values:|Profession$|"
+        r"Summary:|Possible Values:|Profession$|Guild:|"
         r"There are \d+ other help pages that may be related to your search\.|"
         r"See '.*' for a list\.|See also,?|"
         r"You can create the (?:spell|skill) .* on the following consumables:|"
         r"You can use .* while:)", re.I
     )
+    # A Help page may contain a small glossary such as ``stream - ...`` /
+    # ``river - ...``.  Require a run of two or more rows so ordinary prose
+    # containing a dash never becomes a false table.
+    definition_indexes, definition_run = set(), []
+    for index, row in enumerate(rows + [""]):
+        if index < len(rows) and HELP_DEFINITION_ROW.fullmatch(row):
+            definition_run.append(index)
+            continue
+        if len(definition_run) >= 2:
+            definition_indexes.update(definition_run)
+        definition_run = []
 
     def flush_body():
         if body:
             units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(body)))
             body[:] = []
 
-    for row in rows:
+    for index, row in enumerate(rows):
         value = row.strip()
         if metadata.match(value):
             flush_body()
@@ -3518,6 +3588,16 @@ def parse_help_semantic_units(text):
             in_usage = value.lower() in {"usage:", "syntax:", "format:"}
             in_command_table = in_usage
             after_usable = bool(re.match(r"^You can use .* while:$", value, re.I))
+            in_possible_values = value.lower() == "possible values:"
+            continue
+        value_option = HELP_VALUE_OPTION_ROW.fullmatch(row)
+        if value_option and in_possible_values:
+            flush_body()
+            units.append(("help_value_option", row))
+            continue
+        if index in definition_indexes:
+            flush_body()
+            units.append(("help_definition", row))
             continue
         command_row = parse_help_command_row(row)
         if command_row and (in_usage or in_command_table):
@@ -3527,6 +3607,7 @@ def parse_help_semantic_units(text):
             units.append(("raw", value))
             continue
         in_usage = False
+        in_possible_values = False
         if after_usable:
             flush_body()
             units.append(("translate", value))
@@ -3680,6 +3761,25 @@ def translate_semantic_units(units, c, context="semantic"):
             indent, tag, spacing, description, trailing = match.groups()
             output.append("%s%s%s%s%s" % (
                 indent, tag, spacing,
+                translate_cached_phrase(description.strip(), c), trailing,
+            ))
+            continue
+        if kind == "help_value_option":
+            match = HELP_VALUE_OPTION_ROW.fullmatch(source)
+            if not match:
+                raise RuntimeError("HELP_VALUE_OPTION_PARSE_FAILED")
+            indent, prefix, description, trailing = match.groups()
+            output.append("%s%s%s%s" % (
+                indent, prefix, translate_cached_phrase(description.strip(), c), trailing,
+            ))
+            continue
+        if kind == "help_definition":
+            match = HELP_DEFINITION_ROW.fullmatch(source)
+            if not match:
+                raise RuntimeError("HELP_DEFINITION_PARSE_FAILED")
+            indent, label, delimiter, description, trailing = match.groups()
+            output.append("%s%s%s%s%s" % (
+                indent, label, delimiter,
                 translate_cached_phrase(description.strip(), c), trailing,
             ))
             continue

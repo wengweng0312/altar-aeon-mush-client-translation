@@ -148,6 +148,7 @@ Skill: metallurgy               Lvl 10  Any  (85%)
 (helpful)
 Group: Smiths Guild Trade Skills
 Profession
+Guild: The Smiths Guild  Rank: Novice
 Usage:
 forge
 forge check
@@ -155,7 +156,45 @@ The metallurgy skill is used to smelt ore."""
     rendered = render_with_stubs(module, trade_skill_help)
     rows = rendered.splitlines()
     assert "技能：中譯<metallurgy>；等級：10；職業：不限職業（85%）" in rows, rows
+    assert "公會：中譯<The Smiths Guild>；階級：中譯<Novice>" in rows, rows
     assert "forge" in rows and "forge check" in rows, rows
+
+    config_numbered_values = """Keywords are:  'mush-z config shortid'
+Syntax: 'config shortid'
+Summary: When identifying an object, simplify the information
+Possible Values:
+1 - Disabled
+2 - Output and history
+3 - History only"""
+    units = module.parse_help_semantic_units(config_numbered_values)
+    assert [kind for kind, _value in units].count("help_value_option") == 3, units
+    rendered = render_with_stubs(module, config_numbered_values)
+    rows = rendered.splitlines()
+    assert rows[-4:] == [
+        "可用值：", "1 - 中譯<Disabled>", "2 - 中譯<Output and history>",
+        "3 - 中譯<History only>",
+    ], rows
+
+    terrain_definitions = """Keywords are:  'ocean river stream aquatic biomes'
+There are several types of aquatic terrain:
+stream     - brooks, creeks, shallow rivers
+river      - deep natural watercourses or artificial canals
+water      - ponds, lakes, springs
+underwater - beneath the surface of deep water
+ocean      - saltwater and estuaries
+beach      - shorelines of large bodies of water
+These terrains require swimming."""
+    units = module.parse_help_semantic_units(terrain_definitions)
+    assert [kind for kind, _value in units].count("help_definition") == 6, units
+    rendered = render_with_stubs(module, terrain_definitions)
+    rows = rendered.splitlines()
+    assert "stream     - 中譯<brooks, creeks, shallow rivers>" in rows, rows
+    assert "underwater - 中譯<beneath the surface of deep water>" in rows, rows
+
+    assert module.numeric_items_preserved(
+        "Wimp activates at 1/5 of your hitpoints.",
+        "膽怯模式會在你的生命值降至五分之一時啟動。",
+    )
 
     sectioned_commands = """Keywords are:  'boats ships seafaring sailing'
 Syntax:
