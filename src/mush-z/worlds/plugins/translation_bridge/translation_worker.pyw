@@ -3274,6 +3274,7 @@ HELP_LIST_ROW = re.compile(r"^(\s*)-\s+(.+?)\s*$")
 HELP_TAG_ROW = re.compile(r"^(\s*)(%[A-Za-z%][A-Za-z0-9%]*)(\s{2,})(.+?)(\s*)$")
 HELP_VALUE_OPTION_ROW = re.compile(r"^(\s*)(\d+\s*-\s*)(.+?)(\s*)$")
 HELP_DEFINITION_ROW = re.compile(r"^(\s*)([a-z][a-z0-9_-]*)(\s+-\s+)(.+?)(\s*)$", re.I)
+HELP_TABLE_ROW = re.compile(r"^(\s*)(\S(?:.*?\S)?)(\s+-\s+)(.+?)(\s*)$")
 HELP_TIMEOUT_ROW = re.compile(
     r"^(\d+)\s+months for a level\s+(\d+),\s+all levels\s+(\d+)\s+char$",
     re.I,
@@ -3316,6 +3317,91 @@ def parse_help_command_row(row):
     if not is_help_usage_command(command) or not description.strip():
         return None
     return indent, command, delimiter, description.strip(), trailing
+
+
+def parse_help_table_row(row):
+    """Parse a Help key/command row without assuming the key is one word."""
+    match = HELP_TABLE_ROW.fullmatch(str(row))
+    if not match:
+        return None
+    indent, label, delimiter, description, trailing = match.groups()
+    label = label.strip()
+    if (not label or label.isdigit() or len(label) > 80 or len(label.split()) > 8 or
+            re.search(r"[.!?;:]$", label) or not description.strip()):
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9<>{}\[\](),.'\"/_%+ -]+", label):
+        return None
+    return indent, label, delimiter, description.strip(), trailing
+
+
+def help_table_groups(rows):
+    """Return logical dash-table rows, including wrapped descriptions.
+
+    A run must contain at least two real table rows.  Between them, and after
+    the final row, only indented or lowercase-starting text can be treated as
+    a wrapped continuation.  This keeps ordinary dashed prose out.
+    """
+    candidates = {
+        index: parse_help_table_row(row)
+        for index, row in enumerate(rows)
+        if parse_help_table_row(row) is not None
+    }
+    candidate_indexes = sorted(candidates)
+
+    def dash_column(index):
+        match = HELP_TABLE_ROW.fullmatch(str(rows[index]))
+        return match.start(3) + match.group(3).index("-")
+
+    def aligned_run(run):
+        # Real Help tables pad their left cells so at least two separator
+        # dashes land in the same display column.  Ordinary prose containing
+        # two unrelated dashes does not have that alignment.
+        columns = [dash_column(index) for index in run]
+        return any(
+            abs(left - right) <= 3
+            for position, left in enumerate(columns)
+            for right in columns[position + 1:]
+        )
+
+    def continuation(row):
+        stripped = str(row).strip()
+        if not stripped or parse_help_table_row(row) is not None:
+            return False
+        return len(str(row)) > len(str(row).lstrip()) or bool(re.match(r"^[a-z]", stripped))
+
+    candidate_runs = []
+    current = []
+    for index in candidate_indexes:
+        if not current:
+            current = [index]
+            continue
+        gap = rows[current[-1] + 1:index]
+        if len(gap) <= 6 and all(continuation(row) for row in gap):
+            current.append(index)
+            continue
+        if len(current) >= 2 and aligned_run(current):
+            candidate_runs.append(current)
+        current = [index]
+    if len(current) >= 2 and aligned_run(current):
+        candidate_runs.append(current)
+
+    groups = {}
+    covered = set()
+    for run in candidate_runs:
+        for position, index in enumerate(run):
+            end = run[position + 1] if position + 1 < len(run) else index + 1
+            if position + 1 == len(run):
+                while end < len(rows) and continuation(rows[end]):
+                    end += 1
+            description_rows = [candidates[index][3]]
+            description_rows.extend(row.strip() for row in rows[index + 1:end])
+            indent, label, delimiter, _description, trailing = candidates[index]
+            groups[index] = (
+                indent, label, delimiter,
+                " ".join(value for value in description_rows if value).strip(), trailing,
+            )
+            covered.update(range(index, end))
+    return groups, covered
 
 
 def _command_usage_parts(text):
@@ -3563,6 +3649,7 @@ def parse_help_semantic_units(text):
         r"You can create the (?:spell|skill) .* on the following consumables:|"
         r"You can use .* while:)", re.I
     )
+    table_groups, table_covered = help_table_groups(rows)
     # A Help page may contain a small glossary such as ``stream - ...`` /
     # ``river - ...``.  Require a run of two or more rows so ordinary prose
     # containing a dash never becomes a false table.
@@ -3581,6 +3668,12 @@ def parse_help_semantic_units(text):
             body[:] = []
 
     for index, row in enumerate(rows):
+        if index in table_groups:
+            flush_body()
+            units.append(("help_table", table_groups[index]))
+            continue
+        if index in table_covered:
+            continue
         value = row.strip()
         if metadata.match(value):
             flush_body()
@@ -3736,6 +3829,13 @@ def translate_semantic_units(units, c, context="semantic"):
             indent, command, delimiter, description, trailing = parts
             output.append("%s%s%s%s%s" % (
                 indent, command, delimiter,
+                translate_cached_phrase(description, c), trailing,
+            ))
+            continue
+        if kind == "help_table":
+            indent, label, delimiter, description, trailing = source
+            output.append("%s%s%s%s%s" % (
+                indent, label, delimiter,
                 translate_cached_phrase(description, c), trailing,
             ))
             continue

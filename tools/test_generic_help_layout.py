@@ -185,7 +185,7 @@ ocean      - saltwater and estuaries
 beach      - shorelines of large bodies of water
 These terrains require swimming."""
     units = module.parse_help_semantic_units(terrain_definitions)
-    assert [kind for kind, _value in units].count("help_definition") == 6, units
+    assert [kind for kind, _value in units].count("help_table") == 6, units
     rendered = render_with_stubs(module, terrain_definitions)
     rows = rendered.splitlines()
     assert "stream     - 中譯<brooks, creeks, shallow rivers>" in rows, rows
@@ -195,6 +195,63 @@ These terrains require swimming."""
         "Wimp activates at 1/5 of your hitpoints.",
         "膽怯模式會在你的生命值降至五分之一時啟動。",
     )
+
+    deeds_table = """Keywords are:  'deeds'
+Complete lists of deeds can be displayed using the following commands:
+deeds                   - show a list of deeds you have completed
+deeds <player name>     - show a list of deeds another player has completed
+deeds sloe              - show a list of deeds on the island of sloe
+deeds all               - show a list of all available deeds
+For information about quests, use the 'quest help' command."""
+    units = module.parse_help_semantic_units(deeds_table)
+    assert [kind for kind, _value in units].count("help_table") == 4, units
+    rendered = render_with_stubs(module, deeds_table)
+    rows = rendered.splitlines()
+    assert "deeds <player name>     - 中譯<show a list of deeds another player has completed>" in rows, rows
+    assert rows[-1] == "中譯<For information about quests, use the 'quest help' command.>", rows
+
+    channel_table = """Keywords are:  'channel restrictions'
+The following public channels are available:
+(player defined channels) - player defined channels are the least regulated
+channels. The owner may change channel parameters.
+auction   - for topics related to buying, selling, and trading.
+newbie    - for newbie questions. Be nice on this channel -
+            very nice. If you can't be nice, turn it off.
+gossip    - for miscellaneous chatting. Listen
+            to what the owner has to say.
+zt        - for discussions of the mush-z client
+Spamming will not be tolerated on any channel."""
+    units = module.parse_help_semantic_units(channel_table)
+    assert [kind for kind, _value in units].count("help_table") == 5, units
+    rendered = render_with_stubs(module, channel_table)
+    rows = rendered.splitlines()
+    assert "(player defined channels) - 中譯<player defined channels are the least regulated channels. The owner may change channel parameters.>" in rows, rows
+    assert "newbie    - 中譯<for newbie questions. Be nice on this channel - very nice. If you can't be nice, turn it off.>" in rows, rows
+    assert rows[-1] == "中譯<Spamming will not be tolerated on any channel.>", rows
+
+    demon_table = """Keywords are:  'necromancer skill summon demon familiars'
+Advantages given by various demons:
+A black, horned demon     - hitpoints, damage resistance
+A winged red imp          - move regen, attacks, mana
+An azure blue demon       - elemental saves, elemental absorb
+An ebony scaled demon     - hp regen, and saving spell, breath, poison
+An energetic green demon  - mana regeneration and movement"""
+    units = module.parse_help_semantic_units(demon_table)
+    assert [kind for kind, _value in units].count("help_table") == 5, units
+
+    dashed_prose = """Keywords are:  'weapons weaponry'
+Weapons can be nearly anything - if you can wield it, you can try to use
+it as a weapon. Normally you equip swords, axes and staves, but in a pinch
+you can wield other things. These are suboptimal choices - the best weapons
+are almost always weapons."""
+    units = module.parse_help_semantic_units(dashed_prose)
+    assert not any(kind == "help_table" for kind, _value in units), units
+
+    autoassist_prose = """Keywords are:  'autoassist assist'
+[Experienced players - this behavior is similar to berserk.
+WARNING - The autoassist command is not a true autoassist."""
+    units = module.parse_help_semantic_units(autoassist_prose)
+    assert not any(kind == "help_table" for kind, _value in units), units
 
     sectioned_commands = """Keywords are:  'boats ships seafaring sailing'
 Syntax:
@@ -207,7 +264,8 @@ sail <direction> [number] - sail in a direction
 anchor
 This command is used to manage a ship."""
     units = module.parse_help_semantic_units(sectioned_commands)
-    assert [kind for kind, _value in units].count("help_command") == 3, units
+    assert [kind for kind, _value in units].count("help_table") == 2, units
+    assert [kind for kind, _value in units].count("help_command") == 1, units
     assert ("raw", "anchor") in units, units
     rendered = render_with_stubs(module, sectioned_commands)
     rows = rendered.splitlines()
