@@ -179,6 +179,67 @@ def main() -> None:
     assert generic_help_lines[0].endswith("Showing page 1."), generic_help_lines
     assert generic_help_lines[-1].endswith("See 'help search reboot' for a list."), generic_help_lines
 
+    preservation_english = (
+        "Keywords are: 'necromancer spell preservation preserve'\n"
+        "Spell: preservation Mana: 16 Int: 18 Wis: 16 Lvl 10 Necr (28%)\n"
+        "(important) Requires: undead lore\nGroup: Necromancer Undead Skills\nUsage:\n"
+        "cast preservation <object>\n"
+        "The spell slows the decay of corpses and other organic matter.\n"
+        "Note that it will not work on inorganic materials,\n"
+        "but it prolongs the shelf life of food.\n"
+        "You can create the spell 'preservation' on the following consumables:\n"
+        "Potions Scrolls Spellstaffs"
+    )
+    preservation_chinese = (
+        "關鍵詞：'necromancer spell preservation preserve'\n"
+        "咒語：保存；法力：16；智力：18；智慧：16；等級：10；職業：死靈法師（28%）\n"
+        "重要；前置需求：不死傳說\n分組：死靈法師技能\n用法：\n"
+        "cast preservation <object>\n防腐術會減緩屍體腐爛。\n"
+        "請注意，它對無機材料不起作用，但可延長食物保存期。\n"
+        "你可以在以下消耗品上製作 'preservation'：\n藥劑、卷軸、法杖"
+    )
+    preservation_lines = present(preservation_chinese + " | " + preservation_english).splitlines()
+    assert len(preservation_lines) == 10, preservation_lines
+    assert preservation_lines[7].endswith("but it prolongs the shelf life of food."), preservation_lines
+    assert preservation_lines[-1].endswith("Potions Scrolls Spellstaffs"), preservation_lines
+
+    treasure_english = (
+        "Keywords are: 'treasure bullion ingots billets'\n"
+        "While shopping, you may find items that are type TREASURE.\n"
+        "These can sometimes be used as raw material for forging."
+    )
+    treasure_chinese = (
+        "關鍵詞：'treasure bullion ingots billets'\n"
+        "購物時，你可能找到寶藏類物品。\n"
+        "這些物品有時可作為鍛造原料。"
+    )
+    treasure_lines = present(treasure_chinese + " | " + treasure_english).splitlines()
+    assert len(treasure_lines) == 3, treasure_lines
+    assert all(" | " in row for row in treasure_lines), treasure_lines
+
+    spellgroup_english = (
+        "Keywords are: 'spellgroup warrior iron body skillgroup'\n"
+        "Warrior iron body:\n"
+        "increased stamina                         13 war\n"
+        "armored skin                             28 war\n"
+        "second wind                              22 war\n"
+        "indomitable will                         37 war\n"
+        "last stand                               38 war\n"
+        "iron claw                                25 war\n"
+        "These skills improve physical resistance, and allow exhausted fighters\n"
+        "to sometimes surpass their physical limits."
+    )
+    spellgroup_chinese = (
+        "關鍵詞：'spellgroup warrior iron body skillgroup'\n戰士鐵體：\n"
+        "增加耐力 13 war\n盔甲皮膚 28 war\n第二春 22 war\n"
+        "不屈的意志 37 war\n堅守陣地 38 war\n鐵爪 25 war\n"
+        "這些技能提高身體抵抗力，讓疲憊的戰士超越體力極限。"
+    )
+    spellgroup_lines = present(spellgroup_chinese + " | " + spellgroup_english).splitlines()
+    assert len(spellgroup_lines) == 9, spellgroup_lines
+    assert spellgroup_lines[2].endswith("increased stamina                         13 war"), spellgroup_lines
+    assert spellgroup_lines[-1].endswith("to sometimes surpass their physical limits."), spellgroup_lines
+
     merged = (
         "龍牙之路繼續以東西走向延伸，周圍有許多矮人巡邏。"
         "西北方向可以看到一個巨大的傳送門。 | "

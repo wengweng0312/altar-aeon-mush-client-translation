@@ -651,22 +651,29 @@ def _isHelpUsageCommand(row):
 def _translationHelpSemanticLines(english):
 	"""Mirror the worker's stable help fields, commands and prose units."""
 	rows = [line.strip() for line in english.splitlines() if line.strip()]
-	head = rows[:6]
-	hasKeywords = any(row.startswith("Keywords are:") for row in head)
-	hasTypedHeader = any(re.match(r"^(?:Skill|Spell):\s+", row, re.I) for row in head)
-	hasPageHeader = bool(rows and re.match(r"^Showing page \d+\.$", rows[0], re.I))
-	if not (hasKeywords and (hasTypedHeader or hasPageHeader)):
+	# The worker accepts every complete Help page, not only skill/spell pages.
+	# Keeping the old narrow test here made ordinary pages fall through to the
+	# 600-character emergency splitter, which paired unrelated Chinese and
+	# English fragments in review mode.
+	if len(rows) < 3 or not any(row.startswith("Keywords are:") for row in rows[:2]):
 		return []
 	metadata = re.compile(
 		r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
 		r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
-		r"\(Can Be (?:Groupcast|Maintained)\)|Group:|Speed:|Usage:|"
+		r"\(Can Be (?:Groupcast|Maintained|Bloodcast)\)|\(Requires Favor\)|"
+		r"Group:|Speed:|Damage Type:|Damage:|Usage:|Syntax:|Format:|"
+		r"Summary:|Possible Values:|Profession$|Guild:|"
+		r"There are \d+ other help pages that may be related to your search\.|"
+		r"See '.*' for a list\.|See also,?|"
+		r"You can create the (?:spell|skill) .* on the following consumables:|"
 		r"You can use .* while:)",
 		re.I,
 	)
 	units, prose = [], []
 	inUsage = False
+	inCommandTable = False
 	afterUsable = False
+	inPossibleValues = False
 
 	def flushProse():
 		if not prose:
@@ -685,18 +692,53 @@ def _translationHelpSemanticLines(english):
 		if metadata.match(row):
 			flushProse()
 			units.append(row)
-			inUsage = row.lower() == "usage:"
+			inUsage = row.lower() in {"usage:", "syntax:", "format:"}
+			inCommandTable = inUsage
 			afterUsable = bool(re.match(r"^You can use .* while:$", row, re.I))
+			inPossibleValues = row.lower() == "possible values:"
 			continue
-		if inUsage and _isHelpUsageCommand(row):
+		if inPossibleValues and re.match(r"^\d+\s*-\s*.+", row):
+			flushProse()
+			units.append(row)
+			continue
+		commandDescription = re.fullmatch(r"(.+?)(\s+(?:--?|:)\s+)(.+)", row)
+		if commandDescription and (inUsage or inCommandTable) and _isHelpUsageCommand(commandDescription.group(1)):
+			flushProse()
+			units.append(row)
+			continue
+		if (inUsage or inCommandTable) and _isHelpUsageCommand(row):
+			flushProse()
 			units.append(row)
 			continue
 		inUsage = False
+		inPossibleValues = False
 		if afterUsable:
 			flushProse()
 			units.append(row)
 			afterUsable = False
 			continue
+		# Spellgroup/skillgroup trees are already reconstructed by the worker as
+		# one row per skill.  Preserve the same boundary here so a complete tree
+		# is not collapsed back into one giant review line.
+		if re.fullmatch(r".+?\s{2,}\d+\s+(?:mag|cle|thi|war|nec|dru)", row, re.I):
+			flushProse()
+			units.append(row)
+			continue
+		if re.match(r"^-\s+.+", row):
+			flushProse()
+			units.append(row)
+			continue
+		if re.fullmatch(r"(?:For )?Examples?,?", row, re.I):
+			flushProse()
+			units.append(row)
+			continue
+		if row.endswith(":") and len(row) <= 100:
+			flushProse()
+			units.append(row)
+			inUsage = row.lower().endswith("syntax is:")
+			inCommandTable = inCommandTable or inUsage
+			continue
+		inCommandTable = False
 		prose.append(row)
 	flushProse()
 	return units

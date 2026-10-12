@@ -171,7 +171,7 @@ Possible Values:
     rendered = render_with_stubs(module, config_numbered_values)
     rows = rendered.splitlines()
     assert rows[-4:] == [
-        "可用值：", "1 - 中譯<Disabled>", "2 - 中譯<Output and history>",
+        "可用值：", "1 - 停用", "2 - 中譯<Output and history>",
         "3 - 中譯<History only>",
     ], rows
 
@@ -376,6 +376,29 @@ The timeout is based on level:
         " - 等級 1、總等級 1 的角色：12 個月",
         " - 等級 30、總等級 104 的角色：64 個月",
     ], rows
+
+    config_values = """Keywords are:  'mush-z mushz config groupdice'
+Syntax: 'config groupdice'
+Summary: Add group dice results to history
+Possible Values:
+1 - Disabled
+2 - Group only
+3 - All and Group"""
+    rendered = render_with_stubs(module, config_values)
+    assert rendered.splitlines()[-3:] == [
+        "1 - 停用", "2 - 僅群組", "3 - 全部與群組",
+    ], rendered
+
+    moderator_commands = """Keywords are:  'moderator commands'
+Commands available to moderators are:
+- moderate
+- who avatar
+- replay avatar
+The moderate command can be used to warn players on a given channel."""
+    rendered = render_with_stubs(module, moderator_commands)
+    assert rendered.splitlines()[2:5] == [
+        "- moderate", "- who avatar", "- replay avatar",
+    ], rendered
 
     print("GENERIC_HELP_LAYOUT_OK generic=yes short=yes config=yes syntax=yes format=yes command-sections=yes lists=yes spellgroup=4 cache=bypass")
 

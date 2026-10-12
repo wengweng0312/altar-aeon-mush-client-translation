@@ -3638,6 +3638,7 @@ def parse_help_semantic_units(text):
     in_command_table = False
     after_usable = False
     in_possible_values = False
+    in_command_list = False
     metadata = re.compile(
         r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
         r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
@@ -3714,7 +3715,10 @@ def parse_help_semantic_units(text):
         listed = HELP_LIST_ROW.fullmatch(row)
         if listed:
             flush_body()
-            units.append(("help_list", row))
+            if in_command_list and is_help_usage_command(listed.group(2).strip()):
+                units.append(("raw", row))
+            else:
+                units.append(("help_list", row))
             continue
         tag = HELP_TAG_ROW.fullmatch(row)
         if tag:
@@ -3751,6 +3755,7 @@ def parse_help_semantic_units(text):
         if value.endswith(":") and len(value) <= 100:
             flush_body()
             units.append(("translate", value))
+            in_command_list = "command" in value.lower()
             in_usage = value.lower().endswith("syntax is:")
             in_command_table = (
                 False if value.lower() in {"keywords:", "examples:"}
@@ -3758,6 +3763,7 @@ def parse_help_semantic_units(text):
             )
             continue
         in_command_table = False
+        in_command_list = False
         body.append(value)
     flush_body()
     return units
@@ -3869,8 +3875,15 @@ def translate_semantic_units(units, c, context="semantic"):
             if not match:
                 raise RuntimeError("HELP_VALUE_OPTION_PARSE_FAILED")
             indent, prefix, description, trailing = match.groups()
+            fixed_values = {
+                "disabled": "停用", "enabled": "啟用",
+                "group only": "僅群組", "all and group": "全部與群組",
+            }
+            translated_description = fixed_values.get(description.strip().lower())
+            if translated_description is None:
+                translated_description = translate_cached_phrase(description.strip(), c)
             output.append("%s%s%s%s" % (
-                indent, prefix, translate_cached_phrase(description.strip(), c), trailing,
+                indent, prefix, translated_description, trailing,
             ))
             continue
         if kind == "help_definition":
@@ -3896,7 +3909,15 @@ def translate_semantic_units(units, c, context="semantic"):
             if not any("\u3400" <= ch <= "\u9fff" for ch in translated):
                 raise RuntimeError(context.upper() + "_UNIT_UNTRANSLATED")
             if numeric_values(source) and not numeric_items_preserved(source, translated):
-                raise RuntimeError(context.upper() + "_UNIT_NUMERIC_ITEMS_MISSING")
+                # Retry only the failed semantic unit with explicit field and
+                # digit preservation.  The former behaviour returned a whole
+                # warning/example paragraph in English after one dropped
+                # number even though the rest of the Help page was valid.
+                retry = translate_numbered_fields_once([source], c)[0]
+                if (not any("\u3400" <= ch <= "\u9fff" for ch in retry) or
+                        not numeric_items_preserved(source, retry)):
+                    raise RuntimeError(context.upper() + "_UNIT_NUMERIC_ITEMS_MISSING")
+                translated = retry
             translated = " ".join(translated.splitlines()).strip()
             cache_put(source, translated, c)
             prepared[source] = translated
