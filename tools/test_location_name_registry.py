@@ -46,6 +46,12 @@ def main():
             assert worker.translate_place_name(source, config, "room_title") == "鐵堡壘遊俠公會"
             assert calls == []
 
+            # This real LMT failure must always resolve to the reviewed room
+            # name, even after the player clears a recently learned name.
+            barracks = "Dwarven barracks"
+            assert worker.translate_place_name(barracks, config, "room_title") == "矮人兵營"
+            assert calls == []
+
             # An unseen ordinary place is translated once, then shared by
             # where and the later room title.
             cabin = "A large wooden cabin"
@@ -70,6 +76,9 @@ def main():
             assert worker.place_name_get(source) == "鐵堡壘遊俠公會"
             worker.clear_recent_translation_cache(1)
             assert worker.place_name_get(source) is None
+            assert worker.translate_place_name(source, config, "room_title") == "鐵堡壘遊俠公會"
+            assert calls.count(source) == 0
+            assert calls.count(barracks) == 0
 
             # Ordinary prose is never treated as a where row/place boundary.
             assert not worker.is_where_location_row(
