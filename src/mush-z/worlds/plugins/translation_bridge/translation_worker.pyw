@@ -3216,6 +3216,10 @@ def is_skill_help_detail(text):
 HELP_CLASS_ZH = {
     "mage": "法師", "cler": "牧師", "thie": "盜賊",
     "warr": "戰士", "necr": "死靈法師", "drui": "德魯伊",
+    # Trade / general skills such as metallurgy legitimately use "Any".
+    # It is an eligibility field, not an unknown class and must never turn a
+    # valid Help page into an English fallback.
+    "any": "不限職業",
 }
 HELP_STAT_ZH = {
     "mana": "法力", "int": "智力", "wis": "智慧", "chr": "魅力",

@@ -143,6 +143,20 @@ The brew potion skill mixes herbs."""
     assert "專業技能" in rows and "格式：" in rows, rows
     assert "brew potion inventory" in rows and "brew potion <object list>" in rows, rows
 
+    trade_skill_help = """Keywords are:  'skill crafting forge metallurgy'
+Skill: metallurgy               Lvl 10  Any  (85%)
+(helpful)
+Group: Smiths Guild Trade Skills
+Profession
+Usage:
+forge
+forge check
+The metallurgy skill is used to smelt ore."""
+    rendered = render_with_stubs(module, trade_skill_help)
+    rows = rendered.splitlines()
+    assert "技能：中譯<metallurgy>；等級：10；職業：不限職業（85%）" in rows, rows
+    assert "forge" in rows and "forge check" in rows, rows
+
     sectioned_commands = """Keywords are:  'boats ships seafaring sailing'
 Syntax:
 Information and Settings:
