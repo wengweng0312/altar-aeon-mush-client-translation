@@ -43,4 +43,43 @@ assert semantic("You see nothing left to loot from the corpse of A trogdolyte.",
     "「A trogdolyte」的屍體已經沒有東西可搜刮了。"
 )
 
+equipment_source = """You are using:
+head - the demon's horn(artifact)
+neck - A necklace of Power (glow)
+neck - a black wolf talisman(rare)
+arms - jadite sleeves
+wrist - a jadite bracer
+wrist - a legendary dwarven bracelet(artifact) (glow)
+hands - emperal gauntlets
+finger - a scarlet crystal ring(rare) (glow)
+finger - a black opal ring(artifact) (glow)
+on body - a purple-blue tunic
+about body - an emperal cloak
+waist - a burlap belt
+legs - jadite leggings
+feet - jadite boots
+shield -
+weapon - the blade, 'Mischief'(relic)"""
+
+assert module["is_equipment_listing"](equipment_source)
+equipment = module["translate_equipment_listing"]
+equipment.__globals__["reviewed_phrase_translation"] = lambda value: None
+equipment.__globals__["cache_get"] = lambda value, _config: None
+equipment.__globals__["cache_put"] = lambda value, translated, _config: None
+equipment.__globals__["translate_piece"] = (
+    lambda value, _config, force_robust=False: "物品「%s」" % value
+)
+equipment_result = equipment(equipment_source, {})
+equipment_lines = equipment_result.splitlines()
+assert len(equipment_lines) == len(equipment_source.splitlines()) == 17
+assert equipment_lines[0] == "你正在使用："
+assert equipment_lines[2].startswith("頸部 - ")
+assert equipment_lines[3].startswith("頸部 - ")
+assert equipment_lines[5].startswith("手腕 - ")
+assert equipment_lines[6].startswith("手腕 - ")
+assert equipment_lines[8].startswith("手指 - ")
+assert equipment_lines[9].startswith("手指 - ")
+assert equipment_lines[15] == "盾牌 -"
+assert equipment_lines[16] == "武器 - 物品「the blade, 'Mischief'(relic)」"
+
 print("RESOURCE_EQUIPMENT_TEMPLATES_OK")

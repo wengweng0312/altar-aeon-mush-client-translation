@@ -203,6 +203,16 @@ WHERE_LOCATION_ROW = re.compile(r"^(\s*)(.+?)(\s*->\s*)(.+?)(\s*)$")
 DENSE_ITEM_ROW = re.compile(
     r"^(\s*(?:R\s+)?\((?:(?:lvl|tot)\s+)?\s*\d+\)\s*)(.+?)(\s*)$", re.IGNORECASE
 )
+EQUIPMENT_SLOT_ROW = re.compile(
+    r"^(\s*)(head|neck|arms|wrist|hands|finger|on body|about body|waist|legs|feet|shield|weapon)"
+    r"(\s+-\s*)(.*?)(\s*)$", re.IGNORECASE,
+)
+EQUIPMENT_SLOT_ZH = {
+    "head": "頭部", "neck": "頸部", "arms": "手臂", "wrist": "手腕",
+    "hands": "手部", "finger": "手指", "on body": "身上",
+    "about body": "身體周圍", "waist": "腰部", "legs": "腿部",
+    "feet": "腳部", "shield": "盾牌", "weapon": "武器",
+}
 QUEST_DETAIL_FIELD = re.compile(
     r"^(Quest Name|Location|Area Level|Creator|Editors|Approximate difficulty \(scale from 1 to 10\)|"
     r"General Quest Info|Previous goal short description|Previous goal long description|"
@@ -6105,6 +6115,44 @@ def translate_dense_item_table(text, c):
     return result
 
 
+def is_equipment_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(lines) < 4 or lines[0].strip() != "You are using:":
+        return False
+    rows = [line for line in lines[1:] if line.strip()]
+    return len(rows) >= 3 and all(EQUIPMENT_SLOT_ROW.fullmatch(line) for line in rows)
+
+
+def translate_equipment_listing(text, c):
+    """Preserve every equipment slot, including repeats and empty slots."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    output = []
+    for index, line in enumerate(lines):
+        if index == 0 and line.strip() == "You are using:":
+            output.append("你正在使用：")
+            continue
+        if not line.strip():
+            output.append("")
+            continue
+        row = EQUIPMENT_SLOT_ROW.fullmatch(line)
+        if not row:
+            raise RuntimeError("EQUIPMENT_LIST_ROW_PARSE_FAILED")
+        indent, slot, delimiter, item, trailing = row.groups()
+        translated_item = ""
+        if item.strip():
+            translated_item = reviewed_phrase_translation(item.strip()) or cache_get(item.strip(), c)
+            if translated_item is None:
+                translated_item = translate_piece(item.strip(), c, force_robust=True)
+                cache_put(item.strip(), translated_item, c)
+            translated_item = " ".join(translated_item.splitlines()).strip()
+        output.append("%s%s%s%s%s" % (
+            indent, EQUIPMENT_SLOT_ZH[slot.lower()], delimiter, translated_item, trailing,
+        ))
+    if len(output) != len(lines):
+        raise RuntimeError("EQUIPMENT_LIST_FINAL_LINE_COUNT_MISMATCH")
+    return "\n".join(output)
+
+
 def is_nearby_map_listing(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if len(lines) < 2:
@@ -6523,6 +6571,8 @@ def translate(text,c):
         return translate_quest_help_block(text)
     if is_available_level_skills_block(text):
         return translate_available_level_skills_block(text, c)
+    if is_equipment_listing(text):
+        return translate_equipment_listing(text, c)
     if is_command_usage_listing(text):
         return translate_command_usage_listing(text, c)
     if is_sales_listing(text):
