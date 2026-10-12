@@ -3204,7 +3204,13 @@ def is_skill_help_detail(text):
     has_keywords = any(line.startswith("Keywords are:") for line in head)
     has_typed_header = any(re.match(r"^(?:Skill|Spell):\s+", line, re.I) for line in head)
     has_page_header = bool(rows and re.match(r"^Showing page \d+\.$", rows[0], re.I))
-    return bool(len(rows) >= 3 and has_keywords and (has_typed_header or has_page_header))
+    # Every full Alter Aeon help page has a Keywords header.  Older versions
+    # only routed skill/spell pages (or pages with ``Showing page``) through
+    # the semantic parser, leaving ordinary prose and spellgroup trees for
+    # the model to collapse into one line.
+    return bool(len(rows) >= 3 and has_keywords and
+                (has_typed_header or has_page_header or
+                 any(line.startswith("Keywords are:") for line in rows[:2])))
 
 
 HELP_CLASS_ZH = {
@@ -3220,16 +3226,61 @@ HELP_IMPORTANCE_ZH = {
     "useful": "有用", "obscure": "冷門", "guild": "公會技能",
 }
 
+HELP_SPELLGROUP_ENTRY = re.compile(
+    r"^(\s*)(.+?)(\s{2,})(\d+)\s+(mag|cle|thi|war|nec|dru)\s*$",
+    re.I,
+)
+HELP_OPTION_ROW = re.compile(
+    r"^(\s*)((?:[A-Za-z][A-Za-z0-9'-]*)(?:\s+(?:<[^>]+>|\[[^\]]+\]|-[A-Za-z0-9-]+|[A-Za-z][A-Za-z0-9'-]*))+)(\s{2,})(.+)$"
+)
+HELP_SWITCH_ROW = re.compile(
+    r"^(\s*)((?:look|help|show|config)\s+.+?\s+-[A-Za-z0-9-]+)\s+([A-Z].+)$",
+    re.I,
+)
+HELP_LIST_ROW = re.compile(r"^(\s*)-\s+(.+?)\s*$")
+HELP_TAG_ROW = re.compile(r"^(\s*)(%[A-Za-z%][A-Za-z0-9%]*)(\s{2,})(.+?)(\s*)$")
+HELP_TIMEOUT_ROW = re.compile(
+    r"^(\d+)\s+months for a level\s+(\d+),\s+all levels\s+(\d+)\s+char$",
+    re.I,
+)
+HELP_COMMAND_ROW = re.compile(r"^(\s*)(.+?)(\s+(?:--?|:)\s+)(.+?)(\s*)$")
+
 
 def is_help_usage_command(row):
     """Recognize command syntax after Usage without confusing it with prose."""
     value = str(row).strip()
-    if not value or len(value) > 140 or re.search(r"[.!?]", value):
+    if not value or len(value) > 140 or re.search(r"[!?]", value):
         return False
-    return bool(re.fullmatch(
-        r"'?\s*[a-z][a-z0-9'-]*(?:\s+(?:[a-z][a-z0-9'-]*|-[a-z][a-z0-9-]*|<[^>]+>|\[[^\]]+\]))*\s*'?",
-        value,
-    ))
+    if value.endswith("."):
+        return False
+    if value.startswith("'"):
+        return bool(re.fullmatch(r"'[a-z][a-z0-9'/_ -]*'", value, re.I))
+    if not re.match(r"^[a-z<]", value):
+        return False
+    # Help syntax legitimately includes ``all.<type>``, quotes, placeholders,
+    # pipes, and occasional malformed trailing quotes in official pages.  This
+    # deliberately runs only inside a Syntax/Usage/Format command section.
+    if not re.fullmatch(r"[A-Za-z0-9#\s<>{}\[\]()'\"/|,._=:-]+", value):
+        return False
+    if len(value.split()) > 5 and not re.search(r"[<>\[\]\"/|._=:]", value):
+        return False
+    # A wrapped prose line may begin lowercase after ``Format:``.  A long
+    # sequence made only of ordinary words is prose, not a typeable command.
+    if re.fullmatch(r"[a-z][a-z0-9'_-]*(?:\s+[a-z][a-z0-9'_-]*)*", value, re.I):
+        return len(value.split()) <= 5
+    return True
+
+
+def parse_help_command_row(row):
+    """Split a command/description row while retaining its original delimiter."""
+    match = HELP_COMMAND_ROW.fullmatch(str(row))
+    if not match:
+        return None
+    indent, command, delimiter, description, trailing = match.groups()
+    command = command.strip()
+    if not is_help_usage_command(command) or not description.strip():
+        return None
+    return indent, command, delimiter, description.strip(), trailing
 
 
 def _command_usage_parts(text):
@@ -3380,10 +3431,48 @@ def translate_help_metadata_unit(row, c):
     speed = re.fullmatch(r"Speed:\s*(.+)", value, re.I)
     if speed:
         return "速度：" + translate_cached_phrase(speed.group(1).strip(), c)
+    damage_type = re.fullmatch(r"Damage Type:\s*(.+)", value, re.I)
+    if damage_type:
+        return "傷害類型：" + translate_cached_phrase(damage_type.group(1).strip(), c)
+    damage = re.fullmatch(r"Damage:\s*(.+)", value, re.I)
+    if damage:
+        return "傷害：" + translate_cached_phrase(damage.group(1).strip(), c)
+    related = re.fullmatch(r"There are\s+(\d+)\s+other help pages that may be related to your search\.", value, re.I)
+    if related:
+        return "另有 %s 個可能與此次搜尋相關的幫助頁面。" % related.group(1)
+    see_list = re.fullmatch(r"See\s+'([^']+)'\s+for a list\.", value, re.I)
+    if see_list:
+        return "列表請參閱 '%s'。" % see_list.group(1)
+    see_also = re.fullmatch(r"See also,?\s+(.+)", value, re.I)
+    if see_also:
+        return "另請參閱：%s" % see_also.group(1).strip()
+    consumables = re.fullmatch(
+        r"You can create the (?:spell|skill)\s+'([^']+)'\s+on the following consumables:",
+        value, re.I,
+    )
+    if consumables:
+        return "你可以在以下消耗品上製作 '%s'：" % consumables.group(1)
+    syntax_inline = re.fullmatch(r"Syntax:\s*(.+)", value, re.I)
+    if syntax_inline:
+        return "語法：%s" % syntax_inline.group(1).strip()
+    summary = re.fullmatch(r"Summary:\s*(.+)", value, re.I)
+    if summary:
+        return "摘要：" + translate_cached_phrase(summary.group(1).strip(), c)
+    possible = re.fullmatch(r"Possible Values:\s*(.+)", value, re.I)
+    if possible:
+        choices = possible.group(1).strip()
+        if choices.lower() == "enabled / disabled":
+            choices = "啟用／停用"
+        return "可用值：" + choices
     fixed = {
         "usage:": "用法：",
+        "syntax:": "語法：",
+        "format:": "格式：",
+        "profession": "專業技能",
         "(can be groupcast)": "可群體施放",
         "(can be maintained)": "可維持",
+        "(can be bloodcast)": "可使用血液施放",
+        "(requires favor)": "需要神恩",
     }
     if value.lower() in fixed:
         return fixed[value.lower()]
@@ -3395,14 +3484,20 @@ def translate_help_metadata_unit(row, c):
 
 def parse_help_semantic_units(text):
     """Turn display-wrapped help into ordered, independently verifiable units."""
-    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    rows = [line.rstrip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     units, body = [], []
     in_usage = False
+    in_command_table = False
     after_usable = False
     metadata = re.compile(
         r"^(Showing page \d+\.|Keywords are:|Skill:|Spell:|"
         r"\((?:critical|important|helpful|useful|obscure|guild)\)|"
-        r"\(Can Be (?:Groupcast|Maintained)\)|Group:|Speed:|Usage:|"
+        r"\(Can Be (?:Groupcast|Maintained|Bloodcast)\)|\(Requires Favor\)|"
+        r"Group:|Speed:|Damage Type:|Damage:|Usage:|Syntax:|Format:|"
+        r"Summary:|Possible Values:|Profession$|"
+        r"There are \d+ other help pages that may be related to your search\.|"
+        r"See '.*' for a list\.|See also,?|"
+        r"You can create the (?:spell|skill) .* on the following consumables:|"
         r"You can use .* while:)", re.I
     )
 
@@ -3412,22 +3507,80 @@ def parse_help_semantic_units(text):
             body[:] = []
 
     for row in rows:
-        if metadata.match(row):
+        value = row.strip()
+        if metadata.match(value):
             flush_body()
-            units.append(("help", row))
-            in_usage = row == "Usage:"
-            after_usable = bool(re.match(r"^You can use .* while:$", row, re.I))
+            units.append(("help", value))
+            in_usage = value.lower() in {"usage:", "syntax:", "format:"}
+            in_command_table = in_usage
+            after_usable = bool(re.match(r"^You can use .* while:$", value, re.I))
             continue
-        if in_usage and is_help_usage_command(row):
-            units.append(("raw", row))
+        command_row = parse_help_command_row(row)
+        if command_row and (in_usage or in_command_table):
+            units.append(("help_command", row))
+            continue
+        if (in_usage or in_command_table) and is_help_usage_command(value):
+            units.append(("raw", value))
             continue
         in_usage = False
         if after_usable:
             flush_body()
-            units.append(("translate", row))
+            units.append(("translate", value))
             after_usable = False
             continue
-        body.append(row)
+        tree = HELP_SPELLGROUP_ENTRY.fullmatch(row)
+        if tree:
+            flush_body()
+            units.append(("help_tree", row))
+            continue
+        listed = HELP_LIST_ROW.fullmatch(row)
+        if listed:
+            flush_body()
+            units.append(("help_list", row))
+            continue
+        tag = HELP_TAG_ROW.fullmatch(row)
+        if tag:
+            flush_body()
+            units.append(("help_tag", row))
+            continue
+        if re.fullmatch(r"(?:For )?Examples?,?", value, re.I):
+            flush_body()
+            units.append(("translate", value))
+            continue
+        # Alter Aeon wraps long bullet items onto a following non-bullet row.
+        # Rejoin only a lowercase continuation after an unfinished bullet; a
+        # new sentence, heading, command, or list item remains independent.
+        if (units and units[-1][0] == "help_list" and
+                not re.search(r"[.!?]$", units[-1][1].strip()) and
+                re.match(r"^[a-z]", value)):
+            units[-1] = ("help_list", units[-1][1].rstrip() + " " + value)
+            continue
+        if re.fullmatch(r"https?://\S+", value, re.I):
+            flush_body()
+            units.append(("raw", value))
+            continue
+        if re.fullmatch(r"[a-z][a-z0-9'-]*(?:\s+\d+)+\s*\([^)]+\)", value, re.I):
+            flush_body()
+            units.append(("raw", value))
+            continue
+        option = HELP_SWITCH_ROW.fullmatch(row) or HELP_OPTION_ROW.fullmatch(row)
+        if option and option.group(2).split()[0].lower() in {"look", "help", "show", "config"}:
+            flush_body()
+            units.append(("help_option", row))
+            continue
+        # Short labels and section headings should not absorb the prose or
+        # table row that follows them.
+        if value.endswith(":") and len(value) <= 100:
+            flush_body()
+            units.append(("translate", value))
+            in_usage = value.lower().endswith("syntax is:")
+            in_command_table = (
+                False if value.lower() in {"keywords:", "examples:"}
+                else (in_command_table or in_usage)
+            )
+            continue
+        in_command_table = False
+        body.append(value)
     flush_body()
     return units
 
@@ -3467,6 +3620,65 @@ def translate_semantic_units(units, c, context="semantic"):
         if kind == "help":
             output.append(translate_help_metadata_unit(source, c))
             continue
+        if kind == "help_tree":
+            match = HELP_SPELLGROUP_ENTRY.fullmatch(source)
+            if not match:
+                raise RuntimeError("HELP_TREE_PARSE_FAILED")
+            indent, name, spacing, level, class_code = match.groups()
+            output.append("%s%s%s%s %s" % (
+                indent, translate_cached_phrase(name.strip(), c), spacing,
+                level, class_code,
+            ))
+            continue
+        if kind == "help_option":
+            match = HELP_SWITCH_ROW.fullmatch(source)
+            if match:
+                indent, command, description = match.groups()
+            else:
+                match = HELP_OPTION_ROW.fullmatch(source)
+                if match:
+                    indent, command, _spacing, description = match.groups()
+            if not match:
+                raise RuntimeError("HELP_OPTION_PARSE_FAILED")
+            output.append("%s%s - %s" % (
+                indent, command.strip(), translate_cached_phrase(description.strip(), c),
+            ))
+            continue
+        if kind == "help_command":
+            parts = parse_help_command_row(source)
+            if not parts:
+                raise RuntimeError("HELP_COMMAND_PARSE_FAILED")
+            indent, command, delimiter, description, trailing = parts
+            output.append("%s%s%s%s%s" % (
+                indent, command, delimiter,
+                translate_cached_phrase(description, c), trailing,
+            ))
+            continue
+        if kind == "help_list":
+            match = HELP_LIST_ROW.fullmatch(source)
+            if not match:
+                raise RuntimeError("HELP_LIST_PARSE_FAILED")
+            indent, item = match.groups()
+            timeout = HELP_TIMEOUT_ROW.fullmatch(item)
+            if timeout:
+                months, level, total = timeout.groups()
+                translated = "等級 %s、總等級 %s 的角色：%s 個月" % (
+                    level, total, months,
+                )
+            else:
+                translated = translate_cached_phrase(item, c)
+            output.append("%s- %s" % (indent, translated))
+            continue
+        if kind == "help_tag":
+            match = HELP_TAG_ROW.fullmatch(source)
+            if not match:
+                raise RuntimeError("HELP_TAG_PARSE_FAILED")
+            indent, tag, spacing, description, trailing = match.groups()
+            output.append("%s%s%s%s%s" % (
+                indent, tag, spacing,
+                translate_cached_phrase(description.strip(), c), trailing,
+            ))
+            continue
         translated = prepared.get(source)
         # Old per-sentence cache rows can contain a model echo in English.  A
         # semantic prose unit is not complete unless it actually contains CJK.
@@ -3496,7 +3708,8 @@ def translate_semantic_units(units, c, context="semantic"):
 def translate_skill_help_detail(text, c):
     """Translate field/command/prose units and reconstruct their exact order."""
     units = parse_help_semantic_units(text)
-    if len(units) < 3:
+    # A valid short help page may contain only Keywords plus one prose unit.
+    if len(units) < 2:
         raise RuntimeError("HELP_SEMANTIC_UNITS_EMPTY")
     return translate_semantic_units(units, c, "help")
 
