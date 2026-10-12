@@ -1247,15 +1247,18 @@ def _translationOrNative(gesture, translationGesture, nativeScript, afterTransla
 					if changed == current:
 						afterTranslation()
 						return
-					# Require one 5 ms stable observation. Rapid repeated keys can
+					# Require one 10 ms stable observation. Rapid repeated keys can
 					# replace the file again; in that case only the newest entry wins.
-					core.callLater(5, lambda: poll(attempt + 1, current))
+					core.callLater(10, lambda: poll(attempt + 1, current))
 					return
-				if attempt >= 24:
-					# Preserve the old safe fallback on unusually slow filesystems.
-					afterTranslation()
+				if attempt >= 80:
+					# MUSHclient rewrites the review entry even at a real history
+					# boundary.  If no rewrite arrived, the request has not completed;
+					# inspecting the old text here would falsely announce "oldest" or
+					# "latest" and make a later completed request look like a jump.
+					ui.message("翻譯紀錄尚未更新，請再按一次。")
 					return
-				core.callLater(5, lambda: poll(attempt + 1, changed))
+				core.callLater(10, lambda: poll(attempt + 1, changed))
 			core.callLater(0, poll)
 	else:
 		nativeScript(gesture)

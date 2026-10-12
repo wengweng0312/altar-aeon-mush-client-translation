@@ -72,6 +72,10 @@ def main() -> None:
     present = module["_translationReviewPresentation"]
     original = module["_translationOriginalEnglish"]
 
+    addon_source = MODULE.read_text(encoding="utf-8")
+    assert "if attempt >= 80:" in addon_source
+    assert "翻譯紀錄尚未更新，請再按一次。" in addon_source
+
     cases = (
         ("Pikan says, 'Bring this letter to Fast Eddie in the Dragon Tooth research guild.'", {"Pikan", "Fast Eddie", "Dragon Tooth research guild"}),
         ("Some fungal ooze", {"fungal ooze"}),
