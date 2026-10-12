@@ -82,4 +82,41 @@ assert equipment_lines[9].startswith("手指 - ")
 assert equipment_lines[15] == "盾牌 -"
 assert equipment_lines[16] == "武器 - 物品「the blade, 'Mischief'(relic)」"
 
+inspection_source = """Testperson is short and of slender build, with brown eyes. Their sandy hair
+is shoulder length, but unkempt and messy.
+They look fairly young and fresh.
+You are in excellent condition.
+head        - the demon's horn(artifact)
+neck        - A necklace of Power (glow)
+arms        - jadite sleeves
+hands       - emperal gauntlets
+on body     - a purple-blue tunic
+shield      -
+weapon      - the blade, 'Mischief'(relic)
+Testperson is obviously carrying:
+the sword of mist
+a smithy's hammer
+a magic mirror"""
+
+assert module["is_character_inspection_listing"](inspection_source)
+inspection = module["translate_character_inspection_listing"]
+inspection.__globals__["translate_cached_phrase"] = lambda value, _config: "譯「%s」" % value
+inspection_result = inspection(inspection_source, {})
+inspection_lines = inspection_result.splitlines()
+assert inspection_lines[:4] == [
+    "譯「Testperson is short and of slender build, with brown eyes.」",
+    "譯「Their sandy hair is shoulder length, but unkempt and messy.」",
+    "譯「They look fairly young and fresh.」",
+    "譯「You are in excellent condition.」",
+]
+assert inspection_lines[4].startswith("頭部        - 譯「")
+assert inspection_lines[9] == "盾牌      -"
+assert inspection_lines[10].startswith("武器      - 譯「")
+assert inspection_lines[11] == "Testperson 顯然攜帶："
+assert inspection_lines[12:] == [
+    "譯「the sword of mist」",
+    "譯「a smithy's hammer」",
+    "譯「a magic mirror」",
+]
+
 print("RESOURCE_EQUIPMENT_TEMPLATES_OK")

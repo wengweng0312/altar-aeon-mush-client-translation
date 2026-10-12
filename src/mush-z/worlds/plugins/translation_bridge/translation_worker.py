@@ -213,6 +213,7 @@ EQUIPMENT_SLOT_ZH = {
     "about body": "身體周圍", "waist": "腰部", "legs": "腿部",
     "feet": "腳部", "shield": "盾牌", "weapon": "武器",
 }
+OBVIOUSLY_CARRYING_HEADER = re.compile(r"^(.+?)\s+is obviously carrying:\s*$", re.IGNORECASE)
 QUEST_DETAIL_FIELD = re.compile(
     r"^(Quest Name|Location|Area Level|Creator|Editors|Approximate difficulty \(scale from 1 to 10\)|"
     r"General Quest Info|Previous goal short description|Previous goal long description|"
@@ -6153,6 +6154,60 @@ def translate_equipment_listing(text, c):
     return "\n".join(output)
 
 
+def character_inspection_parts(text):
+    """Locate equipment and carried-item sections inside a player/NPC look."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    equipment_indexes = [
+        index for index, line in enumerate(lines) if EQUIPMENT_SLOT_ROW.fullmatch(line)
+    ]
+    carrying_indexes = [
+        index for index, line in enumerate(lines) if OBVIOUSLY_CARRYING_HEADER.fullmatch(line.strip())
+    ]
+    if len(equipment_indexes) < 5 or len(carrying_indexes) != 1:
+        return None
+    carrying_index = carrying_indexes[0]
+    first_equipment = equipment_indexes[0]
+    if first_equipment <= 0 or carrying_index <= equipment_indexes[-1]:
+        return None
+    if equipment_indexes != list(range(first_equipment, carrying_index)):
+        return None
+    carried = [line for line in lines[carrying_index + 1:] if line.strip()]
+    if not carried:
+        return None
+    return lines, first_equipment, carrying_index
+
+
+def is_character_inspection_listing(text):
+    return character_inspection_parts(text) is not None
+
+
+def translate_character_inspection_listing(text, c):
+    """Reconstruct a character look without trusting model-created line breaks."""
+    parts = character_inspection_parts(text)
+    if parts is None:
+        raise RuntimeError("CHARACTER_INSPECTION_PARSE_FAILED")
+    lines, first_equipment, carrying_index = parts
+    output = []
+    prefix = "\n".join(lines[:first_equipment])
+    for sentence in semantic_sentence_chunks(prefix):
+        output.append(translate_cached_phrase(sentence, c))
+    for line in lines[first_equipment:carrying_index]:
+        row = EQUIPMENT_SLOT_ROW.fullmatch(line)
+        if not row:
+            raise RuntimeError("CHARACTER_INSPECTION_EQUIPMENT_PARSE_FAILED")
+        indent, slot, delimiter, item, trailing = row.groups()
+        translated_item = translate_cached_phrase(item.strip(), c) if item.strip() else ""
+        output.append("%s%s%s%s%s" % (
+            indent, EQUIPMENT_SLOT_ZH[slot.lower()], delimiter, translated_item, trailing,
+        ))
+    header = OBVIOUSLY_CARRYING_HEADER.fullmatch(lines[carrying_index].strip())
+    output.append("%s 顯然攜帶：" % header.group(1).strip())
+    for line in lines[carrying_index + 1:]:
+        if line.strip():
+            output.append(translate_cached_phrase(line.strip(), c))
+    return "\n".join(output)
+
+
 def is_nearby_map_listing(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if len(lines) < 2:
@@ -6571,6 +6626,8 @@ def translate(text,c):
         return translate_quest_help_block(text)
     if is_available_level_skills_block(text):
         return translate_available_level_skills_block(text, c)
+    if is_character_inspection_listing(text):
+        return translate_character_inspection_listing(text, c)
     if is_equipment_listing(text):
         return translate_equipment_listing(text, c)
     if is_command_usage_listing(text):
