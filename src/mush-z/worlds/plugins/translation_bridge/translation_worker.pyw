@@ -3185,23 +3185,40 @@ def translate_login_menu(text, c):
     return "\n".join(output)
 
 
+HELP_NO_MATCH_HEADER = "Sorry, no help matches that.  Perhaps you meant:"
+
+
 def is_help_search_listing(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    return bool(rows and rows[0] == "There is help available on the following topics:" and
-                any(re.match(r"^\[\s*\d+\]\s+", line) for line in rows[1:]))
+    if not rows:
+        return False
+    if rows[0] == "There is help available on the following topics:":
+        return any(re.match(r"^\[\s*\d+\]\s+", line) for line in rows[1:])
+    if rows[0] == HELP_NO_MATCH_HEADER and len(rows) >= 2:
+        # Suggestions are server command keywords, not prose for a model to
+        # rewrite.  Keep this deliberately strict so dialogue cannot match.
+        return all(bool(re.fullmatch(r"[a-z0-9][a-z0-9 '\-]*", line, re.I)) for line in rows[1:])
+    return False
 
 
 def translate_help_search_listing(text, c):
+    substantive = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    no_match = bool(substantive and substantive[0] == HELP_NO_MATCH_HEADER)
     output = []
     for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         value = line.strip()
         row = re.match(r"^(\[\s*\d+\]\s+)(.*)$", value)
         if value == "There is help available on the following topics:":
             output.append("以下主題有說明文件：")
+        elif value == HELP_NO_MATCH_HEADER:
+            output.append("抱歉，找不到符合的說明。你可能是指：")
         elif value == "To pick a particular help page, add in the number of the page.":
             output.append("若要選擇特定說明頁，請加上該頁的編號。")
         elif row:
             output.append(row.group(1) + translate_safe_display_row(row.group(2), c))
+        elif no_match:
+            # Preserve exact help keywords and their indentation for commands.
+            output.append(line)
         elif value:
             output.append(translate_safe_display_row(value, c))
         else:

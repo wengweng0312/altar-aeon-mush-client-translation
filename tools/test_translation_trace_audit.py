@@ -52,5 +52,17 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     generated_loop["source"] = "A chair is here."
     assert "possible_repetition_loop" in audit.suspicious_reasons(generated_loop)
     assert audit.FUNCTIONAL_REASONS.intersection(reasons)
+    advice = audit.repair_advice({"record": newest, "reasons": reasons})
+    assert advice is None
+    help_case = {
+        "record": {
+            "source": "Sorry, no help matches that.  Perhaps you meant:\n    races",
+            "result": "", "engine": "lmt_q4", "ts": "2026-01-03T00:00:00",
+        },
+        "reasons": ["translation_error_or_fallback"],
+    }
+    advice = audit.repair_advice(help_case)
+    assert advice["family"] == "help_no_match_suggestions"
+    assert advice["confidence"] == "high"
 
 print("TRANSLATION_TRACE_AUDIT_OK newest_first=yes readonly=yes")

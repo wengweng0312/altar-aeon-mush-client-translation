@@ -147,6 +147,68 @@ def write_case(stream, number: int, case: dict):
     stream.write("\nChinese/result:\n\n```text\n%s\n```\n" % markdown_text(record.get("result")))
 
 
+def repair_advice(case: dict):
+    """Return a conservative repair family; never generate executable code."""
+    source = str(case["record"].get("source") or "")
+    rows = nonempty_lines(source)
+    if rows and rows[0] == "Sorry, no help matches that.  Perhaps you meant:":
+        return {
+            "family": "help_no_match_suggestions", "confidence": "high",
+            "strategy": "Translate the fixed header and preserve every suggested help keyword row verbatim.",
+            "invariants": ["same_nonempty_line_count", "keyword_rows_byte_preserved", "no_model_required"],
+        }
+    if rows and (rows[0] == "You are using:" or any(" is obviously carrying:" in row for row in rows)):
+        return {
+            "family": "equipment_or_character_inspection", "confidence": "high",
+            "strategy": "Parse slot rows and carried items, translate only semantic item fields, then reconstruct.",
+            "invariants": ["slot_order_preserved", "duplicate_slots_preserved", "empty_slots_preserved"],
+        }
+    if rows and re.match(r"^(?:Usage|Syntax|Keywords are):", rows[0], re.I):
+        return {
+            "family": "help_command_layout", "confidence": "medium",
+            "strategy": "Protect commands, placeholders and labels; translate descriptions as independent fields.",
+            "invariants": ["commands_preserved", "placeholders_preserved", "source_order_preserved"],
+        }
+    if "translation_error_or_fallback" in case["reasons"]:
+        return {
+            "family": "unclassified_fallback", "confidence": "low",
+            "strategy": "Keep English fallback and request human classification before proposing a parser.",
+            "invariants": ["english_never_lost"],
+        }
+    return None
+
+
+def write_repair_candidates(cases, run_dir: Path):
+    advised = []
+    for case in cases.values():
+        advice = repair_advice(case)
+        if advice:
+            advised.append((case, advice))
+    report_path = run_dir / "REPAIR_CANDIDATES.md"
+    fixture_path = run_dir / "AUTO_REPAIR_FIXTURES.json"
+    fixtures = []
+    with report_path.open("w", encoding="utf-8", newline="\n") as report:
+        report.write("# Translation Repair Candidates\n\n")
+        report.write("These are non-executable proposals. Production code is never changed automatically.\n\n")
+        for number, (case, advice) in enumerate(advised, 1):
+            record = case["record"]
+            report.write("## %d. %s | %s confidence\n\n" % (
+                number, advice["family"], advice["confidence"],
+            ))
+            report.write("- Original time: `%s`\n" % (record.get("ts") or "unknown"))
+            report.write("- Engine/model: `%s`\n" % (record.get("engine") or "unknown"))
+            report.write("- Strategy: %s\n" % advice["strategy"])
+            report.write("- Required invariants: `%s`\n" % "`, `".join(advice["invariants"]))
+            report.write("\n```text\n%s\n```\n" % markdown_text(record.get("source")))
+            fixtures.append({
+                "family": advice["family"], "confidence": advice["confidence"],
+                "source": record.get("source") or "", "old_result": record.get("result") or "",
+                "old_reasons": case["reasons"], "required_invariants": advice["invariants"],
+            })
+    fixture_path.write_text(json.dumps(fixtures, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report_path, fixture_path, len(advised)
+
+
 def lmt_server_ready(port=18082):
     try:
         with urlopen("http://127.0.0.1:%d/health" % port, timeout=2.0) as response:
@@ -390,8 +452,11 @@ def audit(args):
         report.write("- Complete normalized trace, newest first: `TRACE_NEWEST_FIRST.jsonl`\n")
         report.write("- Malformed input samples: `MALFORMED_TRACE_LINES.txt`\n")
     malformed_path.write_text("\n\n".join(malformed), encoding="utf-8")
+    repair_report, repair_fixtures, repair_count = write_repair_candidates(cases, run_dir)
     latest = args.output_root.resolve() / "TRANSLATION_TRACE_AUDIT_REPORT.md"
     shutil.copyfile(report_path, latest)
+    shutil.copyfile(repair_report, args.output_root.resolve() / "REPAIR_CANDIDATES.md")
+    shutil.copyfile(repair_fixtures, args.output_root.resolve() / "AUTO_REPAIR_FIXTURES.json")
     replay = None
     if args.replay_lmt:
         replay = replay_cases(cases, args, run_dir)
@@ -399,6 +464,7 @@ def audit(args):
     print("Completed: %d records, %d suspicious cases" % (scanned, len(cases)))
     print("Report: %s" % report_path)
     print("Latest: %s" % latest)
+    print("Repair candidates: %d (%s)" % (repair_count, repair_report))
     if replay is not None:
         print("Replay: fixed=%d unresolved=%d errors=%d" % (
             replay["fixed"], replay["unresolved"], replay["errors"],
