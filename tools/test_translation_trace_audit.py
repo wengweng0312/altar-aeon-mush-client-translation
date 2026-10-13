@@ -42,13 +42,19 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     assert "possible_line_collapse" in reasons
     assert "slow_translation" in reasons
     structured = dict(newest)
-    structured["source"] = "Usage:\ncommand one\ncommand two\ncommand three"
+    structured["source"] = "Usage:\nscan - scan all\nscan <direction> - scan one\nscan help - this page"
     assert "structured_line_collapse" in audit.suspicious_reasons(structured)
+    wrapped_help = dict(newest)
+    wrapped_help["source"] = "Keywords are: 'example'\nThis is ordinary display-wrapped prose\nthat continues on another source line\nand should not be treated as a table."
+    assert "structured_line_collapse" not in audit.suspicious_reasons(wrapped_help)
     numeric = {
         "status": "OK", "engine": "lmt_q4", "elapsed_seconds": 0.1,
         "source": "Mana: 25, Level: 31", "result": "法力：20，等級：31",
     }
     assert "numeric_value_mismatch" in audit.suspicious_reasons(numeric)
+    formatted_numeric = dict(numeric)
+    formatted_numeric.update({"source": "Cost: 9000000", "result": "費用：9,000,000"})
+    assert "numeric_value_mismatch" not in audit.suspicious_reasons(formatted_numeric)
     assert audit.suspicious_reasons(old) == []
     legitimate_repeats = {
         "status": "OK", "engine": "lmt_q4", "elapsed_seconds": 0.5,
@@ -76,6 +82,11 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
         "Gimthen says, 'Hello.'", "金騰說：『你好。』",
     )
     assert entity_pairs[0][:3] == ("npc_name", "Gimthen", "金騰")
+    arrived = audit.extract_entity_pairs("A guard has arrived.", "一名守衛已經來了。")
+    assert arrived[0][:3] == ("npc_name", "A guard", "守衛")
+    assert audit.extract_entity_pairs(
+        "A guard has arrived.", "一名守衛從北方跑了過來。",
+    ) == []
     source_variants = {
         "Gimthen says, 'Hello.'": {
             "occurrences": 2,
@@ -97,5 +108,6 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     consistency = audit.build_consistency_suspicions(source_variants, entity_variants)
     assert consistency[0]["kind"] == "npc_name_variation"
     assert consistency[0]["confidence"] == "high"
+    assert consistency[0]["existing_guard_to_retest"] == "npc_names_or_mob_types_registry"
 
 print("TRANSLATION_TRACE_AUDIT_OK newest_first=yes readonly=yes")

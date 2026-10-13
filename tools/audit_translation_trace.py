@@ -45,13 +45,16 @@ EQUIPMENT_SLOTS = (
 )
 NPC_EVENT_PATTERNS = (
     (re.compile(r"^(.+?)\s+says(?:\s+in\s+.+?)?[, :]", re.I), re.compile(r"^(.+?)(?:說|用.+?語氣說)[：:，,]")),
-    (re.compile(r"^(.+?)\s+is DEAD!", re.I), re.compile(r"^(.+?)(?:死了|已死亡|死亡)")),
-    (re.compile(r"^(.+?)\s+has arrived\.?", re.I), re.compile(r"^(.+?)(?:來了|已到達|抵達)")),
+    (re.compile(r"^(.+?)\s+is DEAD!", re.I), re.compile(r"^(.+?)(?:死了|已死亡|死亡)[。.!！]?$")),
+    (re.compile(r"^(.+?)\s+has arrived\.?", re.I), re.compile(r"^(.+?)(?:來了|已到達|抵達)[。.!！]?$")),
     (re.compile(
         r"^(.+?)\s+(?:leaves|flies|walks|runs)\s+"
         r"(?:north|south|east|west|northeast|northwest|southeast|southwest|up|down|away|in|out)"
         r"(?:wards?)?[.!]?$", re.I,
-    ), re.compile(r"^(.+?)(?:離開|飛|走|跑|向)")),
+    ), re.compile(
+        r"^(.+?)(?:離開(?:前往|並前往|向|往)|向(?:北|南|東|西|上|下).+?離開)"
+        r".+?[。.!！]?$"
+    )),
 )
 
 
@@ -128,7 +131,31 @@ def structured_family(source: str):
 
 
 def numeric_tokens(value: str):
-    return Counter(re.findall(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?(?:[kKmMbB]|%)?", value or ""))
+    # Formatting commas do not change a value: 9000000 and 9,000,000 match.
+    value = re.sub(r"(?<=\d)[,，](?=\d{3}(?:\D|$))", "", value or "")
+    return Counter(re.findall(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?(?:[kKmMbB]|%)?", value))
+
+
+def structural_row_count(source: str):
+    """Count true fields/rows, excluding ordinary display-wrapped prose."""
+    count = 0
+    for row in nonempty_lines(source):
+        if EQUIPMENT_SLOTS and re.match(
+            r"^(?:%s)\s+-" % "|".join(re.escape(slot) for slot in EQUIPMENT_SLOTS), row, re.I,
+        ):
+            count += 1
+        elif re.match(
+            r"^(?:Quest Name|Location|Area Level|Creator|Editors?|Approximate difficulty|"
+            r"Current goal (?:short|long) description|Previous goal (?:short|long) description|"
+            r"Usage|Syntax|Summary|Possible Values|Skill|Spell|Mana|Group|Guild|Rank)\s*:",
+            row, re.I,
+        ):
+            count += 1
+        elif re.match(r"^(?:[-*]|\d+\s*[-.)])\s+\S", row):
+            count += 1
+        elif re.match(r"^[a-z][a-z0-9_-]*(?:\s+<[^>]+>)*\s+-\s+\S", row, re.I):
+            count += 1
+    return count
 
 
 def orphan_fragment_count(value: str):
@@ -139,6 +166,16 @@ def orphan_fragment_count(value: str):
 def normalize_candidate(value: str):
     value = re.sub(r"\s+", " ", str(value or "")).strip(" \t\r\n:：,，.!！?？'\"‘’“”")
     return value.casefold()
+
+
+def clean_translated_entity_candidate(value: str):
+    """Remove grammatical wrappers that are not part of a translated name."""
+    value = str(value or "").strip()
+    value = re.sub(r"^(?:一名|一個|一隻|一位|那名|那個|那隻|該名|該個|該隻)\s*", "", value)
+    value = re.sub(r"(?:已經|已经)$", "", value).strip()
+    if not value or len(value) > 50 or re.search(r"[\r\n，。！？,:：；;]", value):
+        return ""
+    return value
 
 
 def extract_entity_pairs(source: str, result: str):
@@ -154,7 +191,7 @@ def extract_entity_pairs(source: str, result: str):
             chinese_match = chinese_pattern.match(chinese)
             if english_match and chinese_match:
                 original = english_match.group(1).strip()
-                translated = chinese_match.group(1).strip()
+                translated = clean_translated_entity_candidate(chinese_match.group(1))
                 if original and translated and HAN.search(translated):
                     pairs.append(("npc_name", original, translated, english, chinese))
                 break
@@ -211,7 +248,7 @@ def suspicious_reasons(record: dict):
     result_lines = nonempty_lines(result)
     if len(source_lines) >= 4 and len(result_lines) <= max(1, int(len(source_lines) * 0.34)):
         reasons.append("possible_line_collapse")
-        if structured_family(source):
+        if structured_family(source) and structural_row_count(source) >= 3:
             reasons.append("structured_line_collapse")
     source_compact = re.sub(r"\s+", "", source)
     result_compact = re.sub(r"\s+", "", result)
@@ -246,6 +283,7 @@ def build_consistency_suspicions(source_variants, entity_variants):
         suspicions.append({
             "kind": kind, "confidence": "medium", "context": context,
             "key": source, "occurrences": aggregate["occurrences"],
+            "existing_guard_to_retest": existing_guard_for(kind, context),
             "variants": list(aggregate["results"].values()),
         })
     for (kind, original), aggregate in entity_variants.items():
@@ -254,11 +292,31 @@ def build_consistency_suspicions(source_variants, entity_variants):
         suspicions.append({
             "kind": "%s_variation" % kind, "confidence": "high", "context": kind,
             "key": original, "occurrences": aggregate["occurrences"],
+            "existing_guard_to_retest": existing_guard_for("%s_variation" % kind, kind),
             "variants": list(aggregate["translations"].values()),
         })
     confidence_order = {"high": 0, "medium": 1, "low": 2}
     suspicions.sort(key=lambda item: (confidence_order[item["confidence"]], -item["occurrences"], item["kind"]))
     return suspicions
+
+
+def existing_guard_for(kind: str, context: str):
+    """Name current safeguards without claiming an old trace is already fixed."""
+    if kind == "npc_name_variation":
+        return "npc_names_or_mob_types_registry"
+    if kind == "item_name_variation":
+        return "shared_exact_source_cache"
+    if kind == "structured_result_variation":
+        return {
+            "character_inspection": "character_inspection_parser",
+            "help": "generic_help_pipeline",
+            "quest": "quest_layout_pipeline",
+            "skills": "skills_pipeline",
+            "inventory_or_equipment": "equipment_inventory_pipeline",
+            "sales": "sales_listing_parser",
+            "item_detail": "item_detail_parser",
+        }.get(context, "")
+    return ""
 
 
 def write_consistency_report(suspicions, run_dir: Path):
@@ -274,6 +332,8 @@ def write_consistency_report(suspicions, run_dir: Path):
             report.write("\n## %d. %s | %s confidence\n\n" % (number, item["kind"], item["confidence"]))
             report.write("- Context: `%s`\n" % item["context"])
             report.write("- Occurrences: `%d`\n" % item["occurrences"])
+            if item.get("existing_guard_to_retest"):
+                report.write("- Existing safeguard to re-test: `%s` (not automatic proof of repair)\n" % item["existing_guard_to_retest"])
             report.write("- English key/source:\n\n```text\n%s\n```\n" % markdown_text(item["key"]))
             for variant_number, variant in enumerate(item["variants"], 1):
                 report.write("\nVariant %d (%d occurrences; newest `%s`; engines `%s`):\n\n```text\n%s\n```\n" % (
