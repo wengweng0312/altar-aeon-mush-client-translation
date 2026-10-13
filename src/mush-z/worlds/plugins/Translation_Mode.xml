@@ -56,6 +56,7 @@ local unicode_history = {}
 local unicode_history_pos = 0
 local unicode_history_limit = 1000
 local unicode_history_seq = 0
+local review_write_seq = 0
 local history_follow_tail = true
 local block_starts = {
   ["You know the following skills:"] = "skills",
@@ -183,16 +184,24 @@ local function set_review_mode_state(active)
   os.remove(review_state_file)
   os.rename(tmp, review_state_file)
 end
-local function write_review_entry(entry)
+local function write_review_entry(entry, edge)
   if not review_mode then return end
   local text = type(entry) == "table" and entry.text or entry
   if type(text) ~= "string" or text == "" then return end
   local tmp = review_entry_file .. ".tmp"
   local f = io.open(tmp, "wb")
   if not f then return end
-  if type(entry) == "table" and (entry.review_kind == "quest" or entry.review_kind == "job" or entry.review_kind == "skills") then
-    f:write(string.char(30) .. "TMREVIEW:" .. entry.review_kind .. string.char(30))
-  end
+  review_write_seq = review_write_seq + 1
+  local kind = type(entry) == "table" and entry.review_kind or ""
+  if kind ~= "quest" and kind ~= "job" and kind ~= "skills" then kind = "" end
+  local entry_id = type(entry) == "table" and tonumber(entry.id) or 0
+  edge = edge == "oldest" and "oldest" or (edge == "latest" and "latest" or "none")
+  -- Every write has a unique revision.  The explicit edge flag prevents the
+  -- NVDA add-on from guessing history boundaries from repeated text.
+  f:write(string.char(30) .. string.format(
+    "TMREVIEW2:id=%d;pos=%d;count=%d;rev=%d;edge=%s;kind=%s",
+    entry_id or 0, unicode_history_pos, #unicode_history, review_write_seq, edge, kind
+  ) .. string.char(30))
   f:write(text); f:close()
   os.remove(review_entry_file)
   os.rename(tmp, review_entry_file)
@@ -255,8 +264,8 @@ local function history_speak(entry)
     speak(text)
   end
 end
-local function history_review(entry)
-  if entry then write_review_entry(entry) end
+local function history_review(entry, edge)
+  if entry then write_review_entry(entry, edge) end
 end
 function TranslationHistoryPrevious()
   if #unicode_history == 0 then speak("No translation history."); return end
@@ -276,11 +285,13 @@ function TranslationHistoryBottom()
 end
 function TranslationHistoryPreviousReview()
   if #unicode_history == 0 then speak("No translation history."); return end
-  unicode_history_pos = math.max(1, unicode_history_pos - 1); history_follow_tail = false; history_review(unicode_history[unicode_history_pos])
+  local edge = unicode_history_pos <= 1 and "oldest" or nil
+  unicode_history_pos = math.max(1, unicode_history_pos - 1); history_follow_tail = false; history_review(unicode_history[unicode_history_pos], edge)
 end
 function TranslationHistoryNextReview()
   if #unicode_history == 0 then speak("No translation history."); return end
-  unicode_history_pos = math.min(#unicode_history, unicode_history_pos + 1); history_follow_tail = unicode_history_pos == #unicode_history; history_review(unicode_history[unicode_history_pos])
+  local edge = unicode_history_pos >= #unicode_history and "latest" or nil
+  unicode_history_pos = math.min(#unicode_history, unicode_history_pos + 1); history_follow_tail = unicode_history_pos == #unicode_history; history_review(unicode_history[unicode_history_pos], edge)
 end
 function TranslationHistoryTopReview()
   if #unicode_history == 0 then speak("No translation history."); return end

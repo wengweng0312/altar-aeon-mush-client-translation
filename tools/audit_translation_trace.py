@@ -11,9 +11,11 @@ import argparse
 import atexit
 import importlib.util
 import json
+import os
 import re
 import shutil
 import sys
+import tempfile
 from collections import Counter, OrderedDict, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -91,6 +93,176 @@ def trace_files_newest_first(root: Path):
     return files
 
 
+def discover_nvda_diagnostic_files(explicit_log=None, explicit_diagnostic=None):
+    """Find NVDA's current logs without requiring the player to locate Temp."""
+    roots = []
+    profile = os.environ.get("USERPROFILE")
+    for value in (
+        tempfile.gettempdir(), os.environ.get("TEMP"), os.environ.get("TMP"),
+        str(Path(os.environ.get("LOCALAPPDATA", "")) / "Temp") if os.environ.get("LOCALAPPDATA") else "",
+        str(Path(profile) / "AppData" / "Local" / "Temp") if profile else "",
+        str(Path.home() / "AppData" / "Local" / "Temp"),
+    ):
+        if value:
+            path = Path(value).expanduser()
+            if path not in roots:
+                roots.append(path)
+    candidates = []
+    if explicit_log:
+        candidates.append(("nvda", Path(explicit_log)))
+    else:
+        for root in roots:
+            candidates.extend(("nvda", root / name) for name in ("nvda.log", "nvda-old.log"))
+    if explicit_diagnostic:
+        diagnostic = Path(explicit_diagnostic)
+        candidates.append(("review", diagnostic))
+        candidates.extend(("review", Path(str(diagnostic) + ".%d" % number)) for number in range(1, 6))
+    else:
+        for root in roots:
+            diagnostic = root / "mushz_translation_nvda_diagnostic.jsonl"
+            candidates.append(("review", diagnostic))
+            candidates.extend(("review", Path(str(diagnostic) + ".%d" % number)) for number in range(1, 6))
+    found, seen = [], set()
+    for kind, path in candidates:
+        try:
+            key = str(path.resolve()).casefold()
+        except OSError:
+            key = str(path.absolute()).casefold()
+        if key in seen or not path.is_file():
+            continue
+        seen.add(key)
+        found.append((kind, path))
+    return found
+
+
+def nvda_log_records(text: str):
+    """Keep NVDA log headers together with their traceback/stack continuation."""
+    records, current = [], []
+    header = re.compile(r"^(?:DEBUG|INFO|WARNING|ERROR|CRITICAL|IO|DEBUGWARNING)\s+-\s+")
+    for line in str(text or "").splitlines():
+        if header.match(line) and current:
+            records.append("\n".join(current))
+            current = []
+        current.append(line)
+    if current:
+        records.append("\n".join(current))
+    return records
+
+
+def audit_nvda_diagnostics(run_dir: Path, explicit_log=None, explicit_diagnostic=None):
+    """Snapshot and summarize NVDA/add-on diagnostics; never modify originals."""
+    snapshot_dir = run_dir / "nvda-snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    files = discover_nvda_diagnostic_files(explicit_log, explicit_diagnostic)
+    snapshots = []
+    used_names = Counter()
+    for kind, source in files:
+        used_names[source.name] += 1
+        suffix = "-%d" % used_names[source.name] if used_names[source.name] > 1 else ""
+        destination = snapshot_dir / (source.stem + suffix + source.suffix)
+        try:
+            shutil.copy2(source, destination)
+            snapshots.append((kind, source, destination))
+        except OSError:
+            continue
+
+    official_relevant = []
+    official_errors = 0
+    target_pattern = re.compile(r"(?:mushclient|TranslationReview|mushz_translation)", re.I)
+    watchdog_pattern = re.compile(
+        r"(?:watchdog\.waitForFreezeRecovery|watchdog\._waitUntilNormalCoreAliveTimeout)", re.I,
+    )
+    error_pattern = re.compile(r"(?:traceback|error|exception|freeze recovery|core frozen|hung)", re.I)
+    events, malformed = [], 0
+    for kind, unusedSource, snapshot in snapshots:
+        if kind == "nvda":
+            try:
+                content = snapshot.read_text(encoding="utf-8", errors="replace")
+                for record in nvda_log_records(content):
+                    if target_pattern.search(record) or watchdog_pattern.search(record):
+                        official_relevant.append(record[:12000])
+                        if error_pattern.search(record) or watchdog_pattern.search(record):
+                            official_errors += 1
+            except OSError:
+                pass
+        else:
+            try:
+                for line in snapshot.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        record = json.loads(line)
+                        if isinstance(record, dict) and record.get("event"):
+                            events.append(record)
+                        else:
+                            malformed += 1
+                    except Exception:
+                        malformed += 1
+            except OSError:
+                pass
+
+    events.sort(key=lambda item: (str(item.get("ts") or ""), float(item.get("monotonic") or 0)))
+    counts = Counter(str(item.get("event")) for item in events)
+    response_times = [
+        float(item.get("elapsed_ms")) for item in events
+        if item.get("event") == "response_ready" and isinstance(item.get("elapsed_ms"), (int, float))
+    ]
+    suspicious = []
+    for item in events:
+        event = item.get("event")
+        if event == "request_timeout":
+            suspicious.append(("timeout", item))
+        elif event == "response_ready" and float(item.get("elapsed_ms") or 0) >= 250:
+            suspicious.append(("slow_response", item))
+    for previous, current in zip(events, events[1:]):
+        if (previous.get("event") == current.get("event") == "history_edge"
+                and previous.get("edge") == current.get("edge")
+                and previous.get("position") == current.get("position")):
+            suspicious.append(("repeated_edge", current))
+
+    report_path = run_dir / "NVDA_DIAGNOSTIC_REPORT.md"
+    with report_path.open("w", encoding="utf-8", newline="\n") as report:
+        report.write("# NVDA Translation Review Diagnostic\n\n")
+        report.write("Generated: %s\n\n" % datetime.now().isoformat(timespec="seconds"))
+        report.write("This is a local, read-only snapshot. No NVDA, game, cache, or translation files were changed.\n\n")
+        report.write("## Summary\n\n")
+        report.write("- Files captured: `%d`\n" % len(snapshots))
+        report.write("- Structured review events: `%d`\n" % len(events))
+        report.write("- Event counts: `%s`\n" % dict(counts))
+        report.write("- Malformed diagnostic lines: `%d`\n" % malformed)
+        report.write("- Relevant official NVDA log lines: `%d`\n" % len(official_relevant))
+        report.write("- Official NVDA error indicators: `%d`\n" % official_errors)
+        report.write("- Suspicious review events: `%d`\n" % len(suspicious))
+        if response_times:
+            report.write("- Review response latency: average `%.1f ms`, maximum `%.1f ms`\n" % (
+                sum(response_times) / len(response_times), max(response_times),
+            ))
+        report.write("\n## Captured files\n\n")
+        for kind, source, destination in snapshots:
+            report.write("- `%s`: `%s` -> `%s`\n" % (kind, source, destination.name))
+        report.write("\n## Suspicious review events\n\n")
+        if not suspicious:
+            report.write("No structured review anomaly was detected.\n")
+        for number, (reason, item) in enumerate(suspicious[-200:], 1):
+            safe = {key: value for key, value in item.items() if key not in {"text", "content"}}
+            report.write("%d. `%s` `%s` `%s`\n" % (
+                number, item.get("ts") or "unknown", reason,
+                json.dumps(safe, ensure_ascii=False, sort_keys=True),
+            ))
+        report.write("\n## Relevant official NVDA log excerpts\n\n")
+        if not official_relevant:
+            report.write("No matching technical lines were found.\n")
+        else:
+            report.write("```text\n")
+            for record in official_relevant[-100:]:
+                report.write(record + "\n\n")
+            report.write("```\n")
+    return {
+        "report": report_path, "files": len(snapshots), "events": len(events),
+        "suspicious": len(suspicious), "errors": official_errors,
+    }
+
+
 def nonempty_lines(value: str):
     return [line.strip() for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
 
@@ -166,6 +338,48 @@ def orphan_fragment_count(value: str):
 def normalize_candidate(value: str):
     value = re.sub(r"\s+", " ", str(value or "")).strip(" \t\r\n:：,，.!！?？'\"‘’“”")
     return value.casefold()
+
+
+def translation_latency_explanation(record, exact_occurrences=1):
+    """Return compact, evidence-based reasons for one observed duration."""
+    source = str(record.get("source") or "")
+    engine = str(record.get("engine") or "unknown")
+    status = str(record.get("status") or "unknown").upper()
+    try:
+        elapsed = float(record.get("elapsed_seconds") or 0.0)
+    except (TypeError, ValueError):
+        elapsed = 0.0
+    reasons = []
+    if status == "ERROR":
+        reasons.append("翻譯失敗／fallback 前的處理時間")
+    elif engine == "cache":
+        reasons.append("完整快取命中")
+    elif engine == "local" and elapsed <= 0.05:
+        reasons.append("本地規則或分段快取重建")
+    elif engine == "lmt_q4":
+        reasons.append("需要 LMT 生成")
+    elif engine in {"azure", "deepl", "google"}:
+        reasons.append("需要網路翻譯往返")
+    rows = nonempty_lines(source)
+    if len(source) >= 900:
+        reasons.append("長內容 %d 字元" % len(source))
+    if len(rows) >= 15:
+        reasons.append("多行內容 %d 行" % len(rows))
+    if source.startswith("ALTER AEON NEWS"):
+        reasons.append("動態 news 報表")
+    elif source.startswith("Showing page ") or source.startswith("Keywords are:"):
+        reasons.append("Help 長頁面")
+    elif len(rows) >= 5 and any(re.search(r"\b(?:is here|stands|sits|paces|lies here)\b", row, re.I) for row in rows):
+        reasons.append("房間敘述含 NPC／物品列")
+    if exact_occurrences >= 2 and engine not in {"cache", "local"}:
+        reasons.append("相同原文出現 %d 次但仍重新翻譯" % exact_occurrences)
+    if not reasons:
+        reasons.append("一般翻譯請求")
+    if elapsed >= 5:
+        reasons.append("明顯高延遲")
+    elif elapsed >= 1:
+        reasons.append("可感知延遲")
+    return "；".join(reasons)
 
 
 def clean_translated_entity_candidate(value: str):
@@ -584,6 +798,7 @@ def audit(args):
     engines = Counter()
     statuses = Counter()
     malformed = []
+    recent_records = []
     scanned = 0
     source_variants = defaultdict(lambda: {"occurrences": 0, "results": OrderedDict()})
     entity_variants = defaultdict(lambda: {"occurrences": 0, "translations": OrderedDict()})
@@ -604,6 +819,8 @@ def audit(args):
                         malformed.append("%s: %r\n%s" % (path, error, line[:2000]))
                     continue
                 scanned += 1
+                if len(recent_records) < 50:
+                    recent_records.append(record)
                 record["_trace_file"] = str(path)
                 normalized.write(json.dumps(record, ensure_ascii=False) + "\n")
                 engine = str(record.get("engine") or "unknown")
@@ -695,6 +912,22 @@ def audit(args):
                 record.get("status") or "unknown",
                 str(record.get("source") or "").splitlines()[0][:140],
             ))
+        report.write("\n## Recent translation latency, newest first\n\n")
+        report.write("| Time | Seconds | Engine | Size | First line | Why |\n")
+        report.write("| --- | ---: | --- | ---: | --- | --- |\n")
+        for record in recent_records:
+            source = str(record.get("source") or "")
+            first = (source.splitlines() or [""])[0].replace("|", "\\|")[:80]
+            occurrences = source_variants.get(source, {}).get("occurrences", 1)
+            reason = translation_latency_explanation(record, occurrences).replace("|", "\\|")
+            try:
+                elapsed = float(record.get("elapsed_seconds") or 0.0)
+            except (TypeError, ValueError):
+                elapsed = 0.0
+            report.write("| %s | %.3f | %s | %d | %s | %s |\n" % (
+                record.get("ts") or "unknown", elapsed, record.get("engine") or "unknown",
+                len(source), first, reason,
+            ))
         report.write("\n## Output files\n\n")
         report.write("- Complete normalized trace, newest first: `TRACE_NEWEST_FIRST.jsonl`\n")
         report.write("- Malformed input samples: `MALFORMED_TRACE_LINES.txt`\n")
@@ -702,12 +935,21 @@ def audit(args):
     consistency = build_consistency_suspicions(source_variants, entity_variants)
     consistency_report, consistency_json = write_consistency_report(consistency, run_dir)
     repair_report, repair_fixtures, repair_count = write_repair_candidates(cases, run_dir)
+    nvda = audit_nvda_diagnostics(run_dir, args.nvda_log, args.nvda_diagnostic)
+    with report_path.open("a", encoding="utf-8", newline="\n") as report:
+        report.write("\n## NVDA review diagnostics\n\n")
+        report.write("- Report: `NVDA_DIAGNOSTIC_REPORT.md`\n")
+        report.write("- Files captured: `%d`\n" % nvda["files"])
+        report.write("- Structured events: `%d`\n" % nvda["events"])
+        report.write("- Suspicious events: `%d`\n" % nvda["suspicious"])
+        report.write("- Official NVDA error indicators: `%d`\n" % nvda["errors"])
     latest = args.output_root.resolve() / "TRANSLATION_TRACE_AUDIT_REPORT.md"
     shutil.copyfile(report_path, latest)
     shutil.copyfile(repair_report, args.output_root.resolve() / "REPAIR_CANDIDATES.md")
     shutil.copyfile(repair_fixtures, args.output_root.resolve() / "AUTO_REPAIR_FIXTURES.json")
     shutil.copyfile(consistency_report, args.output_root.resolve() / "CONSISTENCY_SUSPICIONS.md")
     shutil.copyfile(consistency_json, args.output_root.resolve() / "CONSISTENCY_SUSPICIONS.json")
+    shutil.copyfile(nvda["report"], args.output_root.resolve() / "NVDA_DIAGNOSTIC_REPORT.md")
     replay = None
     if args.replay_lmt:
         replay = replay_cases(cases, args, run_dir)
@@ -717,6 +959,9 @@ def audit(args):
     print("Latest: %s" % latest)
     print("Repair candidates: %d (%s)" % (repair_count, repair_report))
     print("Consistency suspicions: %d (%s)" % (len(consistency), consistency_report))
+    print("NVDA diagnostics: files=%d events=%d suspicious=%d errors=%d (%s)" % (
+        nvda["files"], nvda["events"], nvda["suspicious"], nvda["errors"], nvda["report"],
+    ))
     if replay is not None:
         print("Replay: fixed=%d unresolved=%d errors=%d" % (
             replay["fixed"], replay["unresolved"], replay["errors"],
@@ -738,6 +983,8 @@ def main():
     parser.add_argument("--replay-lmt", action="store_true", help="replay recent functional candidates using the already-running local LMT server")
     parser.add_argument("--replay-limit", type=int, default=100)
     parser.add_argument("--worker", type=Path, default=DEFAULT_BRIDGE / "translation_worker.py")
+    parser.add_argument("--nvda-log", type=Path, help="optional explicit nvda.log path")
+    parser.add_argument("--nvda-diagnostic", type=Path, help="optional explicit add-on diagnostic JSONL path")
     return audit(parser.parse_args())
 
 

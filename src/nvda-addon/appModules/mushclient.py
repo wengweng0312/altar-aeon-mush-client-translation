@@ -2,6 +2,7 @@
 # Merged Mush Client accessibility app module and optional Translation Mode review navigation.
 
 import os
+import json
 import re
 import tempfile
 import time
@@ -22,7 +23,45 @@ from NVDAObjects.window import Window
 
 REVIEW_STATE_FILE = os.path.join(tempfile.gettempdir(), "mushz_translation_review_mode.txt")
 REVIEW_ENTRY_FILE = os.path.join(tempfile.gettempdir(), "mushz_translation_review_entry.txt")
+REVIEW_DIAGNOSTIC_FILE = os.path.join(tempfile.gettempdir(), "mushz_translation_nvda_diagnostic.jsonl")
+REVIEW_DIAGNOSTIC_LIMIT = 2 * 1024 * 1024
+REVIEW_DIAGNOSTIC_ARCHIVES = 5
 _reviewRequestGeneration = 0
+
+
+def _rotateTranslationDiagnostic():
+	try:
+		if not os.path.isfile(REVIEW_DIAGNOSTIC_FILE) or os.path.getsize(REVIEW_DIAGNOSTIC_FILE) < REVIEW_DIAGNOSTIC_LIMIT:
+			return
+		oldest = REVIEW_DIAGNOSTIC_FILE + ".%d" % REVIEW_DIAGNOSTIC_ARCHIVES
+		if os.path.exists(oldest):
+			os.remove(oldest)
+		for number in range(REVIEW_DIAGNOSTIC_ARCHIVES - 1, 0, -1):
+			source = REVIEW_DIAGNOSTIC_FILE + ".%d" % number
+			if os.path.exists(source):
+				os.replace(source, REVIEW_DIAGNOSTIC_FILE + ".%d" % (number + 1))
+		os.replace(REVIEW_DIAGNOSTIC_FILE, REVIEW_DIAGNOSTIC_FILE + ".1")
+	except OSError:
+		pass
+
+
+def _translationDiagnostic(event, **fields):
+	"""Best-effort metadata-only diagnostics; never interrupt NVDA review."""
+	try:
+		_rotateTranslationDiagnostic()
+		record = {
+			"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+			"monotonic": round(time.monotonic(), 6),
+			"pid": os.getpid(),
+			"event": str(event),
+		}
+		for key, value in fields.items():
+			if isinstance(value, (str, int, float, bool)) or value is None:
+				record[str(key)] = value
+		with open(REVIEW_DIAGNOSTIC_FILE, "a", encoding="utf-8", newline="\n") as output:
+			output.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+	except Exception:
+		pass
 
 _properNamePattern = re.compile(
 	r"\b(?:Sir|Lady|King|Queen|Captain|Doctor|Fast|Old)?\s*"
@@ -791,23 +830,44 @@ def _translationNewsSemanticLines(english):
 	prose and preserve every fixed/news-table row.
 	"""
 	rows = [line.strip() for line in english.splitlines() if line.strip()]
-	if len(rows) < 3 or rows[0].upper() != "ALTER AEON NEWS" or rows[1].upper() != "TODAY'S HEADLINE:":
+	if len(rows) < 2 or rows[0].upper() != "ALTER AEON NEWS":
 		return []
-	markers = (
-		"Happy Halloween!",
-		"Alter Aeon was last booted:",
-		"(Type 'changes'",
-		"Got Their Freak On:",
-		"Catch of the Day:",
-		"New and recently updated areas:",
-	)
-	markerIndex = next(
-		(index for index in range(2, len(rows)) if rows[index].startswith(markers)),
-		-1,
-	)
-	if markerIndex <= 2:
-		return []
-	return rows[:2] + [" ".join(rows[2:markerIndex])] + rows[markerIndex:]
+	output = [rows[0]]
+	index = 1
+	if rows[index].upper() == "TODAY'S HEADLINE:":
+		output.append(rows[index])
+		index += 1
+	prose = []
+
+	def flushProse():
+		if prose:
+			output.append(" ".join(prose))
+			prose[:] = []
+
+	def isFixedRow(row):
+		return (
+			row.startswith((
+				"Alter Aeon was last booted:", "(Type 'changes'",
+				"Got Their Freak On:", "Catch of the Day:",
+				"Last Meteor Sighting:", "New and recently updated areas:",
+			))
+			or row == "Recent Archery Contest Winners:"
+			or re.match(r"^.+?\s+won a jackpot!$", row, re.I)
+			or re.match(r"^.+?\s+-\s+score\s+\d+\s+-\s+.+$", row, re.I)
+			or re.match(r"^Date\s+Level\s+\[\s*X,\s*Y\]\s+Name\s+Creators$", row, re.I)
+			or re.match(r"^[A-Z][a-z]{2}\s+\d{1,2}\s+\d{4}\s+(?:Lvl|Tot)\s+\d+\s+\[", row)
+		)
+
+	for row in rows[index:]:
+		if isFixedRow(row):
+			flushProse()
+			output.append(row)
+			continue
+		prose.append(row)
+		if re.search(r"[.!?][\"')\]]*$", row):
+			flushProse()
+	flushProse()
+	return output
 
 
 def _translationPairedNewsLines(chinese, english):
@@ -945,12 +1005,35 @@ def _boundedBilingualFallback(chinese, english):
 	return "\n".join(rows)
 
 
+def _translationReviewEnvelope(text):
+	"""Return versioned navigation metadata and visible review text."""
+	metadata = {"kind": "", "edge": "none"}
+	match = re.match(
+		r"^\x1eTMREVIEW2:id=(\d+);pos=(\d+);count=(\d+);rev=(\d+);"
+		r"edge=(oldest|latest|none);kind=(quest|job|skills)?\x1e",
+		text or "",
+	)
+	if match:
+		metadata.update({
+			"id": int(match.group(1)),
+			"pos": int(match.group(2)),
+			"count": int(match.group(3)),
+			"rev": int(match.group(4)),
+			"edge": match.group(5),
+			"kind": match.group(6) or "",
+		})
+		return metadata, text[match.end():]
+	legacy = re.match(r"^\x1eTMREVIEW:(quest|job|skills)\x1e", text or "")
+	if legacy:
+		metadata["kind"] = legacy.group(1)
+		return metadata, text[legacy.end():]
+	return metadata, text
+
+
 def _translationReviewMetadata(text):
-	"""Remove Translation Mode's private category marker from review text."""
-	match = re.match(r"^\x1eTMREVIEW:(quest|job|skills)\x1e", text or "")
-	if not match:
-		return "", text
-	return match.group(1), text[match.end():]
+	"""Compatibility helper returning category and visible review text."""
+	metadata, visible = _translationReviewEnvelope(text)
+	return metadata["kind"], visible
 
 
 def _translationReviewPresentation(text):
@@ -1223,11 +1306,15 @@ def _readTranslationReviewEntry():
 
 
 def _reviewEntrySignature():
-	"""Identify an atomically replaced review entry without reading its text."""
+	"""Identify a completed response, including same-size repeated entries."""
 	try:
+		with open(REVIEW_ENTRY_FILE, "r", encoding="utf-8-sig") as entry:
+			metadata, unusedText = _translationReviewEnvelope(entry.read())
+		if "rev" in metadata:
+			return ("v2", metadata["rev"], metadata["id"], metadata["pos"], metadata["count"])
 		stat = os.stat(REVIEW_ENTRY_FILE)
-		return stat.st_mtime_ns, stat.st_size
-	except OSError:
+		return ("legacy", stat.st_mtime_ns, stat.st_size)
+	except (OSError, UnicodeError):
 		return None
 
 
@@ -1237,14 +1324,29 @@ def _translationOrNative(gesture, translationGesture, nativeScript, afterTransla
 		before = _reviewEntrySignature()
 		_reviewRequestGeneration += 1
 		generation = _reviewRequestGeneration
+		started = time.monotonic()
+		_translationDiagnostic(
+			"request_sent", generation=generation, command=translationGesture,
+			before_signature=repr(before),
+		)
 		KeyboardInputGesture.fromName(translationGesture).send()
 		if afterTranslation:
 			def poll(attempt=0, changed=None):
 				if generation != _reviewRequestGeneration:
+					_translationDiagnostic(
+						"request_superseded", generation=generation,
+						new_generation=_reviewRequestGeneration,
+						elapsed_ms=round((time.monotonic() - started) * 1000, 1),
+					)
 					return
 				current = _reviewEntrySignature()
 				if current is not None and current != before:
 					if changed == current:
+						_translationDiagnostic(
+							"response_ready", generation=generation,
+							elapsed_ms=round((time.monotonic() - started) * 1000, 1),
+							response_signature=repr(current), attempts=attempt,
+						)
 						afterTranslation()
 						return
 					# Require one 10 ms stable observation. Rapid repeated keys can
@@ -1256,6 +1358,11 @@ def _translationOrNative(gesture, translationGesture, nativeScript, afterTransla
 					# boundary.  If no rewrite arrived, the request has not completed;
 					# inspecting the old text here would falsely announce "oldest" or
 					# "latest" and make a later completed request look like a jump.
+					_translationDiagnostic(
+						"request_timeout", generation=generation,
+						elapsed_ms=round((time.monotonic() - started) * 1000, 1),
+						before_signature=repr(before), attempts=attempt,
+					)
 					ui.message("翻譯紀錄尚未更新，請再按一次。")
 					return
 				core.callLater(10, lambda: poll(attempt + 1, changed))
@@ -1458,6 +1565,7 @@ class AppModule(appModuleHandler.AppModule):
 			nativeScript(gesture)
 			return
 		presentation = _translationReviewPresentation(text)
+		metadata, unusedVisible = _translationReviewEnvelope(text)
 		if self._translationReviewObject is None or self._translationReviewObject.basicText != presentation:
 			self._syncTranslationReviewPosition()
 		lineRanges = _translationPresentationLineRanges(presentation)
@@ -1473,13 +1581,39 @@ class AppModule(appModuleHandler.AppModule):
 				info = _translationReviewInfoAtOffset(self._translationReviewObject, start)
 				if api.setReviewPosition(info):
 					self._translationSentenceIndex = -1
+					_translationDiagnostic(
+						"line_move", direction=direction, entry_id=metadata.get("id"),
+						position=metadata.get("pos"), count=metadata.get("count"),
+						from_line=current, to_line=target, line_count=len(lineRanges),
+					)
 					ui.message(presentation[start:end])
 				return
+		_translationDiagnostic(
+			"history_cross_request", direction=direction, entry_id=metadata.get("id"),
+			position=metadata.get("pos"), count=metadata.get("count"),
+			line_count=len(lineRanges),
+		)
 		def syncChangedHistoryEntry():
 			updated = _readTranslationReviewEntry()
-			if updated == text:
-				ui.message("已到最新一筆翻譯紀錄。" if direction > 0 else "已到最舊一筆翻譯紀錄。")
+			metadata, unusedVisible = _translationReviewEnvelope(updated or "")
+			if metadata.get("edge") == "latest":
+				_translationDiagnostic(
+					"history_edge", edge="latest", entry_id=metadata.get("id"),
+					position=metadata.get("pos"), count=metadata.get("count"),
+				)
+				ui.message("已到最新一筆翻譯紀錄。")
 				return
+			if metadata.get("edge") == "oldest":
+				_translationDiagnostic(
+					"history_edge", edge="oldest", entry_id=metadata.get("id"),
+					position=metadata.get("pos"), count=metadata.get("count"),
+				)
+				ui.message("已到最舊一筆翻譯紀錄。")
+				return
+			_translationDiagnostic(
+				"history_entry_loaded", direction=direction, entry_id=metadata.get("id"),
+				position=metadata.get("pos"), count=metadata.get("count"),
+			)
 			self._syncTranslationReviewPosition(True, atEnd=direction < 0)
 
 		_translationOrNative(

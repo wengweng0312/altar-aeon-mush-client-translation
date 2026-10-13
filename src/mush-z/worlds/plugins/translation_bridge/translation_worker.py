@@ -6358,7 +6358,10 @@ NEWS_AREA_ROW = re.compile(
 
 def is_news_report(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
-    return len(rows) >= 3 and rows[0] == "ALTER AEON NEWS" and rows[1] == "TODAY'S HEADLINE:"
+    # The live news page does not always include TODAY'S HEADLINE.  The title
+    # itself is the stable report boundary; requiring the optional second row
+    # sent newer reports through one large prose request and destroyed tables.
+    return len(rows) >= 2 and rows[0] == "ALTER AEON NEWS"
 
 
 def translate_news_report(text, c):
@@ -6366,7 +6369,11 @@ def translate_news_report(text, c):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     if not is_news_report(text):
         raise RuntimeError("NEWS_REPORT_PARSE_FAILED")
-    units = [("fixed", "ALTER AEON 新聞"), ("fixed", "今日頭條：")]
+    units = [("fixed", "ALTER AEON 新聞")]
+    row_start = 1
+    if len(rows) > 1 and rows[1].upper() == "TODAY'S HEADLINE:":
+        units.append(("fixed", "今日頭條："))
+        row_start = 2
     prose = []
 
     def flush_prose():
@@ -6374,7 +6381,7 @@ def translate_news_report(text, c):
             units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose)))
             prose[:] = []
 
-    for row in rows[2:]:
+    for row in rows[row_start:]:
         booted = re.fullmatch(r"Alter Aeon was last booted:\s*(.+)", row, re.I)
         if booted:
             flush_prose()
@@ -6385,6 +6392,20 @@ def translate_news_report(text, c):
         elif (match := re.fullmatch(r"Got Their Freak On:\s*(.+?),\s*level:\s*(\d+)\.", row, re.I)):
             flush_prose()
             units.append(("fixed", "Got Their Freak On：%s，等級 %s。" % match.groups()))
+        elif (match := re.fullmatch(r"Got Their Freak On:\s*(.+?),\s*(.+?),\s*damage:\s*(\d+)\.", row, re.I)):
+            flush_prose()
+            player, attack, damage = match.groups()
+            units.append(("fixed", "Got Their Freak On：%s，%s，傷害：%s。" % (player, attack, damage)))
+        elif (match := re.fullmatch(r"(.+?)\s+won a jackpot!", row, re.I)):
+            flush_prose()
+            units.append(("fixed", "%s 贏得了頭獎！" % match.group(1)))
+        elif row == "Recent Archery Contest Winners:":
+            flush_prose()
+            units.append(("fixed", "近期射箭比賽優勝者："))
+        elif (match := re.fullmatch(r"(.+?)\s+-\s+score\s+(\d+)\s+-\s+(.+)", row, re.I)):
+            flush_prose()
+            player, score, when = match.groups()
+            units.append(("fixed", "%s，分數 %s，%s" % (player.strip(), score, when.strip())))
         elif (match := re.fullmatch(r"Catch of the Day:\s*(.+?),\s*(\d+)\s*lbs\.\s*-\s*caught by\s+(.+)", row, re.I)):
             flush_prose()
             fish, weight, player = match.groups()
@@ -6395,6 +6416,9 @@ def translate_news_report(text, c):
         elif re.fullmatch(r"Date\s+Level\s+\[\s*X,\s*Y\]\s+Name\s+Creators", row, re.I):
             flush_prose()
             units.append(("fixed", "日期，等級，座標，名稱，創作者"))
+        elif (match := re.fullmatch(r"Last Meteor Sighting:\s*(.+)", row, re.I)):
+            flush_prose()
+            units.append(("fixed", "上次觀測到流星：%s" % match.group(1)))
         elif (match := NEWS_AREA_ROW.fullmatch(row)):
             flush_prose()
             date, level_kind, level, x_value, y_value, name, creators = match.groups()
@@ -6721,6 +6745,12 @@ def translate(text,c):
         return translate_structured_line_block(text, c)
     if is_numeric_report_block(text):
         return translate_numeric_report_block(text, c)
+    # A room description followed by NPC/object rows can legitimately contain
+    # duplicate rows.  Route it through the room/trailing-row cache before the
+    # generic duplicate-line handler, which only deduplicates within one
+    # request and would therefore retranslate the whole room on every visit.
+    if is_room_prose_candidate(text) and has_trailing_independent_rows(text):
+        return translate_trailing_independent_rows(text, c)
     if has_repeated_source_lines(text):
         return translate_repeated_line_block(text, c)
     if has_deterministic_lines(text):

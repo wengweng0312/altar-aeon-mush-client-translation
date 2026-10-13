@@ -66,6 +66,13 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     generated_loop["source"] = "A chair is here."
     assert "possible_repetition_loop" in audit.suspicious_reasons(generated_loop)
     assert audit.FUNCTIONAL_REASONS.intersection(reasons)
+    latency = audit.translation_latency_explanation(newest, exact_occurrences=3)
+    assert "需要 LMT 生成" in latency and "相同原文出現 3 次" in latency, latency
+    cached_latency = audit.translation_latency_explanation({
+        "status": "CACHE", "engine": "cache", "elapsed_seconds": 0,
+        "source": "A short sentence.",
+    })
+    assert cached_latency == "完整快取命中", cached_latency
     advice = audit.repair_advice({"record": newest, "reasons": reasons})
     assert advice is None
     help_case = {
@@ -110,4 +117,39 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     assert consistency[0]["confidence"] == "high"
     assert consistency[0]["existing_guard_to_retest"] == "npc_names_or_mob_types_registry"
 
-print("TRANSLATION_TRACE_AUDIT_OK newest_first=yes readonly=yes")
+    nvda_log = Path(temporary) / "nvda.log"
+    nvda_log.write_text(
+        "INFO - appModuleHandler: loaded mushclient\n"
+        "ERROR - error in appModule mushclient TranslationReviewObject\n",
+        encoding="utf-8",
+    )
+    diagnostic = Path(temporary) / "mushz_translation_nvda_diagnostic.jsonl"
+    diagnostic.write_text("\n".join([
+        json.dumps({
+            "ts": "2026-01-02T00:00:01", "monotonic": 1.0,
+            "event": "request_sent", "generation": 1,
+        }),
+        json.dumps({
+            "ts": "2026-01-02T00:00:02", "monotonic": 2.0,
+            "event": "request_timeout", "generation": 1, "elapsed_ms": 800.0,
+        }),
+        json.dumps({
+            "ts": "2026-01-02T00:00:03", "monotonic": 3.0,
+            "event": "history_edge", "edge": "oldest", "position": 1,
+        }),
+        json.dumps({
+            "ts": "2026-01-02T00:00:04", "monotonic": 4.0,
+            "event": "history_edge", "edge": "oldest", "position": 1,
+        }),
+    ]) + "\n", encoding="utf-8")
+    nvda_output = Path(temporary) / "nvda-audit"
+    nvda_output.mkdir()
+    nvda = audit.audit_nvda_diagnostics(nvda_output, nvda_log, diagnostic)
+    assert nvda["files"] == 2, nvda
+    assert nvda["events"] == 4, nvda
+    assert nvda["suspicious"] == 2, nvda
+    assert nvda["errors"] == 1, nvda
+    report = nvda["report"].read_text(encoding="utf-8")
+    assert "request_timeout" in report and "repeated_edge" in report, report
+
+print("TRANSLATION_TRACE_AUDIT_OK newest_first=yes readonly=yes nvda_snapshot=yes")

@@ -51,4 +51,38 @@ assert any("-526、561" in line and "西魯斯塔爾海岸" in line for line in 
 assert max(map(len, lines)) < 300, max(map(len, lines))
 assert globals_["should_bypass_whole_block_cache"](source)
 
+live_source = (
+    "ALTER AEON NEWS\n"
+    "To commemorate the fallen seek out Colonel's favourite panacea and type 'rub bacon'.\n"
+    "See 'help bacon day' for more details.\n"
+    "Happy Halloween! Watch for carveable pumpkins when foraging!\n"
+    "Alter Aeon was last booted:  Mon Oct 12 00:18:57 2026\n"
+    "(Type 'changes' to see recent updates to the game's codebase.)\n"
+    "Gallade won a jackpot!\n"
+    "Got Their Freak On: Asteroid, ranged attack, damage: 207.\n"
+    "Recent Archery Contest Winners:\n"
+    "Juggernaut - score 475 - Tue Oct 13 04:35:26 2026\n"
+    "Karshinna - score 525 - Tue Oct 13 02:40:15 2026\n"
+    "Kayliana - score 580 - Tue Oct 13 00:44:15 2026\n"
+    "Catch of the Day: a broad-head sawfish, 107 lbs. - caught by Neufi\n"
+    "Last Meteor Sighting: Headhunter Island, The Continent of Suboria\n"
+    "New and recently updated areas:\n"
+    "Date Level [ X, Y] Name Creators\n"
+    "Aug 26 2026 Lvl 27 [ -3929, 56 ] Tyranid caves  alf duncan osprey morpheus seren\n"
+    "Jul 29 2026 Lvl 32 [ -32, -409 ] An Abandoned Citadel  bloodlust morpheus virgo seren\n"
+    "Jul 14 2026 Tot 189 [ -526, 561 ] The Cirustal Coast  morpheus draak"
+)
+assert module["is_news_report"](live_source)
+live_result = module["translate_news_report"](live_source, {})
+live_lines = live_result.splitlines()
+assert len(live_lines) == 19, live_lines
+assert live_lines[0] == "ALTER AEON 新聞", live_lines
+assert all("今日頭條" not in line for line in live_lines), live_lines
+assert "Gallade 贏得了頭獎！" in live_lines, live_lines
+assert "Got Their Freak On：Asteroid，ranged attack，傷害：207。" in live_lines, live_lines
+assert "Juggernaut，分數 475，Tue Oct 13 04:35:26 2026" in live_lines, live_lines
+assert any("107 磅" in line and "Neufi" in line for line in live_lines), live_lines
+assert any("-3929、56" in line and "泰倫蟲族洞穴" in line for line in live_lines), live_lines
+assert globals_["should_bypass_whole_block_cache"](live_source)
+
 print("NEWS_REPORT_OK structured=yes dynamic_numbers=preserved long_single_line=no")

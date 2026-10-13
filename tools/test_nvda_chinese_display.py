@@ -41,6 +41,7 @@ FUNCTIONS = {
     "_isStructuredTranslationReview",
     "_boundedReviewChunks",
     "_boundedBilingualFallback",
+    "_translationReviewEnvelope",
     "_translationReviewMetadata",
     "_translationReviewPresentation",
     "_translationPresentationChineseStart",
@@ -71,8 +72,30 @@ def main() -> None:
     extract = module["_translationEnglishKeys"]
     present = module["_translationReviewPresentation"]
     original = module["_translationOriginalEnglish"]
+    envelope = module["_translationReviewEnvelope"]
+
+    marked = "\x1eTMREVIEW2:id=17;pos=3;count=9;rev=41;edge=none;kind=quest\x1e中文 | English"
+    metadata, visible = envelope(marked)
+    assert metadata == {
+        "kind": "quest", "edge": "none", "id": 17, "pos": 3,
+        "count": 9, "rev": 41,
+    }, metadata
+    assert visible == "中文 | English", visible
+    oldest, visible = envelope(
+        "\x1eTMREVIEW2:id=1;pos=1;count=9;rev=42;edge=oldest;kind=\x1e相同文字"
+    )
+    assert oldest["edge"] == "oldest" and oldest["rev"] == 42, oldest
+    assert visible == "相同文字", visible
 
     addon_source = MODULE.read_text(encoding="utf-8")
+    assert "mushz_translation_nvda_diagnostic.jsonl" in addon_source
+    assert "REVIEW_DIAGNOSTIC_LIMIT = 2 * 1024 * 1024" in addon_source
+    assert "REVIEW_DIAGNOSTIC_ARCHIVES = 5" in addon_source
+    diagnostic_method = addon_source.split("def _translationDiagnostic", 1)[1].split("\n\ndef ", 1)[0]
+    assert '"event": str(event)' in diagnostic_method
+    assert '"text"' not in diagnostic_method and '"content"' not in diagnostic_method
+    for event in ("request_sent", "response_ready", "request_timeout", "history_edge", "line_move"):
+        assert '"%s"' % event in addon_source
     assert "if attempt >= 80:" in addon_source
     assert "翻譯紀錄尚未更新，請再按一次。" in addon_source
 
@@ -515,6 +538,37 @@ Jul 14 2026 Tot 189 [-526, 561] The Cirustal Coast morpheus"""
     assert news_lines[2].endswith("The quest is not going to work until we get another reboot, but the problem has been found."), news_lines[2]
     assert news_lines[-1].endswith("The Cirustal Coast morpheus"), news_lines[-1]
 
+    live_news_english = """ALTER AEON NEWS
+To commemorate the fallen, type 'rub bacon'.
+See 'help bacon day' for more details.
+Alter Aeon was last booted: Mon Oct 12 00:18:57 2026
+Gallade won a jackpot!
+Got Their Freak On: Asteroid, ranged attack, damage: 207.
+Recent Archery Contest Winners:
+Juggernaut - score 475 - Tue Oct 13 04:35:26 2026
+Catch of the Day: a broad-head sawfish, 107 lbs. - caught by Neufi
+Last Meteor Sighting: Headhunter Island, The Continent of Suboria
+New and recently updated areas:
+Date Level [ X, Y] Name Creators
+Aug 26 2026 Lvl 27 [ -3929, 56 ] Tyranid caves  alf duncan"""
+    live_news_chinese = """ALTER AEON 新聞
+紀念逝者，輸入 rub bacon。
+詳情請參閱 help bacon day。
+Alter Aeon 上次重啟時間：Mon Oct 12 00:18:57 2026
+Gallade 贏得了頭獎！
+Got Their Freak On：Asteroid，ranged attack，傷害：207。
+近期射箭比賽優勝者：
+Juggernaut，分數 475，Tue Oct 13 04:35:26 2026
+今日漁獲：a broad-head sawfish，107 磅；捕獲者：Neufi
+上次觀測到流星：Headhunter Island, The Continent of Suboria
+新增與近期更新區域：
+日期，等級，座標，名稱，創作者
+Aug 26 2026，Lvl 27，座標 -3929、56，泰倫蟲族洞穴，創作者：alf duncan"""
+    live_news_lines = present(live_news_chinese + " | " + live_news_english).splitlines()
+    assert len(live_news_lines) == 13, live_news_lines
+    assert live_news_lines[7].endswith("Juggernaut - score 475 - Tue Oct 13 04:35:26 2026"), live_news_lines
+    assert live_news_lines[-1].endswith("Tyranid caves  alf duncan"), live_news_lines
+
     changes_english = """[3413] ---- Sep 20, 26
 From Draak:
 Add 'help' option to the scan command.
@@ -562,8 +616,15 @@ scan -dclient [args] - 掃描前查看"""
     assert "_syncTranslationReviewPosition(True, atEnd=True)" in bottom_script
 
     line_navigation = addon_source.split("def _moveTranslationHistoryLine", 1)[1].split("\n\tdef ", 1)[0]
-    assert "if updated == text:" in line_navigation
+    assert "if updated == text:" not in line_navigation
+    assert 'metadata.get("edge") == "oldest"' in line_navigation
+    assert 'metadata.get("edge") == "latest"' in line_navigation
     assert "已到最新一筆翻譯紀錄。" in line_navigation
+
+    plugin_source = (ROOT / "src/mush-z/worlds/plugins/Translation_Mode.xml").read_text(encoding="utf-8-sig")
+    assert "TMREVIEW2:id=%d;pos=%d;count=%d;rev=%d;edge=%s;kind=%s" in plugin_source
+    assert 'unicode_history_pos <= 1 and "oldest"' in plugin_source
+    assert 'unicode_history_pos >= #unicode_history and "latest"' in plugin_source
 
     sync_method = addon_source.split("def _syncTranslationReviewPosition", 1)[1].split("\n\tdef ", 1)[0]
     assert "_translationReviewInfoAtOffset(obj, targetLine[0])" in sync_method
