@@ -826,9 +826,17 @@ def deterministic_translate(text):
         "You are too exhausted!": "你太疲憊了！",
         "You begin to recover your morale!": "你的士氣開始恢復！",
         "You sit down and rest your tired bones.": "你坐下來休息疲憊的身體。",
+        "You can't donate bound equipment.": "你不能捐贈已綁定的裝備。",
+        "If you want to destroy it, you can 'drop' and 'sacrifice' it.": "如果你想銷毀它，可以先輸入「drop」丟棄，再輸入「sacrifice」獻祭。",
+        "There is currently a 'credit buy' sale in progress!": "目前正在舉行「credit buy」特賣！",
+        "Use the 'sale' command for details.": "輸入「sale」指令查看詳情。",
     }
     if source.strip() in fixed_events:
         return fixed_events[source.strip()]
+    login = re.fullmatch(r"Logging in\s+(.+?)\.", source.strip(), re.I)
+    if login:
+        # The character name is an identifier and must never be translated or lost.
+        return "正在登入 %s。" % login.group(1)
     resource_names = {
         "hp": "血量", "hit": "血量", "hit point": "血量", "hit points": "血量",
         "mana": "法力", "m": "法力",

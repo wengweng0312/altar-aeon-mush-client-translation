@@ -167,6 +167,16 @@ def main() -> None:
         assert deterministic(source) == expected
     assert deterministic("You receive an explorer point!") == "你獲得 1 點探索點數！"
     assert deterministic("Your ice shield fades and is gone.") == "你的冰盾消退並消失了。"
+    assert deterministic("Logging in wengweng.") == "正在登入 wengweng。"
+    assert deterministic("Logging in Hawana.") == "正在登入 Hawana。"
+    assert deterministic("You can't donate bound equipment.") == "你不能捐贈已綁定的裝備。"
+    assert deterministic(
+        "If you want to destroy it, you can 'drop' and 'sacrifice' it."
+    ) == "如果你想銷毀它，可以先輸入「drop」丟棄，再輸入「sacrifice」獻祭。"
+    assert deterministic(
+        "There is currently a 'credit buy' sale in progress!"
+    ) == "目前正在舉行「credit buy」特賣！"
+    assert deterministic("Use the 'sale' command for details.") == "輸入「sale」指令查看詳情。"
     print("SEMANTIC_EVENTS_OK cases=%d aggregate_safe=yes" % len(cases))
 
 
