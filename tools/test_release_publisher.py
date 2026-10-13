@@ -18,6 +18,13 @@ assert publisher.index("if ($DryRun)") < publisher.index("WriteAllText($reposito
 assert "release-patch.yml" in publisher
 assert "gh run watch" in publisher
 assert "function Invoke-GhCaptured" in publisher
+assert "function Write-WorkflowFailureDiagnostics" in publisher
+assert '"--log-failed"' in publisher
+assert "mush-release-run-$RunId-failed.log" in publisher
+assert "GITHUB ACTIONS FAILURE DETAILS" in publisher
+assert "Source commit  : already pushed" in publisher
+assert "the same version may be retried" in publisher
+assert publisher.index("gh run watch") < publisher.index("Write-WorkflowFailureDiagnostics $RunId")
 assert "release not found|HTTP 404" in publisher
 assert "SysWOW64\\WindowsPowerShell" in publisher
 assert "RELEASE COMPLETED AND PLAYER UPDATE CHECK PASSED" in publisher

@@ -35,6 +35,45 @@ function Invoke-GhCaptured([string[]]$Arguments) {
     }
 }
 
+function Write-WorkflowFailureDiagnostics([string]$RunId, [string]$Repository, [string]$Version) {
+    $temporaryRoot = if ([string]::IsNullOrWhiteSpace($env:TEMP)) {
+        [System.IO.Path]::GetTempPath()
+    } else {
+        $env:TEMP
+    }
+    $logPath = Join-Path $temporaryRoot "mush-release-run-$RunId-failed.log"
+    $log = Invoke-GhCaptured @("run", "view", $RunId, "--repo", $Repository, "--log-failed")
+    $logText = if ($log.Output) { $log.Output + "`n" } else {
+        "GitHub did not return a detailed failed-step log. gh exit code: $($log.ExitCode)`n"
+    }
+    [System.IO.File]::WriteAllText($logPath, $logText, [System.Text.UTF8Encoding]::new($false))
+
+    Write-Host ""
+    Write-Host "GITHUB ACTIONS FAILURE DETAILS"
+    Write-Host "Run            : $RunId"
+    Write-Host "Complete log   : $logPath"
+    $important = @($logText -split "`r?`n" | Where-Object {
+        $_ -match '(?i)Traceback|Regression tests failed|FileNotFoundError|AssertionError|FAILED|VALIDATION|##\[error\]|Process completed with exit code'
+    } | Select-Object -Last 30)
+    if ($important.Count -gt 0) {
+        Write-Host "Important lines:"
+        $important | ForEach-Object { Write-Host "  $_" }
+    } else {
+        Write-Host "Important lines: no recognizable error summary; inspect the complete log."
+    }
+
+    $release = Invoke-GhCaptured @("release", "view", "v$Version", "--repo", $Repository, "--json", "tagName", "--jq", ".tagName")
+    $releaseExists = $release.ExitCode -eq 0
+    Write-Host "Source commit  : already pushed to $Repository"
+    if ($releaseExists) {
+        Write-Host "GitHub release : v$Version exists; do not retry with the same version until its state is inspected."
+    } else {
+        Write-Host "GitHub release : v$Version was not created; the same version may be retried after fixing the error."
+        Write-Host "Updater manifest: not confirmed or published by this failed run."
+    }
+    return [pscustomobject]@{ LogPath = $logPath; ReleaseExists = $releaseExists }
+}
+
 function Get-Repository {
     $remote = (& git -C $Root remote get-url origin).Trim()
     if ($LASTEXITCODE -ne 0 -or $remote -notmatch 'github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$') {
@@ -202,7 +241,11 @@ for ($attempt = 0; $attempt -lt 30 -and -not $RunId; $attempt++) {
     if ($null -ne $match) { $RunId = [string]$match.databaseId }
 }
 if (-not $RunId) { throw "The GitHub release workflow was dispatched but could not be located." }
-Invoke-Checked { gh run watch $RunId --repo $Repository --exit-status } "The GitHub release workflow failed."
+& gh run watch $RunId --repo $Repository --exit-status
+if ($LASTEXITCODE -ne 0) {
+    $diagnostic = Write-WorkflowFailureDiagnostics $RunId $Repository $Version
+    throw "The GitHub release workflow failed. Full diagnostics were saved to $($diagnostic.LogPath)"
+}
 
 Invoke-Checked { git -C $Root pull --ff-only origin $Branch } "Release succeeded, but the local checkout could not fast-forward to the published manifest."
 if ($Mode -eq "full") {
