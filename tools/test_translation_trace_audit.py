@@ -41,6 +41,14 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     reasons = audit.suspicious_reasons(newest)
     assert "possible_line_collapse" in reasons
     assert "slow_translation" in reasons
+    structured = dict(newest)
+    structured["source"] = "Usage:\ncommand one\ncommand two\ncommand three"
+    assert "structured_line_collapse" in audit.suspicious_reasons(structured)
+    numeric = {
+        "status": "OK", "engine": "lmt_q4", "elapsed_seconds": 0.1,
+        "source": "Mana: 25, Level: 31", "result": "法力：20，等級：31",
+    }
+    assert "numeric_value_mismatch" in audit.suspicious_reasons(numeric)
     assert audit.suspicious_reasons(old) == []
     legitimate_repeats = {
         "status": "OK", "engine": "lmt_q4", "elapsed_seconds": 0.5,
@@ -64,5 +72,30 @@ with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
     advice = audit.repair_advice(help_case)
     assert advice["family"] == "help_no_match_suggestions"
     assert advice["confidence"] == "high"
+    entity_pairs = audit.extract_entity_pairs(
+        "Gimthen says, 'Hello.'", "金騰說：『你好。』",
+    )
+    assert entity_pairs[0][:3] == ("npc_name", "Gimthen", "金騰")
+    source_variants = {
+        "Gimthen says, 'Hello.'": {
+            "occurrences": 2,
+            "results": {
+                "a": {"value": "金騰說：你好", "count": 1, "newest_ts": "2", "engines": ["lmt_q4"]},
+                "b": {"value": "吉姆森說：你好", "count": 1, "newest_ts": "1", "engines": ["azure"]},
+            },
+        },
+    }
+    entity_variants = {
+        ("npc_name", "gimthen"): {
+            "occurrences": 2,
+            "translations": {
+                "a": {"value": "金騰", "count": 1, "newest_ts": "2", "engines": ["lmt_q4"]},
+                "b": {"value": "吉姆森", "count": 1, "newest_ts": "1", "engines": ["azure"]},
+            },
+        },
+    }
+    consistency = audit.build_consistency_suspicions(source_variants, entity_variants)
+    assert consistency[0]["kind"] == "npc_name_variation"
+    assert consistency[0]["confidence"] == "high"
 
 print("TRANSLATION_TRACE_AUDIT_OK newest_first=yes readonly=yes")

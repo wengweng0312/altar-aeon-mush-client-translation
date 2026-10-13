@@ -14,7 +14,7 @@ import json
 import re
 import shutil
 import sys
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, defaultdict
 from datetime import datetime
 from pathlib import Path
 from urllib.request import urlopen
@@ -33,6 +33,26 @@ FUNCTIONAL_REASONS = {
     "no_chinese_result", "possible_line_collapse", "possible_under_translation",
     "possible_repetition_loop", "possible_prompt_leak",
 }
+STRUCTURED_MARKERS = (
+    "You are using:", "You are carrying:", "You know the following skills:",
+    "Quest Name:", "Current goal short description:", "Current goal long description:",
+    "Previous goal short description:", "Previous goal long description:",
+    "Usage:", "Syntax:", "Keywords are:", "There are the following sales running:",
+)
+EQUIPMENT_SLOTS = (
+    "head", "neck", "arms", "wrist", "hands", "finger", "on body", "about body",
+    "waist", "legs", "feet", "shield", "weapon", "wielded", "held", "light",
+)
+NPC_EVENT_PATTERNS = (
+    (re.compile(r"^(.+?)\s+says(?:\s+in\s+.+?)?[, :]", re.I), re.compile(r"^(.+?)(?:說|用.+?語氣說)[：:，,]")),
+    (re.compile(r"^(.+?)\s+is DEAD!", re.I), re.compile(r"^(.+?)(?:死了|已死亡|死亡)")),
+    (re.compile(r"^(.+?)\s+has arrived\.?", re.I), re.compile(r"^(.+?)(?:來了|已到達|抵達)")),
+    (re.compile(
+        r"^(.+?)\s+(?:leaves|flies|walks|runs)\s+"
+        r"(?:north|south|east|west|northeast|northwest|southeast|southwest|up|down|away|in|out)"
+        r"(?:wards?)?[.!]?$", re.I,
+    ), re.compile(r"^(.+?)(?:離開|飛|走|跑|向)")),
+)
 
 
 def reverse_lines(path: Path, block_size: int = 128 * 1024):
@@ -85,6 +105,89 @@ def repetition_strength(value: str):
     return max(strongest, max(counts.values(), default=1))
 
 
+def structured_family(source: str):
+    """Return a conservative structure family, or an empty string."""
+    rows = nonempty_lines(source)
+    if not rows:
+        return ""
+    if rows[0] == "You are using:" or any(" is obviously carrying:" in row for row in rows):
+        return "character_inspection"
+    if rows[0].startswith(("Usage:", "Syntax:", "Keywords are:")):
+        return "help"
+    if any(marker in source for marker in STRUCTURED_MARKERS[:8]):
+        if "Quest Name:" in source or " goal " in source.lower():
+            return "quest"
+        if "skills:" in source.lower():
+            return "skills"
+        return "inventory_or_equipment"
+    if "There are the following sales running:" in source:
+        return "sales"
+    if re.search(r"\bLevel:\s*\d+\b", source, re.I) and re.search(r"\bType:\s*\w+", source, re.I):
+        return "item_detail"
+    return ""
+
+
+def numeric_tokens(value: str):
+    return Counter(re.findall(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?(?:[kKmMbB]|%)?", value or ""))
+
+
+def orphan_fragment_count(value: str):
+    rows = nonempty_lines(value)
+    return sum(bool(re.fullmatch(r"[\s'\"‘’“”。，、；：!?！？…-]{1,5}", row)) for row in rows)
+
+
+def normalize_candidate(value: str):
+    value = re.sub(r"\s+", " ", str(value or "")).strip(" \t\r\n:：,，.!！?？'\"‘’“”")
+    return value.casefold()
+
+
+def extract_entity_pairs(source: str, result: str):
+    """Yield high-confidence entity mappings without deciding which Chinese is correct."""
+    source_rows = nonempty_lines(source)
+    result_rows = nonempty_lines(result)
+    if len(source_rows) != len(result_rows):
+        return []
+    pairs = []
+    for english, chinese in zip(source_rows, result_rows):
+        for english_pattern, chinese_pattern in NPC_EVENT_PATTERNS:
+            english_match = english_pattern.match(english)
+            chinese_match = chinese_pattern.match(chinese)
+            if english_match and chinese_match:
+                original = english_match.group(1).strip()
+                translated = chinese_match.group(1).strip()
+                if original and translated and HAN.search(translated):
+                    pairs.append(("npc_name", original, translated, english, chinese))
+                break
+        equipment = re.match(
+            r"^(%s)\s+-\s+(.+)$" % "|".join(re.escape(slot) for slot in EQUIPMENT_SLOTS),
+            english, re.I,
+        )
+        if equipment:
+            chinese_equipment = re.match(r"^\S.{0,12}?\s*[-—－]\s*(.+)$", chinese)
+            if chinese_equipment:
+                original = equipment.group(2).strip()
+                translated = chinese_equipment.group(1).strip()
+                if original and translated and HAN.search(translated):
+                    pairs.append(("item_name", original, translated, english, chinese))
+    return pairs
+
+
+def variation_family(source: str):
+    family = structured_family(source)
+    lowered = source.lower()
+    if family:
+        return "structured_result_variation", family
+    if any(pattern.match(line) for line in nonempty_lines(source) for pattern, _ in NPC_EVENT_PATTERNS):
+        return "npc_context_translation_variation", "npc_event"
+    if re.search(r"\b(?:get|drop|put|wear|wield|hold|give)\b", lowered):
+        return "item_context_translation_variation", "item_action"
+    if re.search(r"\b(?:skill|spell|cast|spellgroup)\b", lowered):
+        return "skill_context_translation_variation", "skill_or_spell"
+    if re.search(r"(?:\bLocation:|\bnearby areas named|\s->\s)", source, re.I):
+        return "place_context_translation_variation", "place"
+    return "same_source_translation_variation", "unclassified"
+
+
 def suspicious_reasons(record: dict):
     source = str(record.get("source") or "")
     result = str(record.get("result") or "")
@@ -108,6 +211,8 @@ def suspicious_reasons(record: dict):
     result_lines = nonempty_lines(result)
     if len(source_lines) >= 4 and len(result_lines) <= max(1, int(len(source_lines) * 0.34)):
         reasons.append("possible_line_collapse")
+        if structured_family(source):
+            reasons.append("structured_line_collapse")
     source_compact = re.sub(r"\s+", "", source)
     result_compact = re.sub(r"\s+", "", result)
     if len(source_compact) >= 180 and len(result_compact) < max(24, int(len(source_compact) * 0.16)):
@@ -121,10 +226,61 @@ def suspicious_reasons(record: dict):
     lowered = result.lower()
     if any(marker in lowered for marker in PROMPT_LEAKS):
         reasons.append("possible_prompt_leak")
+    if source and result and numeric_tokens(source) != numeric_tokens(result):
+        reasons.append("numeric_value_mismatch")
+    if orphan_fragment_count(result) >= 2 and orphan_fragment_count(result) > orphan_fragment_count(source):
+        reasons.append("possible_orphan_line_fragments")
     slow_limit = 5.0 if engine in {"lmt_q4", "local", "unknown"} else 3.0
     if elapsed >= slow_limit:
         reasons.append("slow_translation")
     return reasons
+
+
+def build_consistency_suspicions(source_variants, entity_variants):
+    suspicions = []
+    for source, aggregate in source_variants.items():
+        results = [value for value in aggregate["results"] if value]
+        if len(results) < 2:
+            continue
+        kind, context = variation_family(source)
+        suspicions.append({
+            "kind": kind, "confidence": "medium", "context": context,
+            "key": source, "occurrences": aggregate["occurrences"],
+            "variants": list(aggregate["results"].values()),
+        })
+    for (kind, original), aggregate in entity_variants.items():
+        if len(aggregate["translations"]) < 2:
+            continue
+        suspicions.append({
+            "kind": "%s_variation" % kind, "confidence": "high", "context": kind,
+            "key": original, "occurrences": aggregate["occurrences"],
+            "variants": list(aggregate["translations"].values()),
+        })
+    confidence_order = {"high": 0, "medium": 1, "low": 2}
+    suspicions.sort(key=lambda item: (confidence_order[item["confidence"]], -item["occurrences"], item["kind"]))
+    return suspicions
+
+
+def write_consistency_report(suspicions, run_dir: Path):
+    json_path = run_dir / "CONSISTENCY_SUSPICIONS.json"
+    report_path = run_dir / "CONSISTENCY_SUSPICIONS.md"
+    json_path.write_text(json.dumps(suspicions, ensure_ascii=False, indent=2), encoding="utf-8")
+    with report_path.open("w", encoding="utf-8", newline="\n") as report:
+        report.write("# Translation Consistency Suspicions\n\n")
+        report.write("Read-only evidence. These flags do not choose a preferred translation and never modify cache, glossary, SQLite, worker, or game files.\n\n")
+        report.write("- Total candidates: `%d`\n" % len(suspicions))
+        report.write("- Categories: `%s`\n" % dict(Counter(item["kind"] for item in suspicions)))
+        for number, item in enumerate(suspicions, 1):
+            report.write("\n## %d. %s | %s confidence\n\n" % (number, item["kind"], item["confidence"]))
+            report.write("- Context: `%s`\n" % item["context"])
+            report.write("- Occurrences: `%d`\n" % item["occurrences"])
+            report.write("- English key/source:\n\n```text\n%s\n```\n" % markdown_text(item["key"]))
+            for variant_number, variant in enumerate(item["variants"], 1):
+                report.write("\nVariant %d (%d occurrences; newest `%s`; engines `%s`):\n\n```text\n%s\n```\n" % (
+                    variant_number, variant["count"], variant["newest_ts"],
+                    ", ".join(sorted(variant["engines"])), markdown_text(variant["value"]),
+                ))
+    return report_path, json_path
 
 
 def markdown_text(value: str):
@@ -369,6 +525,8 @@ def audit(args):
     statuses = Counter()
     malformed = []
     scanned = 0
+    source_variants = defaultdict(lambda: {"occurrences": 0, "results": OrderedDict()})
+    entity_variants = defaultdict(lambda: {"occurrences": 0, "translations": OrderedDict()})
 
     print("Translation trace audit")
     print("Source: %s" % root)
@@ -392,6 +550,35 @@ def audit(args):
                 status = str(record.get("status") or "unknown")
                 engines[engine] += 1
                 statuses[status] += 1
+                source = str(record.get("source") or "").strip()
+                result = str(record.get("result") or "").strip()
+                if source and result and status.upper() in {"OK", "CACHE"}:
+                    aggregate = source_variants[source]
+                    aggregate["occurrences"] += 1
+                    result_key = normalize_candidate(result)
+                    if result_key not in aggregate["results"]:
+                        aggregate["results"][result_key] = {
+                            "value": result, "count": 0, "newest_ts": record.get("ts") or "unknown",
+                            "engines": [], "request_id": record.get("request_id") or "unknown",
+                        }
+                    variant = aggregate["results"][result_key]
+                    variant["count"] += 1
+                    if engine not in variant["engines"]:
+                        variant["engines"].append(engine)
+                    for kind, original, translated, english_line, chinese_line in extract_entity_pairs(source, result):
+                        entity = entity_variants[(kind, original.casefold())]
+                        entity["occurrences"] += 1
+                        translated_key = normalize_candidate(translated)
+                        if translated_key not in entity["translations"]:
+                            entity["translations"][translated_key] = {
+                                "value": translated, "count": 0,
+                                "newest_ts": record.get("ts") or "unknown", "engines": [],
+                                "english_context": english_line, "chinese_context": chinese_line,
+                            }
+                        entity_variant = entity["translations"][translated_key]
+                        entity_variant["count"] += 1
+                        if engine not in entity_variant["engines"]:
+                            entity_variant["engines"].append(engine)
                 try:
                     elapsed = float(record.get("elapsed_seconds") or 0.0)
                 except (TypeError, ValueError):
@@ -452,11 +639,15 @@ def audit(args):
         report.write("- Complete normalized trace, newest first: `TRACE_NEWEST_FIRST.jsonl`\n")
         report.write("- Malformed input samples: `MALFORMED_TRACE_LINES.txt`\n")
     malformed_path.write_text("\n\n".join(malformed), encoding="utf-8")
+    consistency = build_consistency_suspicions(source_variants, entity_variants)
+    consistency_report, consistency_json = write_consistency_report(consistency, run_dir)
     repair_report, repair_fixtures, repair_count = write_repair_candidates(cases, run_dir)
     latest = args.output_root.resolve() / "TRANSLATION_TRACE_AUDIT_REPORT.md"
     shutil.copyfile(report_path, latest)
     shutil.copyfile(repair_report, args.output_root.resolve() / "REPAIR_CANDIDATES.md")
     shutil.copyfile(repair_fixtures, args.output_root.resolve() / "AUTO_REPAIR_FIXTURES.json")
+    shutil.copyfile(consistency_report, args.output_root.resolve() / "CONSISTENCY_SUSPICIONS.md")
+    shutil.copyfile(consistency_json, args.output_root.resolve() / "CONSISTENCY_SUSPICIONS.json")
     replay = None
     if args.replay_lmt:
         replay = replay_cases(cases, args, run_dir)
@@ -465,6 +656,7 @@ def audit(args):
     print("Report: %s" % report_path)
     print("Latest: %s" % latest)
     print("Repair candidates: %d (%s)" % (repair_count, repair_report))
+    print("Consistency suspicions: %d (%s)" % (len(consistency), consistency_report))
     if replay is not None:
         print("Replay: fixed=%d unresolved=%d errors=%d" % (
             replay["fixed"], replay["unresolved"], replay["errors"],
