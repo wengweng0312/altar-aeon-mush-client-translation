@@ -15,7 +15,10 @@ audit = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(audit)
 
 
-with tempfile.TemporaryDirectory(dir=ROOT / ".test-temp") as temporary:
+# Use the runner-provided temporary directory instead of requiring a
+# repository-local parent to exist.  A clean GitHub checkout does not contain
+# ignored directories such as .test-temp.
+with tempfile.TemporaryDirectory() as temporary:
     bridge = Path(temporary) / "bridge"
     archive = bridge / "log_archive"
     archive.mkdir(parents=True)
