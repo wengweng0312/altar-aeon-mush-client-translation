@@ -70,6 +70,10 @@ def main() -> None:
             "Hawana 在這裡。", "一塊木製短告示牌標示著當地教師的方向。"],
         "translate_room_units_once": lambda values, _config: (local_calls.append(list(values)) or ["龍牙傳送點"]),
         "translation_sanity_ok": lambda _source, _result: (True, ""),
+        "room_fallback_cache_config": lambda config: dict(config, translation_cache_version=13001),
+        "translate_room_fallback_cached": lambda *_args, **_kwargs: (
+            (_ for _ in ()).throw(AssertionError("whole-room fallback ran"))
+        ),
         "translate_piece": lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("whole-room fallback ran")),
         "log": lambda *_args, **_kwargs: None,
     })

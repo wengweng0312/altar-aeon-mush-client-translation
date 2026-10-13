@@ -63,6 +63,7 @@ CONTROL_TRANSLATE_OUTGOING_CHAT = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:"
 CONTROL_CHECK_API = "__MUSHZ_CONTROL_CHECK_API__"
 CPU_AUTOTUNE_VERSION = 1
 STRUCTURED_FIELD_CACHE_VERSION = 2
+ROOM_FALLBACK_CACHE_VERSION = 1
 CPU_AUTOTUNE_MIN_GAIN = 1.05
 CLOUD_FAILURE_LIMIT = 3
 CLOUD_COOLDOWN_SECONDS = 300
@@ -2580,11 +2581,39 @@ def seed_room_sentence_cache(source, translated, c):
     return len(pairs)
 
 
+def room_fallback_cache_config(c):
+    """Isolate safe whole-prefix fallbacks from ordinary translation cache."""
+    config = dict(c)
+    config["translation_cache_version"] = (
+        int(c.get("translation_cache_version", 12)) * 1000 + ROOM_FALLBACK_CACHE_VERSION
+    )
+    return config
+
+
+def translate_room_fallback_cached(text, c):
+    """Cache a validated whole room prefix when semantic units are unsuitable."""
+    config = room_fallback_cache_config(c)
+    cached = cache_get(text, config)
+    if cached is not None:
+        return cached
+    translated = translate_piece(text, c, force_robust=True)
+    cache_put(text, translated, config)
+    return translated
+
+
 def translate_room_prose_cached(text, c):
     """Reuse known room sentences without slowing an entirely new room."""
     chunks = room_semantic_chunks(text)
     if len(chunks) < 2:
         return translate_piece(text, c, force_robust=len(text) >= 180)
+    # A fluent Chinese sentence can be much shorter than its English source.
+    # If unit-level guards reject that shape, the proven whole-prefix fallback
+    # is cached in a separate namespace.  Repeated `look` commands then reuse
+    # it instead of calling LMT again, without weakening the safety guard or
+    # admitting old whole-room cache entries.
+    fallback_cached = cache_get(text, room_fallback_cache_config(c))
+    if fallback_cached is not None:
+        return fallback_cached
     rows = [
         line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
@@ -2606,7 +2635,7 @@ def translate_room_prose_cached(text, c):
                 # This is a presentation optimisation.  If a model changes or
                 # drops a marker, retain the proven whole-room translation path.
                 log("room aligned translation fallback: %r" % error, True)
-                return translate_piece(text, c, force_robust=True)
+                return translate_room_fallback_cached(text, c)
         else:
             unresolved = [index for index, value in enumerate(translated_missing) if value is None]
             if unresolved:
@@ -2618,12 +2647,12 @@ def translate_room_prose_cached(text, c):
                         translated_missing[index] = value
                 except Exception as error:
                     log("room partial cloud fallback: %r" % error, True)
-                    return translate_piece(text, c, force_robust=True)
+                    return translate_room_fallback_cached(text, c)
         for index, translated_chunk in zip(missing_indexes, translated_missing):
             ok, reason = translation_sanity_ok(chunks[index], translated_chunk)
             if not ok:
                 log("room aligned translation fallback: %s" % reason, True)
-                return translate_piece(text, c, force_robust=True)
+                return translate_room_fallback_cached(text, c)
             translated_chunk = " ".join(translated_chunk.splitlines()).strip()
             if room_title and chunks[index] == room_title:
                 translated_chunk = place_name_put(
