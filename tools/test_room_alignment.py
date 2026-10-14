@@ -22,6 +22,7 @@ CONSTANTS = {
     "ROOM_NON_TITLE",
     "ROOM_PERIOD_TITLE_START",
     "ROOM_NON_PROSE_BLOCK",
+    "PLACE_URL_SUFFIX",
 }
 
 
@@ -98,6 +99,15 @@ def main() -> None:
         "and a metal cauldron rests in one corner beside several dirty dishes."
     )
     assert module["is_room_prose_candidate"](body_starts_its_a)
+
+    shop_url = (
+        "A Twinkle in Her Eye Jewelry and Lapidary - http://alteraeon.com:8080/shops/53467\n"
+        "This small shop's walls are covered with simple linen drapes. There are\n"
+        "marble-topped counters by the east and west walls, with velvet-lined trays\n"
+        "that bear various pieces of jewelry. A lantern fills the room with light."
+    )
+    assert module["room_title_index"](shop_url.splitlines()) == 0
+    assert module["room_semantic_chunks"](shop_url)[0].endswith("/shops/53467")
 
     longer_period_name = period_title.replace(
         "Near the middle of a clearing.",

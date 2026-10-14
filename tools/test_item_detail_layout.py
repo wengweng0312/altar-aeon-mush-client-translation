@@ -86,7 +86,26 @@ def main() -> None:
     assert translated_total and len(translated_total.splitlines()) >= 10, translated_total
     assert "總等級：61（另含 20 級盜賊）" in translated_total
     assert module.numeric_items_preserved(total_levels, translated_total)
-    print("ITEM_DETAIL_LAYOUT_OK fields=13 total_levels=yes internal_component_comma=preserved")
+
+    carrying = (
+        "a huge two handed spiked club, Total levels: 73, Comp: BASE METAL, IRON, "
+        "Type: WEAPON, Weight: 40, 2_WIELD, Damage: 3d15, Speed: slow, "
+        "Damage Type: crush, 27 wield strength, DAMROLL by 14, ARMOR by 14, "
+        "HIT_POINTS by 50, Quality: WELL CRAFTED "
+        "You are carrying a huge two handed spiked club."
+    )
+    translated_carrying = module.translate_item_detail_line(carrying, {})
+    assert translated_carrying, translated_carrying
+    carrying_rows = translated_carrying.splitlines()
+    assert carrying_rows[-2] == "品質：工藝精良", carrying_rows
+    assert carrying_rows[-1].startswith("你正攜帶著"), carrying_rows
+    assert len(carrying_rows) == len(module.split_item_detail_fields(
+        carrying[:carrying.index(" You are carrying")]
+    )) + 1, carrying_rows
+
+    assert '(value:find(", Level:", 1, true) or value:find(", Total levels:", 1, true))' in plugin
+    assert 'value:gsub("%s+(You are carrying .+)$", "\\n%1")' in plugin
+    print("ITEM_DETAIL_LAYOUT_OK fields=13 total_levels=yes carrying=separate internal_component_comma=preserved")
 
 
 if __name__ == "__main__":

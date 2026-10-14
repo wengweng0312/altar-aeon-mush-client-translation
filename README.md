@@ -127,6 +127,12 @@ Mush-Z\worlds\plugins\translation_bridge\cloud_translation_config.txt
 
 私人訊息預設不會送往線上翻譯服務。即使線上服務無法使用，遊戲仍可繼續運作，並依設定使用離線翻譯或英文原文。
 
+如果想使用離線翻譯，可以輸入:
+```text
+lmt_test
+```
+他會在下次開啟 mush client 的時候跑離線翻譯模型優化，需要一點時間，跑完會跳出 altar aeon 的歡迎詞。
+
 ## 自動更新
 
 Mush-Z 啟動時會自動檢查翻譯套件是否有新版本。玩家同意更新後，程式會：

@@ -1234,6 +1234,48 @@ local function command_usage_semantic_source_lines(lines)
 end
 
 local function craftable_material_semantic_source_lines(lines)
+  local compact = {}
+  for _, source in ipairs(lines or {}) do
+    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then compact[#compact + 1] = value end
+  end
+  local catalog_footer = compact[#compact] and compact[#compact]:lower() or ""
+  local has_catalog_footer = catalog_footer:match("^use '[^']+'%s+.+") ~= nil
+  local catalog_end = has_catalog_footer and (#compact - 1) or #compact
+  if catalog_end >= 5 then
+    local catalog_count = 0
+    for i = 1, catalog_end do
+      if compact[i]:match("^%[%s*[^%]]-%s*%]%s*,%s*[%a][%a ]-[%s,]*[%a %-]*$") then
+        catalog_count = catalog_count + 1
+      else
+        catalog_count = -1
+        break
+      end
+    end
+    if catalog_count >= 5 then return compact end
+  end
+  if #compact >= 5 then
+    local recipe_count = 0
+    for _, value in ipairs(compact) do
+      local tail = value:lower():match("^%[%s*[^%]]-%s*%]%s*,%s*(.+)$")
+      if not tail or not (tail:match("mining tool%s*$")
+          or tail:match("one%-handed weapon%s*$")
+          or tail:match("two%-handed weapon%s*$")
+          or tail:match("ranged weapon%s*$")) then
+        recipe_count = -1
+        break
+      end
+      recipe_count = recipe_count + 1
+    end
+    if recipe_count >= 5 then return compact end
+  end
+  if #compact >= 6
+      and compact[1]:lower():match("^it would be .- to forge an ingot of .- into%.%.%.$") then
+    for i = 2, #compact do
+      if not compact[i]:match("^[%a][%a' %-]*$") or #compact[i] > 40 then return nil end
+    end
+    return compact
+  end
   local output, prose, keyword_count = {}, {}, 0
   local function flush_prose()
     if #prose == 0 then return end
@@ -1324,7 +1366,8 @@ local function item_detail_semantic_source_lines(lines)
   for _, source in ipairs(lines or {}) do
     local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if value ~= "" then
-      if value:find(", Level:", 1, true) and value:find(", Type:", 1, true) then
+      if (value:find(", Level:", 1, true) or value:find(", Total levels:", 1, true))
+          and value:find(", Type:", 1, true) then
         found = true
         for _, label in ipairs({"Level", "Comp", "Type", "Weight", "AC", "Damage", "Speed", "Damage Type", "Quality"}) do
           value = value:gsub(",%s*(" .. label .. ":)", "\n%1")
@@ -1349,6 +1392,10 @@ local function item_detail_semantic_source_lines(lines)
         value = value:gsub(",%s*(This item)", "\n%1")
         value = value:gsub(",%s*(Spells on wearer:)", "\n%1")
         value = value:gsub(",%s*(Spell on wearer:)", "\n%1")
+        value = value:gsub("%s+(You are carrying .+)$", "\n%1")
+        value = value:gsub("%s+(You are wielding .+)$", "\n%1")
+        value = value:gsub("%s+(You are wearing .+)$", "\n%1")
+        value = value:gsub("%s+(You are holding .+)$", "\n%1")
         for field in (value .. "\n"):gmatch("(.-)\n") do
           field = field:gsub("^%s+", ""):gsub("%s+$", ""):gsub(",%s*$", "")
           if field ~= "" then output[#output + 1] = field end
@@ -1362,10 +1409,14 @@ local function item_detail_semantic_source_lines(lines)
 end
 
 local function wrapped_dialogue_source_lines(lines)
-  local rows = {}
+  local rows, indented = {}, {}
   for _, source in ipairs(lines or {}) do
-    local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if value ~= "" then rows[#rows + 1] = value end
+    local raw = tostring(source or "")
+    local value = raw:gsub("^%s+", ""):gsub("%s+$", "")
+    if value ~= "" then
+      rows[#rows + 1] = value
+      indented[#rows] = raw:match("^%s") ~= nil
+    end
   end
   local first, last = nil, nil
   for i, value in ipairs(rows) do
@@ -1384,10 +1435,30 @@ local function wrapped_dialogue_source_lines(lines)
   if not last then return nil end
   local output = {}
   if first > 1 then
-    local before = {}
-    for i = 1, first - 1 do before[#before + 1] = rows[i] end
-    local semantic = wrapped_semantic_source_lines(before)
-    for _, value in ipairs(semantic) do output[#output + 1] = value end
+    local indent_first, indent_last, indent_count = nil, nil, 0
+    for i = 1, first - 1 do
+      if indented[i] then
+        indent_first = indent_first or i
+        indent_last = i
+        indent_count = indent_count + 1
+      end
+    end
+    if indent_count >= 2 and indent_last - indent_first + 1 == indent_count then
+      local before = {}
+      for i = 1, indent_first - 1 do before[#before + 1] = rows[i] end
+      local semantic = wrapped_semantic_source_lines(before)
+      for _, value in ipairs(semantic) do output[#output + 1] = value end
+      for i = indent_first, indent_last do output[#output + 1] = rows[i] end
+      local after_list = {}
+      for i = indent_last + 1, first - 1 do after_list[#after_list + 1] = rows[i] end
+      semantic = wrapped_semantic_source_lines(after_list)
+      for _, value in ipairs(semantic) do output[#output + 1] = value end
+    else
+      local before = {}
+      for i = 1, first - 1 do before[#before + 1] = rows[i] end
+      local semantic = wrapped_semantic_source_lines(before)
+      for _, value in ipairs(semantic) do output[#output + 1] = value end
+    end
   end
   local speech = {}
   for i = first, last do speech[#speech + 1] = rows[i] end

@@ -23,6 +23,7 @@ def main():
             "A large wooden cabin": "一座大型木屋",
             "Astraeus": "阿斯特賴俄斯",
             "The Ranger Strag": "遊俠斯特拉格",
+            "A Twinkle in Her Eye Jewelry and Lapidary": "眼眸閃耀珠寶與寶石工坊",
         }
 
         original_translate_piece = worker.translate_piece
@@ -58,6 +59,12 @@ def main():
             assert worker.translate_place_name(cabin, config, "where") == "一座大型木屋"
             assert worker.translate_place_name(cabin, config, "room_title") == "一座大型木屋"
             assert calls.count(cabin) == 1
+
+            shop = "A Twinkle in Her Eye Jewelry and Lapidary - http://alteraeon.com:8080/shops/53467"
+            assert worker.translate_place_name(shop, config, "room_title") == (
+                "眼眸閃耀珠寶與寶石工坊 - http://alteraeon.com:8080/shops/53467"
+            )
+            assert calls.count("A Twinkle in Her Eye Jewelry and Lapidary") == 1
 
             where = "The Ranger Strag -> Fort Ironcliff Ranger's Guild"
             assert worker.is_where_location_row(where)

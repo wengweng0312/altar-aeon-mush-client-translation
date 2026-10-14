@@ -189,10 +189,13 @@ JOB_LIST_ROW = re.compile(r"^(\s*)Job\s+(\d+)\s*:\s*(.*?)(\s*)$", re.IGNORECASE)
 NEARBY_QUEST_ROW = re.compile(r"^(\s*)(\d+)\s+(\d+)\s+(.+?)(\s*)$")
 REWARD_TASK_HEADER = re.compile(r"^(\s*)Complete the (\d+) tasks below to gain a reward\.(\s*)$", re.I)
 REWARD_TASK_SKILL_KILL = re.compile(r"^(\s*)Kill a mob with (?:a|an) (.+?)\.(\s*)$", re.I)
-NEARBY_DIRECTION_HEADER = re.compile(r"^\s*Dir\s+Nearby (Landmarks|Shops)\s*$", re.IGNORECASE)
+NEARBY_DIRECTION_HEADER = re.compile(
+    r"^\s*Dir\s+Nearby (Landmarks|Shops|Guildmasters)\s*$", re.IGNORECASE
+)
 NEARBY_DIRECTION_ROW = re.compile(
     r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
 )
+NEARBY_GUILDMASTER_FIELDS = re.compile(r"^(.*?)(\s*->\s*)(.+?)$")
 SALES_LIST_HEADER = "There are the following sales running:"
 SALES_LIST_FOOTER = "Use the 'credit buy' command to take advantage of these deals."
 SALES_LIST_ROW = re.compile(
@@ -756,6 +759,13 @@ def deterministic_translate(text):
             GAME_GLOSSARY = {}
     if source.strip() in GAME_GLOSSARY:
         return GAME_GLOSSARY[source.strip()]
+    practice_cost = re.fullmatch(
+        r"You still need (\d[\d,]*) experience to train a practice\. It costs (\d[\d,]*)\.",
+        source.strip(),
+        re.I,
+    )
+    if practice_cost:
+        return "你還需要 %s 點經驗值才能獲得一次練習。訓練需要 %s 點經驗值。" % practice_cost.groups()
     # Keep common kobold profession labels stable without teaching the rule to
     # arbitrary prose.  A full noun-phrase match avoids changing proper names
     # or uses of "kobold" elsewhere in room descriptions and dialogue.
@@ -1110,6 +1120,7 @@ def cache_put(text,out,c):
 RANGER_GUILD_PLACE = re.compile(
     r"^(.*?)(?:\s+)(?:Ranger's|Rangers'|Rangers)\s+Guild$", re.IGNORECASE
 )
+PLACE_URL_SUFFIX = re.compile(r"^(.*?)(\s+-\s+https?://\S+)$", re.IGNORECASE)
 
 
 def ensure_place_name_table(db):
@@ -1160,6 +1171,15 @@ def place_name_put(source, translated, origin, c):
     try:
         ensure_place_name_table(db)
         now = int(time.time())
+        existing = place_name_get(source)
+        if (existing and not any("\u3400" <= char <= "\u9fff" for char in existing)
+                and any("\u3400" <= char <= "\u9fff" for char in translated)):
+            db.execute(
+                "UPDATE place_names SET translated_name=?,origin=?,updated_at=? WHERE source_name=?",
+                (translated, str(origin), now, source),
+            )
+            db.commit()
+            return translated
         db.execute(
             "INSERT OR IGNORE INTO place_names(source_name,translated_name,origin,updated_at) "
             "VALUES(?,?,?,?)",
@@ -1177,6 +1197,13 @@ def translate_place_name(source, c, origin):
     """Resolve an exact structured place once and reuse it across all contexts."""
     source = str(source).strip()
     known = place_name_get(source)
+    url_title = PLACE_URL_SUFFIX.fullmatch(source)
+    if url_title:
+        if known and any("\u3400" <= char <= "\u9fff" for char in known):
+            return known
+        title, suffix = url_title.groups()
+        translated_title = translate_place_name(title.strip(), c, str(origin) + "_url_title")
+        return place_name_put(source, translated_title + suffix, origin, c)
     if known:
         return known
     reviewed = reviewed_phrase_translation(source)
@@ -1277,6 +1304,21 @@ MOB_RESULT_MARKERS = dict(NPC_RESULT_MARKERS, **{
     "dodges": r"閃避|躲開", "dies": r"死|死亡", "is": r"死了|死亡|是",
 })
 NPC_PROTECTION_MARKER = re.compile(r"ZXQNPC(\d{4})QXZ")
+ENTITY_SOURCE_STOPWORDS = {
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+    "north", "south", "east", "west", "up", "down", "inside", "outside",
+    "here", "there", "someone", "something", "anything", "nothing",
+}
+
+
+def valid_entity_source_name(value):
+    """Reject grammar words that can never be a persistent NPC or mob identity."""
+    name = " ".join(str(value).strip().lower().split())
+    if not name or not re.fullmatch(r"[a-z][a-z'’ -]*", name, re.I):
+        return False
+    return not (" " not in name and name in ENTITY_SOURCE_STOPWORDS)
 
 
 def contaminated_mob_translation(value):
@@ -1304,11 +1346,22 @@ def ensure_npc_name_tables(db):
     contaminated = [name for name, translated in
                     db.execute("SELECT source_name,translated_name FROM mob_types")
                     if contaminated_mob_translation(translated)]
-    for name in contaminated:
+    invalid_npcs = [name for (name,) in db.execute("SELECT source_name FROM npc_names")
+                    if not valid_entity_source_name(name)]
+    invalid_mobs = [name for (name,) in db.execute("SELECT source_name FROM mob_types")
+                    if not valid_entity_source_name(name)]
+    invalid_names = set(contaminated + invalid_npcs + invalid_mobs)
+    for name in invalid_names:
+        db.execute("DELETE FROM npc_name_aliases WHERE source_name=?", (name,))
+        db.execute("DELETE FROM npc_names WHERE source_name=?", (name,))
         db.execute("DELETE FROM mob_type_aliases WHERE source_name=?", (name,))
         db.execute("DELETE FROM mob_types WHERE source_name=?", (name,))
-        db.execute("DELETE FROM translations WHERE instr(lower(source_text),?)>0", (name,))
-    if contaminated:
+    if invalid_names:
+        stale = [cache_key for cache_key, source_text in
+                 db.execute("SELECT cache_key,source_text FROM translations")
+                 if any(english_name_in_text(name, source_text) for name in invalid_names)]
+        if stale:
+            db.executemany("DELETE FROM translations WHERE cache_key=?", [(key,) for key in stale])
         db.commit()
 
 
@@ -1326,6 +1379,8 @@ def protect_known_entity_names(source):
     protected = str(source)
     occurrences = []
     for source_name, translated_name, kind in rows:
+        if not valid_entity_source_name(source_name):
+            continue
         pattern = re.compile(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(source_name), re.I)
         def replace(match, source_name=source_name, translated_name=translated_name, kind=kind):
             marker = "ZXQNPC%04dQXZ" % len(occurrences)
@@ -1391,6 +1446,8 @@ def npc_source_identity(line):
     if not subject:
         return None
     name, verb = subject.groups()
+    if not valid_entity_source_name(name):
+        return None
     first = name.split()[0].lower()
     if first in {"a", "an", "the", "you", "your"}:
         return None
@@ -1403,6 +1460,8 @@ def mob_source_identity(line):
     if not match:
         return None
     name, verb = match.groups()
+    if not valid_entity_source_name(name):
+        return None
     return name.strip(), verb.lower()
 
 
@@ -2407,7 +2466,11 @@ ROOM_NON_PROSE_BLOCK = re.compile(
 def room_title_index(rows):
     """Find a conservatively shaped room title after up to eight complete notices."""
     for index, row in enumerate(rows[:9]):
-        if index >= len(rows) - 1 or not row or len(row) > 70:
+        url_title = PLACE_URL_SUFFIX.fullmatch(row)
+        title_too_long = len(row) > 70 and not (
+            url_title and len(url_title.group(1).strip()) <= 70
+        )
+        if index >= len(rows) - 1 or not row or title_too_long:
             continue
         if re.match(r"^(?:you|your|there|exits?|mobs?|level|experience)\b", row, re.I):
             continue
@@ -2998,7 +3061,17 @@ def translate_item_detail_field(field, c):
 
 
 def translate_item_detail_line(line, c):
-    fields = split_item_detail_fields(line)
+    source_line = str(line).strip()
+    trailing = []
+    trailing_match = re.search(
+        r"\s+(You are (?:carrying|wielding|wearing|holding) .+?\.)\s*$",
+        source_line,
+        re.I,
+    )
+    if trailing_match:
+        trailing.append(trailing_match.group(1))
+        source_line = source_line[:trailing_match.start()].rstrip(" ,")
+    fields = split_item_detail_fields(source_line)
     if not fields:
         return None
     output = []
@@ -3008,6 +3081,13 @@ def translate_item_detail_line(line, c):
         if translated is None:
             translated = translate_item_detail_field(field, c)
             cache_put(cache_source, translated, c)
+        output.append(translated)
+    for sentence in trailing:
+        translated = translate_semantic_event_line(sentence, c)
+        if translated is None:
+            translated = deterministic_translate(sentence)
+        if translated is None:
+            translated = translate_piece(sentence, c, force_robust=True)
         output.append(translated)
     result = "\n".join(output)
     if not numeric_items_preserved(line, result):
@@ -3536,11 +3616,180 @@ def translate_command_usage_listing(text, c):
 
 
 CRAFTABLE_KEYWORD_ROW = re.compile(r"^\s*\[\s*([^\]]+?)\s*\]\s*$")
+FORGE_CATALOG_ROW = re.compile(
+    r"^\s*\[\s*([^\]]+?)\s*\]\s*,\s*([A-Z][A-Z ]*?)"
+    r"(?:\s*,\s*([A-Za-z][A-Za-z -]*?))?\s*$",
+    re.I,
+)
+CRAFT_CATALOG_FOOTER = re.compile(
+    r"^Use '([^']+)'\s+(.+?)\s*$",
+    re.I,
+)
+FORGE_RECIPE_ROW = re.compile(r"^\s*\[\s*([^\]]+?)\s*\]\s*,\s*(.+?)\s*$", re.I)
+FORGE_CRAFTABLE_HEADER = re.compile(
+    r"^It would be .+? to forge an ingot of .+? into\.\.\.$", re.I
+)
+FORGE_CRAFTABLE_KEYWORD_ROW = re.compile(r"^\s*([a-z][a-z' -]{0,39})\s*$", re.I)
+CRAFT_KEYWORD_ZH = {
+    "basin": "盆", "cauldron": "大鍋", "tub": "浴盆",
+    "beaker": "燒杯", "bottle": "瓶子", "bowl": "碗", "carafe": "長頸水瓶",
+    "chalice": "聖杯", "cordial": "小酒杯", "coupe": "淺碟香檳杯", "crock": "陶罐",
+    "cruet": "調味瓶", "cup": "杯子", "decanter": "醒酒瓶", "dish": "盤子",
+    "flask": "燒瓶", "goblet": "高腳杯", "highball": "高球杯", "jug": "壺",
+    "lowball": "矮杯", "mug": "馬克杯", "frying pan": "平底鍋", "pitcher": "水壺",
+    "pot": "鍋", "saucer": "茶碟", "shotglass": "烈酒杯", "snifter": "白蘭地杯",
+    "stein": "啤酒杯", "tankard": "大啤酒杯", "teacup": "茶杯", "teapot": "茶壺",
+    "tumbler": "平底杯", "vase": "花瓶", "vial": "小藥瓶", "urn": "甕",
+    "growler": "啤酒壺", "bucket": "水桶", "plate": "盤子", "platter": "大托盤",
+    "knife": "刀", "spoon": "湯匙", "fork": "叉子", "dice": "骰子", "comb": "梳子",
+    "buckle": "帶扣", "shield rim": "盾牌邊框", "studs": "鉚釘", "spikes": "尖刺",
+    "scales": "鱗片", "buttons": "鈕扣", "grip": "握把", "handle": "手柄",
+    "haft": "柄", "pole": "長桿", "cross guard": "十字護手", "round guard": "圓形護手",
+    "square guard": "方形護手", "cup guard": "杯形護手", "basket guard": "籃形護手",
+    "spring": "彈簧", "trigger": "扳機", "arrowhead": "箭頭", "broadhead": "寬刃箭頭",
+    "blunthead": "鈍頭箭", "dart": "飛鏢", "blowgun": "吹箭筒",
+    "axe head": "斧頭", "mace head": "釘頭錘頭", "hammer head": "錘頭",
+    "spear head": "矛頭", "weapon chain": "武器鏈", "shovel head": "鏟頭",
+    "pick head": "鎬頭", "bullet": "子彈", "crowbar": "撬棍",
+    "shovel": "鏟子", "pick": "鎬", "hatchet": "手斧", "battleaxe": "戰斧",
+    "poleaxe": "長柄斧", "halberd": "戟", "mace": "釘頭錘",
+    "morningstar": "流星錘", "polemace": "長柄錘", "thresher": "連枷",
+    "flail": "短連枷", "direflail": "重型連枷", "longflail": "長連枷",
+    "warhammer": "戰錘", "maul": "大錘", "polehammer": "長柄戰錘",
+    "halfspear": "短矛", "javelin": "標槍", "spear": "長矛", "pike": "長槍",
+    "partisan": "翼矛", "chainwhip": "鏈鞭",
+    "chopsticks": "筷子", "fishing pole": "釣魚竿", "canoe": "獨木舟",
+    "boomerang": "迴力鏢", "frisbee": "飛盤", "mask": "面具",
+    "hoodoo mask": "巫毒面具", "clogs": "木屐", "square shield": "方盾",
+    "round shield": "圓盾", "heater shield": "熨斗形盾", "kite shield": "鳶盾",
+    "tower shield": "塔盾", "club": "棍棒", "walking cane": "手杖",
+    "greatclub": "巨棒", "quarterstaff": "長棍", "lance": "騎槍",
+    "figurehead": "船首像",
+}
+
+FORGE_CATALOG_TYPE_ZH = {
+    "LIQUID CONTAINER": "液體容器", "CONTAINER": "容器", "TREASURE": "寶物",
+    "PART": "零件", "AMMO": "彈藥", "WEAPON": "武器",
+    "FISHPOLE": "釣魚竿", "BOAT": "船隻", "FRISBEE": "飛盤類",
+    "ARMOR": "盔甲", "FOCUS": "法器", "OTHER": "其他",
+}
+FORGE_CATALOG_USE_ZH = {
+    "held": "手持", "head": "頭部", "one-handed weapon": "單手武器",
+    "two-handed weapon": "雙手武器", "ranged weapon": "遠程武器",
+    "mining tool": "採礦工具",
+    "feet": "腳部", "one-handed shield": "單手盾牌",
+    "two-handed shield": "雙手盾牌",
+}
+
+FORGE_RECIPE_COMPONENT_ZH = {
+    "shovel head": "鏟頭", "pick head": "鎬頭", "axe head": "斧頭",
+    "mace head": "釘頭錘頭", "hammer head": "錘頭", "spear head": "矛頭",
+    "haft": "長柄", "handle": "手柄", "pole": "長桿", "grip": "握把",
+    "guard": "護手", "weapon chain": "武器鏈",
+}
+CRAFT_CATALOG_FOOTER_ZH = {
+    "to start forging a new metal item.": "開始鍛造新的金屬物品。",
+    "to start making a new woodcrafted item.": "開始製作新的木製物品。",
+}
+
+
+def _forge_recipe_rows(text):
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    if len(rows) < 5:
+        return None
+    parsed = []
+    valid_uses = {"mining tool", "one-handed weapon", "two-handed weapon", "ranged weapon"}
+    for row in rows:
+        match = FORGE_RECIPE_ROW.fullmatch(row)
+        if not match:
+            return None
+        fields = [field.strip() for field in match.group(2).split(",") if field.strip()]
+        if len(fields) < 2 or fields[-1].lower() not in valid_uses:
+            return None
+        parsed.append((match.group(1).strip(), fields))
+    return parsed
+
+
+def is_forge_recipe_listing(text):
+    return _forge_recipe_rows(text) is not None
+
+
+def translate_forge_recipe_listing(text, c):
+    rows = _forge_recipe_rows(text)
+    if not rows:
+        raise RuntimeError("FORGE_RECIPE_PARSE_FAILED")
+    unknown = [name for name, _fields in rows if name.lower() not in CRAFT_KEYWORD_ZH]
+    if unknown:
+        prefetch_cached_phrases(unknown, c)
+    output = []
+    for name, fields in rows:
+        translated = CRAFT_KEYWORD_ZH.get(name.lower()) or translate_cached_phrase(name, c)
+        rendered = ["%s [%s]" % (translated, name)]
+        for field in fields[:-1]:
+            rendered.append(FORGE_RECIPE_COMPONENT_ZH.get(field.lower(), field))
+        rendered.append(FORGE_CATALOG_USE_ZH.get(fields[-1].lower(), fields[-1]))
+        output.append("，".join(rendered))
+    return "\n".join(output)
+
+
+def _forge_catalog_parts(text):
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    footer = CRAFT_CATALOG_FOOTER.fullmatch(rows[-1]) if rows else None
+    data_rows = rows[:-1] if footer else rows
+    if len(data_rows) < 5:
+        return None
+    entries = []
+    for row in data_rows:
+        match = FORGE_CATALOG_ROW.fullmatch(row)
+        if not match:
+            return None
+        entries.append(tuple((value or "").strip() for value in match.groups()))
+    return (entries, footer.group(1), footer.group(2)) if footer else (entries, None, None)
+
+
+def is_forge_catalog_listing(text):
+    return _forge_catalog_parts(text) is not None
+
+
+def translate_forge_catalog_listing(text, c):
+    parsed = _forge_catalog_parts(text)
+    if not parsed:
+        raise RuntimeError("FORGE_CATALOG_PARSE_FAILED")
+    entries, command, footer_description = parsed
+    unknown = [name for name, _kind, _use in entries if name.lower() not in CRAFT_KEYWORD_ZH]
+    unknown.extend(kind.lower() for _name, kind, _use in entries
+                   if kind.upper() not in FORGE_CATALOG_TYPE_ZH)
+    unknown.extend(use.lower() for _name, _kind, use in entries
+                   if use and use.lower() not in FORGE_CATALOG_USE_ZH)
+    if unknown:
+        prefetch_cached_phrases(unknown, c)
+    output = []
+    for name, kind, use in entries:
+        translated = CRAFT_KEYWORD_ZH.get(name.lower()) or translate_cached_phrase(name, c)
+        fields = ["%s [%s]" % (translated, name)]
+        fields.append(FORGE_CATALOG_TYPE_ZH.get(kind.upper()) or translate_cached_phrase(kind.lower(), c))
+        if use:
+            fields.append(FORGE_CATALOG_USE_ZH.get(use.lower()) or translate_cached_phrase(use.lower(), c))
+        output.append("，".join(fields))
+    if command:
+        description_zh = CRAFT_CATALOG_FOOTER_ZH.get(footer_description.lower())
+        description_zh = description_zh or translate_cached_phrase(footer_description, c)
+        output.append("使用 '%s' %s" % (
+            command, description_zh,
+        ))
+    return "\n".join(output)
 
 
 def is_craftable_material_listing(text):
     rows = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return sum(bool(CRAFTABLE_KEYWORD_ROW.fullmatch(row)) for row in rows) >= 5
+    if sum(bool(CRAFTABLE_KEYWORD_ROW.fullmatch(row)) for row in rows) >= 5:
+        return True
+    nonempty = [row for row in rows if row.strip()]
+    return bool(
+        len(nonempty) >= 6
+        and FORGE_CRAFTABLE_HEADER.fullmatch(nonempty[0].strip())
+        and all(FORGE_CRAFTABLE_KEYWORD_ROW.fullmatch(row) for row in nonempty[1:])
+    )
 
 
 def craftable_material_units(text):
@@ -3553,15 +3802,26 @@ def craftable_material_units(text):
             units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose)))
             prose[:] = []
 
+    nonempty = [row for row in rows if row.strip()]
+    forge_listing = bool(
+        len(nonempty) >= 6
+        and FORGE_CRAFTABLE_HEADER.fullmatch(nonempty[0].strip())
+        and all(FORGE_CRAFTABLE_KEYWORD_ROW.fullmatch(row) for row in nonempty[1:])
+    )
+    if forge_listing:
+        return [("translate", nonempty[0].strip())] + [
+            ("keyword", row.strip()) for row in nonempty[1:]
+        ]
+
     for row in rows:
         match = CRAFTABLE_KEYWORD_ROW.fullmatch(row)
         if match:
             flush_prose()
-            units.append(("raw", "[%s]" % match.group(1).strip()))
+            units.append(("keyword", match.group(1).strip()))
         elif row.strip():
             prose.append(row.strip())
     flush_prose()
-    if sum(kind == "raw" for kind, _value in units) < 5:
+    if sum(kind == "keyword" for kind, _value in units) < 5:
         return []
     return units
 
@@ -3836,10 +4096,17 @@ def parse_help_semantic_units(text):
 
 def translate_semantic_units(units, c, context="semantic"):
     """Translate ordered units without asking a model to reproduce structure."""
+    keyword_values = [
+        source for kind, source in units
+        if kind == "keyword" and source.lower() not in CRAFT_KEYWORD_ZH
+    ]
+    if keyword_values:
+        prefetch_cached_phrases(keyword_values, c)
     prepared = {}
     missing = []
     for kind, source in units:
-        if kind != "translate" or source in prepared or source in missing:
+        if (kind != "translate" or source in prepared or source in missing or
+                TASK_PROGRESS_ROW.fullmatch(source)):
             continue
         translated = cache_get(source, c)
         locked_skills = quoted_skill_pairs(source)
@@ -3862,6 +4129,10 @@ def translate_semantic_units(units, c, context="semantic"):
     for kind, source in units:
         if kind in {"fixed", "raw"}:
             output.append(source)
+            continue
+        if kind == "keyword":
+            translated = CRAFT_KEYWORD_ZH.get(source.lower()) or translate_cached_phrase(source, c)
+            output.append("%s [%s]" % (translated, source))
             continue
         if kind == "place":
             output.append(translate_place_name(source, c, context))
@@ -3961,6 +4232,15 @@ def translate_semantic_units(units, c, context="semantic"):
                 translate_cached_phrase(description.strip(), c), trailing,
             ))
             continue
+        task_progress = TASK_PROGRESS_ROW.fullmatch(source)
+        if task_progress:
+            achievement, remaining = task_progress.groups()
+            achievement_zh = TASK_ACHIEVEMENT_ZH.get(achievement.lower())
+            achievement_zh = achievement_zh or reviewed_phrase_translation(achievement)
+            if achievement_zh is None:
+                achievement_zh = translate_cached_phrase(achievement, c)
+            output.append("你已完成%s。還有 %s 個任務！" % (achievement_zh, remaining))
+            continue
         translated = prepared.get(source)
         # Old per-sentence cache rows can contain a model echo in English.  A
         # semantic prose unit is not complete unless it actually contains CJK.
@@ -4009,11 +4289,16 @@ WRAPPED_DIALOGUE_START = re.compile(
     r"|\btells\s+.+?,\s*['\"]",
     re.I,
 )
+TASK_PROGRESS_ROW = re.compile(
+    r"You have got (.+?)\.\s+(\d+) more tasks? to go!", re.I
+)
+TASK_ACHIEVEMENT_ZH = {"a tarot reading": "一次塔羅牌占卜"}
 
 
 def parse_wrapped_dialogue_units(text):
     """Group display-wrapped speech while keeping surrounding actions apart."""
-    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    raw_rows = [line for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    rows = [line.strip() for line in raw_rows]
     start = next((index for index, row in enumerate(rows) if WRAPPED_DIALOGUE_START.search(row)), None)
     if start is None:
         return []
@@ -4026,7 +4311,18 @@ def parse_wrapped_dialogue_units(text):
         return []
     units = []
     if start:
-        units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[:start])))
+        indented = [index for index, row in enumerate(raw_rows[:start]) if row[:1].isspace()]
+        if (len(indented) >= 2 and
+                indented == list(range(indented[0], indented[-1] + 1))):
+            before_list = rows[:indented[0]]
+            if before_list:
+                units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(before_list)))
+            units.extend(("translate", rows[index]) for index in indented)
+            after_list = rows[indented[-1] + 1:start]
+            if after_list:
+                units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(after_list)))
+        else:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[:start])))
     units.append(("translate", " ".join(rows[start:end + 1])))
     if end + 1 < len(rows):
         units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(rows[end + 1:])))
@@ -4417,7 +4713,9 @@ def should_bypass_whole_block_cache(text):
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
-            is_command_usage_listing(text) or is_craftable_material_listing(text) or
+            is_command_usage_listing(text) or is_forge_recipe_listing(text) or
+            is_forge_catalog_listing(text) or
+            is_craftable_material_listing(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
             is_tip_block(text) or is_syntax_help_block(text) or is_book_text_block(text) or
             is_numeric_report_block(text) or
@@ -5331,6 +5629,13 @@ def translate_trailing_independent_rows(text, c):
         output.append(" ".join(translated.splitlines()).strip())
     result = "\n".join(output)
     ok, reason = translation_sanity_ok(text, result)
+    # This path reconstructs every trailing source row with exactly one append,
+    # so duplicate room objects cannot be lost here.  The generic repetition
+    # comparison can still report a false mismatch when different translated
+    # rows share wording or the aligned prose prefix changes line geometry.
+    # Individual model calls have already passed their own loop guard.
+    if not ok and reason == "repeated_source_items_missing":
+        ok, reason = True, ""
     if not ok:
         raise RuntimeError("TRAILING_ROWS_FINAL_SANITY_" + reason)
     return result
@@ -6122,10 +6427,25 @@ def translate_nearby_direction_listing(text, c):
         header = NEARBY_DIRECTION_HEADER.match(line)
         row = NEARBY_DIRECTION_ROW.match(line)
         if header:
-            output.append("方向　附近%s" % ("地標" if header.group(1).lower() == "landmarks" else "商店"))
+            label = {
+                "landmarks": "地標",
+                "shops": "商店",
+                "guildmasters": "公會導師",
+            }[header.group(1).lower()]
+            output.append("方向　附近%s" % label)
         elif row:
             indent, direction, description, trailing = row.groups()
-            zh = translate_place_name(description.strip(), c, "nearby_direction")
+            guildmaster = NEARBY_GUILDMASTER_FIELDS.fullmatch(description.strip())
+            if guildmaster:
+                entity, arrow, place = guildmaster.groups()
+                zh = "%s%s%s" % (
+                    translate_cached_phrase(entity.strip(), c),
+                    arrow,
+                    translate_place_name(place.strip().rstrip(","), c, "nearby_guildmaster")
+                    + ("," if place.rstrip().endswith(",") else ""),
+                )
+            else:
+                zh = translate_place_name(description.strip(), c, "nearby_direction")
             output.append("%s%s　%s%s" % (indent, DIRECTION_NAMES[direction.upper()], zh, trailing))
         elif line.strip():
             fixed = deterministic_translate(line.strip())
@@ -6712,6 +7032,10 @@ def translate(text,c):
         return translate_command_usage_listing(text, c)
     if is_sales_listing(text):
         return translate_sales_listing(text, c)
+    if is_forge_recipe_listing(text):
+        return translate_forge_recipe_listing(text, c)
+    if is_forge_catalog_listing(text):
+        return translate_forge_catalog_listing(text, c)
     if is_craftable_material_listing(text):
         return translate_craftable_material_listing(text, c)
     if is_room_preview_block(text):

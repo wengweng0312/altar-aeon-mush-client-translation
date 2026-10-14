@@ -162,6 +162,31 @@ def main() -> None:
         ) is None
         assert module.cache_get("An unrelated sentence.", config) == "一個無關句子。"
 
+        # Number words are prose, never entity identities. Repair an old
+        # polluted installation and invalidate only affected translations.
+        db.execute(
+            "INSERT OR REPLACE INTO mob_types(source_name,translated_name,updated_at) VALUES(?,?,?)",
+            ("two", "東面", 1),
+        )
+        db.execute(
+            "INSERT OR REPLACE INTO mob_type_aliases(source_name,alias_name) VALUES(?,?)",
+            ("two", "東面"),
+        )
+        module.cache_put(
+            "It forms a series of two-inch tall waterfalls.",
+            "它形成一系列東面英寸高的瀑布。", config,
+        )
+        module.ensure_npc_name_tables(db)
+        assert db.execute("SELECT 1 FROM mob_types WHERE source_name='two'").fetchone() is None
+        assert module.cache_get(
+            "It forms a series of two-inch tall waterfalls.", config
+        ) is None
+        protected, occurrences = module.protect_known_entity_names(
+            "It forms a series of two-inch tall waterfalls."
+        )
+        assert protected == "It forms a series of two-inch tall waterfalls."
+        assert occurrences == []
+
         module.CACHE_CONNECTION.close()
         module.CACHE_CONNECTION = None
 
