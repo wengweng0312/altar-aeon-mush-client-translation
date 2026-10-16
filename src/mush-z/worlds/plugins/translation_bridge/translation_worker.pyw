@@ -62,7 +62,7 @@ CONTROL_CLEAR_RECENT_CACHE = "__MUSHZ_CONTROL_CLEAR_RECENT_CACHE__:"
 CONTROL_TRANSLATE_OUTGOING_CHAT = "__MUSHZ_CONTROL_TRANSLATE_OUTGOING_CHAT__:"
 CONTROL_CHECK_API = "__MUSHZ_CONTROL_CHECK_API__"
 CPU_AUTOTUNE_VERSION = 1
-STRUCTURED_FIELD_CACHE_VERSION = 2
+STRUCTURED_FIELD_CACHE_VERSION = 4
 ROOM_FALLBACK_CACHE_VERSION = 1
 CPU_AUTOTUNE_MIN_GAIN = 1.05
 CLOUD_FAILURE_LIMIT = 3
@@ -182,6 +182,10 @@ BONUS_FIELD_ZH = {
     "druid cast level": "德魯伊施法等級", "necromancer cast level": "死靈法師施法等級",
 }
 LIBRARY_HEADER = re.compile(r"^\s*AABN\s*-\s*Book Title\s*$", re.IGNORECASE)
+LIBRARY_SEARCH_HEADER = re.compile(
+    r"^\s*Books\s+(?:matching your search|with names matching)\s+'([^']*)'\s*$",
+    re.IGNORECASE,
+)
 LIBRARY_ROW = re.compile(r"^(\s*)(\d+)(\s*-\s*)(.*?)(\s*)$")
 QUEST_LIST_ROW = re.compile(r"^(\s*)Quest\s+(\d+)\s+-\s+(.*?)(\s+\[ACTIVE\])?(\s*)$", re.IGNORECASE)
 QUEST_AVAILABLE_ROW = re.compile(r"^(\s*)\[\s*(\d+)\]\s*(.*?)(\s*)$", re.IGNORECASE)
@@ -190,12 +194,22 @@ NEARBY_QUEST_ROW = re.compile(r"^(\s*)(\d+)\s+(\d+)\s+(.+?)(\s*)$")
 REWARD_TASK_HEADER = re.compile(r"^(\s*)Complete the (\d+) tasks below to gain a reward\.(\s*)$", re.I)
 REWARD_TASK_SKILL_KILL = re.compile(r"^(\s*)Kill a mob with (?:a|an) (.+?)\.(\s*)$", re.I)
 NEARBY_DIRECTION_HEADER = re.compile(
-    r"^\s*Dir\s+Nearby (Landmarks|Shops|Guildmasters)\s*$", re.IGNORECASE
+    r"^\s*Dir\s+Nearby (Landmarks|Shops|Guildmasters|Service Providers)\s*$", re.IGNORECASE
 )
 NEARBY_DIRECTION_ROW = re.compile(
     r"^(\s*)(N|S|E|W|NE|NW|SE|SW|U|D)\s{2,}(.+?)(\s*)$", re.IGNORECASE
 )
 NEARBY_GUILDMASTER_FIELDS = re.compile(r"^(.*?)(\s*->\s*)(.+?)$")
+ALIAS_LIST_HEADER = re.compile(r"^\s*'([^']+)'\s+is aliased to:\s*$", re.IGNORECASE)
+GUILDMASTER_LIST_HEADER = re.compile(r"^\s*Listing Guildmasters in (.+ Guild):\s*$", re.IGNORECASE)
+GUILDMASTER_LIST_ROW = re.compile(
+    r"^(\s*)(.+?)(\s+-\s+)(Novice|Apprentice|Journeyman|Expert|Master|Grand Master)"
+    r"(\s+-\s+)(.*?)(\s+-\s+)(.*?)(\s*)$", re.IGNORECASE,
+)
+GUILD_RANK_ZH = {
+    "novice": "新手", "apprentice": "學徒", "journeyman": "熟練工",
+    "expert": "專家", "master": "大師", "grand master": "宗師",
+}
 SALES_LIST_HEADER = "There are the following sales running:"
 SALES_LIST_FOOTER = "Use the 'credit buy' command to take advantage of these deals."
 SALES_LIST_ROW = re.compile(
@@ -1303,6 +1317,12 @@ MOB_RESULT_MARKERS = dict(NPC_RESULT_MARKERS, **{
     "stings": r"刺|螫", "misses": r"沒有擊中|未擊中|打偏|落空",
     "dodges": r"閃避|躲開", "dies": r"死|死亡", "is": r"死了|死亡|是",
 })
+MOB_UNSAFE_LEARNING_CONTEXTS = {
+    # These posture/observation verbs commonly put an adverb before the
+    # Chinese verb.  A boundary such as "看" would otherwise teach
+    # "下水道老鼠正專注地" as the creature's permanent name.
+    "watches", "concentrates", "stands", "sits", "stretches",
+}
 NPC_PROTECTION_MARKER = re.compile(r"ZXQNPC(\d{4})QXZ")
 ENTITY_SOURCE_STOPWORDS = {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
@@ -1324,7 +1344,8 @@ def valid_entity_source_name(value):
 def contaminated_mob_translation(value):
     """Movement grammar must never become part of a persistent mob name."""
     return bool(re.search(
-        r"(?:往|向)(?:上|下|北|南|東|西|前|後)(?:方)?|離開|前往|抵達|到達|來了",
+        r"(?:往|向)(?:上|下|北|南|東|西|前|後)(?:方)?|離開|前往|抵達|到達|來了|"
+        r"(?:正|正在)?(?:專注|仔細|緊緊|默默)地?$",
         str(value), re.I,
     ))
 
@@ -1381,7 +1402,14 @@ def protect_known_entity_names(source):
     for source_name, translated_name, kind in rows:
         if not valid_entity_source_name(source_name):
             continue
-        pattern = re.compile(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(source_name), re.I)
+        # Generic creature identities are stored without the English article.
+        # Consume an adjacent a/an/the with the marker so it cannot survive as
+        # "A 一條下水道老鼠" after the Chinese canonical name is restored.
+        article = r"(?:(?:a|an|the)\s+)?" if kind == "mob" else ""
+        pattern = re.compile(
+            r"(?<![A-Za-z])%s%s(?![A-Za-z])" % (article, re.escape(source_name)),
+            re.I,
+        )
         def replace(match, source_name=source_name, translated_name=translated_name, kind=kind):
             marker = "ZXQNPC%04dQXZ" % len(occurrences)
             occurrences.append((marker, source_name, translated_name, kind))
@@ -1580,6 +1608,8 @@ def normalize_npc_names(source, translated):
                 if not identity:
                     continue
                 english_name, context = identity
+                if context in MOB_UNSAFE_LEARNING_CONTEXTS:
+                    continue
                 key = english_name.lower()
                 span = translated_mob_span(result_lines[index], context)
                 if not span:
@@ -1614,6 +1644,13 @@ def normalize_npc_names(source, translated):
             for (alias,) in db.execute("SELECT alias_name FROM mob_type_aliases WHERE source_name=?", (key,)):
                 if alias and alias != canonical:
                     result = result.replace(alias, canonical)
+            # Lazily repair old cached translations made before mob markers
+            # consumed the source article.  This is deliberately scoped to a
+            # confirmed canonical mob name present in the English source.
+            result = re.sub(
+                r"(?<![A-Za-z])(?:A|An|The)\s+(?=" + re.escape(canonical) + r")",
+                "", result,
+            )
         db.commit()
         return result
     except Exception as error:
@@ -2048,7 +2085,11 @@ def translation_sanity_ok(source, translated):
                 return False, "quest_section_labels_missing_or_merged"
     if (is_quest_list_block(source) or is_job_list_block(source)) and len(source_lines) != len(translated_lines):
         return False, "task_list_line_count_mismatch"
-    if (is_nearby_direction_listing(source) or is_dense_item_table(source)) and len(source_lines) != len(translated_lines):
+    if (
+        is_nearby_direction_listing(source) or is_dense_item_table(source)
+        or is_alias_listing(source) or is_guildmaster_listing(source)
+        or is_library_catalog(source)
+    ) and len(source_lines) != len(translated_lines):
         return False, "tabular_line_count_mismatch"
     block_kind = structured_block_kind(source)
     if block_kind and len(source_lines) != len(translated_lines):
@@ -2442,6 +2483,31 @@ def semantic_sentence_chunks(text):
     return chunks
 
 
+def semantic_sentence_chunks_preserving_repeated_rows(rows):
+    """Keep genuine repeated MUD events separate while repairing display wrapping."""
+    output, ordinary = [], []
+
+    def flush_ordinary():
+        if ordinary:
+            output.extend(semantic_sentence_chunks(" ".join(ordinary)))
+            del ordinary[:]
+
+    index = 0
+    while index < len(rows):
+        end = index + 1
+        while end < len(rows) and rows[end] == rows[index]:
+            end += 1
+        repeat_count = end - index
+        if repeat_count >= 2 and len(re.sub(r"\s+", "", rows[index])) >= 12:
+            flush_ordinary()
+            output.extend([rows[index]] * repeat_count)
+        else:
+            ordinary.extend(rows[index:end])
+        index = end
+    flush_ordinary()
+    return output
+
+
 ROOM_PREFIX_END = re.compile(r"[.!?][\"')\]]*$")
 ROOM_SAFE_PREFIX = re.compile(
     r"^(?:In the next room you see|Nearby you see):$", re.I
@@ -2513,9 +2579,9 @@ def room_semantic_chunks(text):
     title_index = room_title_index(rows)
     if title_index < 0:
         return semantic_sentence_chunks(text)
-    prefix = semantic_sentence_chunks(" ".join(rows[:title_index]))
+    prefix = semantic_sentence_chunks_preserving_repeated_rows(rows[:title_index])
     title = rows[title_index]
-    body = semantic_sentence_chunks(" ".join(rows[title_index + 1:]))
+    body = semantic_sentence_chunks_preserving_repeated_rows(rows[title_index + 1:])
     return prefix + [title] + body
 
 
@@ -2548,7 +2614,11 @@ def parse_numbered_room_translation(text, expected_count):
 def translate_room_units_once(chunks, c):
     """Translate each room unit independently; LMT does not reliably retain markers."""
     parsed = []
+    translated_by_source = {}
     for source in chunks:
+        if source in translated_by_source:
+            parsed.append(translated_by_source[source])
+            continue
         result = completion_once(source, c, 256, len(source) >= 180, True)
         result = " ".join(result.splitlines()).strip()
         ok, reason = translation_sanity_ok(source, result)
@@ -2556,6 +2626,7 @@ def translate_room_units_once(chunks, c):
             raise RuntimeError("ROOM_UNIT_SANITY_" + reason)
         if not any("\u3400" <= char <= "\u9fff" for char in result):
             raise RuntimeError("ROOM_UNIT_UNTRANSLATED")
+        translated_by_source[source] = result
         parsed.append(result)
     return parsed
 
@@ -2690,27 +2761,33 @@ def translate_room_prose_cached(text, c):
     missing_indexes = [index for index, value in enumerate(cached) if value is None]
     if missing_indexes:
         missing_sources = [chunks[index] for index in missing_indexes]
-        translated_missing = cloud_translate_many_partial(missing_sources)
-        if translated_missing is None:
+        # One source event may legitimately occur more than once. Translate it
+        # once, then expand the result back to every original position. This
+        # preserves event multiplicity without wasting API calls or LMT time.
+        unique_missing_sources = list(dict.fromkeys(missing_sources))
+        translated_unique = cloud_translate_many_partial(unique_missing_sources)
+        if translated_unique is None:
             try:
-                translated_missing = translate_room_units_once(missing_sources, c)
+                translated_unique = translate_room_units_once(unique_missing_sources, c)
             except Exception as error:
                 # This is a presentation optimisation.  If a model changes or
                 # drops a marker, retain the proven whole-room translation path.
                 log("room aligned translation fallback: %r" % error, True)
                 return translate_room_fallback_cached(text, c)
         else:
-            unresolved = [index for index, value in enumerate(translated_missing) if value is None]
+            unresolved = [index for index, value in enumerate(translated_unique) if value is None]
             if unresolved:
                 try:
                     local_results = translate_room_units_once(
-                        [missing_sources[index] for index in unresolved], c
+                        [unique_missing_sources[index] for index in unresolved], c
                     )
                     for index, value in zip(unresolved, local_results):
-                        translated_missing[index] = value
+                        translated_unique[index] = value
                 except Exception as error:
                     log("room partial cloud fallback: %r" % error, True)
                     return translate_room_fallback_cached(text, c)
+        translated_by_source = dict(zip(unique_missing_sources, translated_unique))
+        translated_missing = [translated_by_source[source] for source in missing_sources]
         for index, translated_chunk in zip(missing_indexes, translated_missing):
             ok, reason = translation_sanity_ok(chunks[index], translated_chunk)
             if not ok:
@@ -2951,8 +3028,15 @@ def is_numeric_report_block(text):
     if len(lines) >= 2 and lines[0].startswith("Comparing objects "):
         return True
     return any(
-        re.search(r",\s*(?:Level|Total levels):", line, re.I)
-        and re.search(r",\s*Type:", line, re.I)
+        (
+            re.search(r",\s*(?:Level|Total levels):", line, re.I)
+            and re.search(r",\s*Type:", line, re.I)
+        ) or (
+            re.search(r",\s*Comp:", line, re.I)
+            and re.search(r",\s*Yield:", line, re.I)
+            and re.search(r",\s*Type:\s*ORE\b", line, re.I)
+            and re.search(r",\s*Weight:", line, re.I)
+        )
         for line in lines
     )
 
@@ -2973,16 +3057,51 @@ ITEM_WEAR_CODES = (
     "BODY", "ON_BODY", "ABOUT_BODY", "WAIST", "LEGS", "FEET", "SHIELD", "2_WIELD",
 )
 ITEM_DETAIL_FIELD_BOUNDARY = re.compile(
-    r",\s*(?=(?:Level|Total levels|Comp|Type|Weight|AC|Damage|Speed|Damage Type|Quality):"
+    r",\s*(?=(?:Level|Total levels|Comp|Yield|Type|Weight|Purity|AC|Damage|Speed|Damage Type|Quality):"
     r"|\d+\s+wield strength(?:\b|$)|(?:" + "|".join(ITEM_AFFECT_CODES) + r")\s+by\b"
     r"|(?:" + "|".join(ITEM_WEAR_CODES) + r")(?:\b|$)|This item\b|Spells? on wearer:)",
     re.I,
 )
 
 ITEM_FIELD_LABELS_ZH = {
-    "level": "等級", "total levels": "總等級", "comp": "材質", "type": "類型", "weight": "重量",
+    "level": "等級", "total levels": "總等級", "comp": "材質", "yield": "產出", "purity": "礦石純度",
+    "type": "類型", "weight": "重量",
     "ac": "護甲值", "damage": "傷害", "speed": "速度",
     "damage type": "傷害類型", "quality": "品質",
+}
+ORE_YIELD_ZH = {
+    "IRON": "鐵", "COPPER": "銅", "TIN": "錫", "LEAD": "鉛",
+    "SILVER": "銀", "GOLD": "黃金", "ZINC": "鋅", "NICKEL": "鎳",
+    "MANGANESE": "錳", "SELENIUM": "硒", "BISMUTH": "鉍",
+    "CADMIUM": "鎘", "PLATINUM": "鉑", "TITANIUM": "鈦",
+    "ADAMANTIUM": "精金", "MITHRIL": "秘銀", "ORICHALCUM": "山銅",
+    "SKY IRON": "天鐵", "ARJALE": "阿爾賈爾（Arjale）", "ZIFF": "齊夫（Ziff）",
+}
+MINERAL_TERM_ZH = {
+    "heartstone": "心石",
+    "iodargyrite": "碘銀礦", "horn silver": "角銀礦",
+    "malachite": "孔雀石", "azurite": "藍銅礦", "bornite": "斑銅礦",
+    "chalcopyrite": "黃銅礦", "tetrahedrite": "黝銅礦",
+    "chalcocite": "輝銅礦", "cuprite": "赤銅礦", "tenorite": "黑銅礦",
+    "galena": "方鉛礦", "cerussite": "白鉛礦", "anglesite": "硫酸鉛礦",
+    "cotunnite": "氯鉛礦", "teallite": "輝鉛錫礦",
+    "goethite": "針鐵礦", "limonite": "褐鐵礦", "siderite": "菱鐵礦",
+    "hematite": "赤鐵礦", "magnetite": "磁鐵礦",
+    "zinc spar": "菱鋅礦", "calamine": "爐甘石", "sphalerite": "閃鋅礦",
+    "zincite": "紅鋅礦", "greenockite": "硫鎘礦", "cassiterite": "錫石",
+    "selenide": "硒化物礦", "bismuthinite": "輝鉍礦", "bismite": "氧化鉍礦",
+    "pyrolusite": "軟錳礦", "psilomelane": "硬錳礦", "manganite": "水錳礦",
+    "millerite": "針鎳礦", "ganierite": "Ganierite", "loganite": "Loganite",
+    "obsidian": "黑曜石", "peridot": "橄欖石", "rutile": "金紅石",
+    "diamond": "鑽石", "cinnabar": "辰砂", "quartz": "石英",
+    "onyx": "縞瑪瑙", "sard": "紅玉髓", "sardonyx": "紅縞瑪瑙",
+    "carnelian": "紅玉髓", "jasper": "碧玉", "agate": "瑪瑙",
+    "tiger-eye": "虎眼石", "hawk-eye": "鷹眼石", "zircon": "鋯石",
+    "chrysoprase": "綠玉髓", "turquoise": "綠松石", "sodalite": "方鈉石",
+    "jade": "翡翠", "labradorite": "拉長石", "rose quartz": "玫瑰石英",
+    "citrine": "黃水晶", "amethyst": "紫水晶", "diatomite": "矽藻土",
+    "graphite": "石墨", "sulfur": "硫磺", "halite": "岩鹽",
+    "sylvite": "鉀石鹽", "borax": "硼砂", "saltpeter": "硝石",
 }
 ITEM_DAMAGE_WORDS_ZH = {
     "nonorm": "非標準", "toxic": "毒性", "ice": "寒冰", "acidic": "酸性",
@@ -2995,8 +3114,23 @@ ITEM_DAMAGE_WORDS_ZH = {
 def split_item_detail_fields(line):
     """Split a dense identify row only at known field boundaries."""
     value = str(line).strip()
-    if not re.search(r",\s*(?:Level|Total levels):", value, re.I) or not re.search(r",\s*Type:", value, re.I):
+    equipment_shape = bool(
+        re.search(r",\s*(?:Level|Total levels):", value, re.I)
+        and re.search(r",\s*Type:", value, re.I)
+    )
+    ore_shape = bool(
+        re.search(r",\s*Comp:", value, re.I)
+        and re.search(r",\s*Yield:", value, re.I)
+        and re.search(r",\s*Type:\s*ORE\b", value, re.I)
+        and re.search(r",\s*Weight:", value, re.I)
+    )
+    if not (equipment_shape or ore_shape):
         return None
+    # Ore purity is a semantic field even though the game does not label it.
+    value = re.sub(
+        r",\s*([A-Za-z]+(?:\s+[A-Za-z]+)?\s+pure\s+ore)\s*$",
+        r", Purity: \1", value, flags=re.I,
+    )
     fields = [field.strip(" ,") for field in ITEM_DETAIL_FIELD_BOUNDARY.split(value)]
     fields = [field for field in fields if field]
     return fields if len(fields) >= 4 else None
@@ -3009,6 +3143,14 @@ def item_glossary_value(field, value):
 
 def translate_item_detail_field(field, c):
     source = str(field).strip(" ,")
+    ore_name = None if ":" in source else re.fullmatch(r"(.+?)\s+ore", source, re.I)
+    if ore_name:
+        translated_name = MINERAL_TERM_ZH.get(ore_name.group(1).strip().lower())
+        if translated_name:
+            return translated_name if translated_name.endswith("礦") else translated_name + "礦石"
+        # Unknown mineral names are gameplay identifiers. Preserve them until
+        # a reviewed source establishes a stable translation.
+        return source
     affect = re.fullmatch(
         r"(" + "|".join(ITEM_AFFECT_CODES) + r")\s+by\s+(minus\s+)?([-+]?\d+(?:\.\d+)?%?)",
         source,
@@ -3038,10 +3180,24 @@ def translate_item_detail_field(field, c):
                 }.get(total.group(3).lower(), total.group(3))
                 value = "%s（另含 %s 級%s）" % (total.group(1), total.group(2), class_name)
         elif key == "comp":
-            parts = [item_glossary_value("composition", token) or token for token in value.split(",")]
+            parts = [
+                item_glossary_value("composition", token)
+                or MINERAL_TERM_ZH.get(token.strip().lower()) or token
+                for token in value.split(",")
+            ]
             value = "、".join(part.strip() for part in parts)
+        elif key == "yield":
+            value = ORE_YIELD_ZH.get(value.strip().upper()) \
+                or item_glossary_value("composition", value) \
+                or value
+        elif key == "purity":
+            purity = re.fullmatch(r"([A-Za-z]+(?:\s+[A-Za-z]+)?)\s+pure\s+ore", value, re.I)
+            if purity:
+                value = {
+                    "more": "較高", "moderately": "中等", "less": "較低", "least": "最低",
+                }.get(purity.group(1).lower()) or translate_cached_phrase(value, c)
         elif key == "type":
-            value = item_glossary_value("item_type", value) or value
+            value = item_glossary_value("item_type", value) or {"ore": "礦石"}.get(value.lower(), value)
         elif key == "speed":
             value = item_glossary_value("speed", value) or value
         elif key == "quality":
@@ -3556,7 +3712,7 @@ def _command_usage_parts(text):
         for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
     ]
-    if len(rows) < 2 or rows[0].lower() != "usage:":
+    if len(rows) < 2 or rows[0].lower() not in {"usage:", "format:"}:
         return None
     entries = []
     root = None
@@ -3606,7 +3762,8 @@ def translate_command_usage_listing(text, c):
     ).splitlines()
     if len(translated) != len(entries) + len(trailing):
         raise RuntimeError("COMMAND_USAGE_LINE_COUNT_MISMATCH")
-    output = ["用法："]
+    first_row = next((line.strip().lower() for line in str(text).splitlines() if line.strip()), "")
+    output = ["格式：" if first_row == "format:" else "用法："]
     output.extend(
         "%s - %s" % (command, description_zh)
         for (command, _description), description_zh in zip(entries, translated)
@@ -3626,8 +3783,19 @@ CRAFT_CATALOG_FOOTER = re.compile(
     re.I,
 )
 FORGE_RECIPE_ROW = re.compile(r"^\s*\[\s*([^\]]+?)\s*\]\s*,\s*(.+?)\s*$", re.I)
+ALLOY_RECIPE_HEADER = (
+    "Alloy Name -      base metal (4 lbs) - 1st metal (1 lb) - 2nd metal (1 lb)"
+)
+ALLOY_RECIPE_ROW = re.compile(r"^\s*\[\s*([^\]]+?)\s*\]\s*,\s*(.+?)\s*$", re.I)
+ALLOY_RECIPE_FOOTER = re.compile(
+    r"^Type 'forge alloy <alloy name>' to alloy any refined metals in your inventory\.$",
+    re.I,
+)
 FORGE_CRAFTABLE_HEADER = re.compile(
-    r"^It would be .+? to forge an ingot of .+? into\.\.\.$", re.I
+    # The game uses several material shapes here (for example an ingot or a
+    # bar).  The many validated one-keyword rows below are the stronger shape
+    # signal, so do not tie the table parser to one particular material noun.
+    r"^It would be .+? to forge (?:an?|the) .+? into\.\.\.$", re.I
 )
 FORGE_CRAFTABLE_KEYWORD_ROW = re.compile(r"^\s*([a-z][a-z' -]{0,39})\s*$", re.I)
 CRAFT_KEYWORD_ZH = {
@@ -3691,6 +3859,63 @@ CRAFT_CATALOG_FOOTER_ZH = {
     "to start forging a new metal item.": "開始鍛造新的金屬物品。",
     "to start making a new woodcrafted item.": "開始製作新的木製物品。",
 }
+
+ALLOY_TERM_ZH = {
+    "bronze": "青銅", "brass": "黃銅", "red brass": "紅黃銅",
+    "white bronze": "白青銅", "black bronze": "黑青銅", "pewter": "白鑞",
+    "yellow lead": "黃鉛合金", "white lead": "白鉛合金", "white copper": "白銅",
+    "steel": "鋼", "blue steel": "藍鋼", "silvered steel": "鍍銀鋼",
+    "black steel": "黑鋼", "adamantine steel": "精金鋼", "azure mithril": "蔚藍秘銀",
+    "copper": "銅", "tin": "錫", "zinc": "鋅", "lead": "鉛",
+    "bismuth": "鉍", "manganese": "錳", "silver": "銀", "nickel": "鎳",
+    "iron": "鐵", "carbon": "碳", "selenium": "硒", "adamantium": "精金",
+    "mithril": "秘銀",
+}
+
+
+def _alloy_recipe_parts(text):
+    rows = [row.strip() for row in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if row.strip()]
+    if len(rows) < 5 or rows[0].lower() != "alloy recipes" or rows[1] != ALLOY_RECIPE_HEADER:
+        return None
+    if not ALLOY_RECIPE_FOOTER.fullmatch(rows[-1]):
+        return None
+    entries = []
+    for row in rows[2:-1]:
+        match = ALLOY_RECIPE_ROW.fullmatch(row)
+        if not match:
+            return None
+        metals = [field.strip() for field in match.group(2).split(",") if field.strip()]
+        if len(metals) not in (2, 3):
+            return None
+        entries.append((match.group(1).strip(), metals))
+    return entries if len(entries) >= 2 else None
+
+
+def is_alloy_recipe_listing(text):
+    return _alloy_recipe_parts(text) is not None
+
+
+def translate_alloy_recipe_listing(text, c):
+    entries = _alloy_recipe_parts(text)
+    if not entries:
+        raise RuntimeError("ALLOY_RECIPE_PARSE_FAILED")
+    unknown = []
+    for name, metals in entries:
+        if name.lower() not in ALLOY_TERM_ZH:
+            unknown.append(name)
+        unknown.extend(metal for metal in metals if metal.lower() not in ALLOY_TERM_ZH)
+    if unknown:
+        prefetch_cached_phrases(list(dict.fromkeys(unknown)), c)
+    output = [
+        "合金配方",
+        "合金名稱 - 基礎金屬（4 磅）- 第 1 種金屬（1 磅）- 第 2 種金屬（1 磅）",
+    ]
+    for name, metals in entries:
+        name_zh = ALLOY_TERM_ZH.get(name.lower()) or translate_cached_phrase(name, c)
+        metal_zh = [ALLOY_TERM_ZH.get(value.lower()) or translate_cached_phrase(value, c) for value in metals]
+        output.append("%s [%s]，%s" % (name_zh, name, "，".join(metal_zh)))
+    output.append("輸入 'forge alloy <alloy name>'，可將背包內已精煉的金屬製成合金。")
+    return "\n".join(output)
 
 
 def _forge_recipe_rows(text):
@@ -4713,7 +4938,7 @@ def should_bypass_whole_block_cache(text):
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
-            is_command_usage_listing(text) or is_forge_recipe_listing(text) or
+            is_command_usage_listing(text) or is_alloy_recipe_listing(text) or is_forge_recipe_listing(text) or
             is_forge_catalog_listing(text) or
             is_craftable_material_listing(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
@@ -5875,8 +6100,12 @@ def translate_library_titles(names, c):
 
 def is_library_catalog(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return bool(lines and LIBRARY_HEADER.match(lines[0]) and
-                sum(bool(LIBRARY_ROW.match(line)) for line in lines[1:]) >= 3)
+    if not lines:
+        return False
+    row_count = sum(bool(LIBRARY_ROW.match(line)) for line in lines[1:])
+    if LIBRARY_SEARCH_HEADER.match(lines[0]):
+        return row_count >= 2
+    return bool(LIBRARY_HEADER.match(lines[0]) and row_count >= 3)
 
 
 def translate_library_catalog(text, c):
@@ -5885,6 +6114,10 @@ def translate_library_catalog(text, c):
     for line in lines:
         if LIBRARY_HEADER.match(line):
             parsed.append(("header", line))
+            continue
+        search_header = LIBRARY_SEARCH_HEADER.match(line)
+        if search_header:
+            parsed.append(("search_header", (line, search_header.group(1))))
             continue
         row = LIBRARY_ROW.match(line)
         if row:
@@ -5900,6 +6133,10 @@ def translate_library_catalog(text, c):
         if kind == "header":
             indent = value[:len(value) - len(value.lstrip())]
             output.append(indent + "書號 - 書名")
+        elif kind == "search_header":
+            source_line, query = value
+            indent = source_line[:len(source_line) - len(source_line.lstrip())]
+            output.append(indent + "符合搜尋「%s」的書籍" % query)
         elif kind == "row":
             indent, book_id, separator, _title, trailing = value
             output.append(indent + book_id + separator + next(translated_titles) + trailing)
@@ -6404,6 +6641,63 @@ def is_nearby_direction_listing(text):
     )
 
 
+def is_alias_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    commands = [line for line in lines[1:] if line.strip()]
+    return bool(
+        lines and ALIAS_LIST_HEADER.fullmatch(lines[0]) and len(commands) >= 1
+        and all("\n" not in line for line in commands)
+    )
+
+
+def translate_alias_listing(text, _c):
+    """Keep executable alias expansions byte-for-byte and only localize the heading."""
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    header = ALIAS_LIST_HEADER.fullmatch(lines[0])
+    if not header:
+        raise RuntimeError("ALIAS_LIST_PARSE_FAILED")
+    indent = lines[0][:len(lines[0]) - len(lines[0].lstrip())]
+    output = [indent + "「%s」會依序執行：" % header.group(1)] + lines[1:]
+    if len(output) != len(lines):
+        raise RuntimeError("ALIAS_LIST_FINAL_LINE_COUNT_MISMATCH")
+    return "\n".join(output)
+
+
+def is_guildmaster_listing(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    rows = [line for line in lines[1:] if line.strip()]
+    return bool(
+        lines and GUILDMASTER_LIST_HEADER.fullmatch(lines[0]) and len(rows) >= 3
+        and all(GUILDMASTER_LIST_ROW.fullmatch(line) for line in rows)
+    )
+
+
+def translate_guildmaster_listing(text, c):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    header = GUILDMASTER_LIST_HEADER.fullmatch(lines[0])
+    if not header:
+        raise RuntimeError("GUILDMASTER_LIST_PARSE_FAILED")
+    output = ["%s的公會導師：" % translate_cached_phrase(header.group(1), c)]
+    for line in lines[1:]:
+        if not line.strip():
+            output.append(line)
+            continue
+        row = GUILDMASTER_LIST_ROW.fullmatch(line)
+        if not row:
+            raise RuntimeError("GUILDMASTER_LIST_ROW_PARSE_FAILED")
+        indent, name, sep1, rank, sep2, detail, sep3, place, trailing = row.groups()
+        name_zh = translate_cached_phrase(name.strip(), c)
+        rank_zh = GUILD_RANK_ZH[rank.lower()]
+        detail_zh = translate_cached_phrase(detail.strip(), c) if detail.strip() else ""
+        place_zh = translate_place_name(place.strip(), c, "guildmaster_list") if place.strip() else ""
+        output.append(
+            indent + name_zh + sep1 + rank_zh + sep2 + detail_zh + sep3 + place_zh + trailing
+        )
+    if len(output) != len(lines):
+        raise RuntimeError("GUILDMASTER_LIST_FINAL_LINE_COUNT_MISMATCH")
+    return "\n".join(output)
+
+
 def is_where_location_row(text):
     """Recognize Mush-Z's single-line ``entity -> room`` where result."""
     value = str(text).strip()
@@ -6431,6 +6725,7 @@ def translate_nearby_direction_listing(text, c):
                 "landmarks": "地標",
                 "shops": "商店",
                 "guildmasters": "公會導師",
+                "service providers": "服務提供者",
             }[header.group(1).lower()]
             output.append("方向　附近%s" % label)
         elif row:
@@ -7030,8 +7325,14 @@ def translate(text,c):
         return translate_equipment_listing(text, c)
     if is_command_usage_listing(text):
         return translate_command_usage_listing(text, c)
+    if is_alias_listing(text):
+        return translate_alias_listing(text, c)
+    if is_guildmaster_listing(text):
+        return translate_guildmaster_listing(text, c)
     if is_sales_listing(text):
         return translate_sales_listing(text, c)
+    if is_alloy_recipe_listing(text):
+        return translate_alloy_recipe_listing(text, c)
     if is_forge_recipe_listing(text):
         return translate_forge_recipe_listing(text, c)
     if is_forge_catalog_listing(text):

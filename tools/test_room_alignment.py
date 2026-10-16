@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "src" / "mush-z" / "worlds" / "plugins" / "translation_bridge" / "translation_worker.py"
 FUNCTIONS = {
     "semantic_sentence_chunks",
+    "semantic_sentence_chunks_preserving_repeated_rows",
     "room_title_index",
     "room_semantic_chunks",
     "is_room_prose_candidate",
@@ -74,6 +75,23 @@ def main() -> None:
     assert cellar_chunks[1] == "Cellar"
     assert len(cellar_chunks) == 4, cellar_chunks
     assert module["is_room_prose_candidate"](cellar)
+
+    repeated_entry = (
+        "East Thalenwood Forest\n"
+        "You enter the East Thalenwood Forest\n"
+        "You enter the East Thalenwood Forest\n"
+        "Entrance to the old ancient forest\n"
+        "You are standing near an old trail leading into a dense ancient forest.\n"
+        "The trees grow close together and their branches block most of the sky.\n"
+        "A disheveled halfling camps out near the trail."
+    )
+    repeated_chunks = module["room_semantic_chunks"](repeated_entry)
+    assert repeated_chunks.count("You enter the East Thalenwood Forest") == 2, repeated_chunks
+    assert repeated_chunks[0] == "East Thalenwood Forest", repeated_chunks
+    assert (
+        "Entrance to the old ancient forest You are standing near an old trail leading into a dense ancient forest."
+        in repeated_chunks
+    ), repeated_chunks
 
     period_title = (
         "Near the middle of a clearing.\n"
@@ -206,6 +224,7 @@ def main() -> None:
     worker_source = WORKER.read_text(encoding="utf-8-sig")
     assert "LMT does not reliably retain markers" in worker_source
     assert "for source in chunks:" in worker_source
+    assert "unique_missing_sources = list(dict.fromkeys(missing_sources))" in worker_source
     assert 'output.append("\\n".join(repaired))' in worker_source
     assert 'output = [" ".join(prefix_translation.splitlines()).strip()]' not in worker_source
     assert "output = [line.strip() for line in prefix_translation.splitlines() if line.strip()]" in worker_source

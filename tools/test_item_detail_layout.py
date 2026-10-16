@@ -105,6 +105,75 @@ def main() -> None:
 
     assert '(value:find(", Level:", 1, true) or value:find(", Total levels:", 1, true))' in plugin
     assert 'value:gsub("%s+(You are carrying .+)$", "\\n%1")' in plugin
+    assert '{"Total levels", "Level", "Comp", "Yield", "Type", "Weight", "Purity"' in plugin
+
+    # Real Total-level equipment must yield exactly the same number of source
+    # semantic rows as the worker emits, or NVDA history safely falls back to
+    # one large bilingual row.
+    warhammer = (
+        "an apple-handled copper warhammer, Total levels: 113 , "
+        "Comp: BASE METAL, COPPER, Type: WEAPON, Weight: 31 REMARKABLE , "
+        "Damage: 4d18, Speed: very slow, Damage Type: crush, "
+        "29 wield strength, SAVING_ZAP by 25%, HITROLL by 2, DAMROLL by 8, "
+        "INT by 2, MANA_REGEN by 1.5, Quality: EXPERTLY CRAFTED\n"
+        "You are carrying an apple-handled copper warhammer."
+    )
+    translated_warhammer = module.translate_item_detail_line(warhammer, {})
+    assert translated_warhammer is not None
+    assert len(translated_warhammer.splitlines()) == 16
+    assert "總等級：113" in translated_warhammer
+    assert "法力恢復：增加 1.5" in translated_warhammer
+
+    ore = (
+        "iodargyrite ore, Comp: MINERAL, ROCK, Yield: SILVER, Type: ORE, "
+        "Weight: 4 , more pure ore\nYou are carrying iodargyrite ore."
+    )
+    assert module.is_numeric_report_block(ore)
+    ore_fields = module.split_item_detail_fields(ore.splitlines()[0])
+    assert ore_fields == [
+        "iodargyrite ore", "Comp: MINERAL, ROCK", "Yield: SILVER",
+        "Type: ORE", "Weight: 4", "Purity: more pure ore",
+    ], ore_fields
+    translated_ore = module.translate_numeric_report_block(ore, {})
+    ore_rows = translated_ore.splitlines()
+    assert len(ore_rows) == 7, ore_rows
+    assert ore_rows[1] == "材質：礦物、岩石", ore_rows
+    assert ore_rows[2] == "產出：銀", ore_rows
+    assert ore_rows[3] == "類型：礦石", ore_rows
+    assert ore_rows[4] == "重量：4", ore_rows
+    assert ore_rows[5] == "礦石純度：較高", ore_rows
+    assert ore_rows[6].startswith("你正攜帶著"), ore_rows
+
+    least_pure_ore = (
+        "malachite ore, Comp: MINERAL, MALACHITE, Yield: COPPER, Type: ORE, "
+        "Weight: 4 , least pure ore\nYou are carrying malachite ore."
+    )
+    least_fields = module.split_item_detail_fields(least_pure_ore.splitlines()[0])
+    assert least_fields[-2:] == ["Weight: 4", "Purity: least pure ore"], least_fields
+    translated_least = module.translate_numeric_report_block(least_pure_ore, {})
+    least_rows = translated_least.splitlines()
+    assert len(least_rows) == 7, least_rows
+    assert least_rows[4] == "重量：4", least_rows
+    assert least_rows[5] == "礦石純度：最低", least_rows
+    assert module.translate_item_detail_field("Yield: LEAD", {}) == "產出：鉛"
+    assert module.translate_item_detail_field("Yield: COPPER", {}) == "產出：銅"
+    assert module.translate_item_detail_field("Yield: PLATINUM", {}) == "產出：鉑"
+    assert module.translate_item_detail_field("Yield: CADMIUM", {}) == "產出：鎘"
+    assert module.translate_item_detail_field("Yield: ADAMANTIUM", {}) == "產出：精金"
+    assert module.translate_item_detail_field("Yield: MITHRIL", {}) == "產出：秘銀"
+    assert module.translate_item_detail_field("Yield: ORICHALCUM", {}) == "產出：山銅"
+    assert module.translate_item_detail_field("Yield: SKY IRON", {}) == "產出：天鐵"
+    assert module.translate_item_detail_field("Yield: ARJALE", {}) == "產出：阿爾賈爾（Arjale）"
+    assert module.translate_item_detail_field("Yield: ZIFF", {}) == "產出：齊夫（Ziff）"
+    assert module.translate_item_detail_field("Yield: UNKNOWNIUM", {}) == "產出：UNKNOWNIUM"
+    assert module.translate_item_detail_field("malachite ore", {}) == "孔雀石礦石"
+    assert module.translate_item_detail_field("heartstone ore", {}) == "心石礦石"
+    assert module.translate_item_detail_field("galena ore", {}) == "方鉛礦"
+    assert module.translate_item_detail_field("unobtainium ore", {}) == "unobtainium ore"
+    assert module.translate_item_detail_field("Comp: MINERAL, MALACHITE", {}) == "材質：礦物、孔雀石"
+    assert module.STRUCTURED_FIELD_CACHE_VERSION >= 4
+    assert 'value:find(", Yield:", 1, true)' in plugin
+    assert '"Comp", "Yield", "Type", "Weight", "Purity"' in plugin
     print("ITEM_DETAIL_LAYOUT_OK fields=13 total_levels=yes carrying=separate internal_component_comma=preserved")
 
 

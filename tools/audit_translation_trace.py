@@ -33,13 +33,13 @@ PROMPT_LEAKS = (
 FUNCTIONAL_REASONS = {
     "translation_error_or_fallback", "unchanged_english", "empty_result",
     "no_chinese_result", "possible_line_collapse", "possible_under_translation",
-    "possible_repetition_loop", "possible_prompt_leak",
+    "possible_repetition_loop", "possible_prompt_leak", "structured_shape_line_mismatch",
 }
 STRUCTURED_MARKERS = (
     "You are using:", "You are carrying:", "You know the following skills:",
     "Quest Name:", "Current goal short description:", "Current goal long description:",
     "Previous goal short description:", "Previous goal long description:",
-    "Usage:", "Syntax:", "Keywords are:", "There are the following sales running:",
+    "Usage:", "Format:", "Syntax:", "Keywords are:", "There are the following sales running:",
 )
 EQUIPMENT_SLOTS = (
     "head", "neck", "arms", "wrist", "hands", "finger", "on body", "about body",
@@ -287,7 +287,7 @@ def structured_family(source: str):
         return ""
     if rows[0] == "You are using:" or any(" is obviously carrying:" in row for row in rows):
         return "character_inspection"
-    if rows[0].startswith(("Usage:", "Syntax:", "Keywords are:")):
+    if rows[0].startswith(("Usage:", "Format:", "Syntax:", "Keywords are:")):
         return "help"
     if any(marker in source for marker in STRUCTURED_MARKERS[:8]):
         if "Quest Name:" in source or " goal " in source.lower():
@@ -299,6 +299,60 @@ def structured_family(source: str):
         return "sales"
     if re.search(r"\bLevel:\s*\d+\b", source, re.I) and re.search(r"\bType:\s*\w+", source, re.I):
         return "item_detail"
+    return ""
+
+
+def structural_shape(source: str):
+    """Classify recurring table shapes without relying on command names.
+
+    This is deliberately read-only evidence for the auditor.  A shape match
+    does not authorize an automatic parser or production change.
+    """
+    rows = nonempty_lines(source)
+    if rows and re.match(
+        r"^Books\s+(?:matching your search|with names matching)\s+'.+'$", rows[0], re.I,
+    ):
+        book_rows = sum(bool(re.match(r"^\d+\s+-\s+.+$", row)) for row in rows[1:])
+        if book_rows >= 2:
+            return "numbered_book_catalog"
+    if len(rows) < 4:
+        return ""
+    header = rows[0].casefold()
+    if re.fullmatch(r"'.+' is aliased to:", rows[0], re.I):
+        alias_rows = sum(bool(re.fullmatch(r"\S(?:.*\S)?", row)) for row in rows[1:])
+        if alias_rows >= 3:
+            return "alias_command_list"
+    if re.match(r"^Listing Guildmasters in .+ Guild:$", rows[0], re.I):
+        guild_rows = sum(row.count(" - ") >= 2 for row in rows[1:])
+        if guild_rows >= 3:
+            return "guildmaster_table"
+    if re.fullmatch(r"Dir\s+Nearby Service Providers", rows[0], re.I):
+        provider_rows = sum(bool(re.match(
+            r"^(?:N|NE|E|SE|S|SW|W|NW|U|D)\s+.+?\s+->\s+.+$", row, re.I,
+        )) for row in rows[1:])
+        if provider_rows >= 3:
+            return "nearby_service_table"
+    if "YOU GAIN A LEVEL!" in rows[0].upper():
+        level_rows = sum(bool(re.match(
+            r"^(?:You are now level|You gain:|You can now learn|Your experience cap|Your next cheapest level)",
+            row, re.I,
+        )) for row in rows[1:])
+        if level_rows >= 3:
+            return "level_advance_report"
+    dash_rows = sum(bool(re.fullmatch(r".+?\s+-\s+.+", row)) for row in rows[1:])
+    if header in {"usage:", "format:", "syntax:"} and dash_rows >= 3:
+        return "command_description_table"
+    bracket_rows = sum(bool(re.fullmatch(r"\[\s*[^\]]+?\s*\](?:\s*,\s*.+)?", row)) for row in rows)
+    if bracket_rows >= 3:
+        return "bracketed_catalog_table"
+    simple_rows = sum(bool(re.fullmatch(r"[A-Za-z][A-Za-z' -]{0,39}", row)) for row in rows[1:])
+    if simple_rows >= 5 and simple_rows >= len(rows[1:]) - 1:
+        return "single_keyword_catalog"
+    labelled_rows = sum(bool(re.match(
+        r"^[A-Za-z][A-Za-z ]{0,45}:\s*\S", row,
+    )) for row in rows)
+    if labelled_rows >= 4:
+        return "labelled_field_report"
     return ""
 
 
@@ -460,6 +514,12 @@ def suspicious_reasons(record: dict):
         reasons.append("no_chinese_result")
     source_lines = nonempty_lines(source)
     result_lines = nonempty_lines(result)
+    shape = structural_shape(source)
+    if shape and (
+        not result_lines or
+        len(result_lines) <= max(1, int(len(source_lines) * 0.60))
+    ):
+        reasons.append("structured_shape_line_mismatch")
     if len(source_lines) >= 4 and len(result_lines) <= max(1, int(len(source_lines) * 0.34)):
         reasons.append("possible_line_collapse")
         if structured_family(source) and structural_row_count(source) >= 3:
@@ -571,6 +631,9 @@ def write_case(stream, number: int, case: dict):
     stream.write("- Elapsed: `%.3f seconds`\n" % case["elapsed"])
     stream.write("- Request: `%s`\n" % (record.get("request_id") or "unknown"))
     stream.write("- Repeated occurrences: `%d`\n" % case["count"])
+    shape = structural_shape(str(record.get("source") or ""))
+    if shape:
+        stream.write("- Detected structure shape: `%s`\n" % shape)
     if record.get("error"):
         stream.write("- Error: `%s`\n" % markdown_text(record["error"]).replace("\n", " "))
     stream.write("\nEnglish source:\n\n```text\n%s\n```\n" % markdown_text(record.get("source")))
@@ -581,6 +644,7 @@ def repair_advice(case: dict):
     """Return a conservative repair family; never generate executable code."""
     source = str(case["record"].get("source") or "")
     rows = nonempty_lines(source)
+    shape = structural_shape(source)
     if rows and rows[0] == "Sorry, no help matches that.  Perhaps you meant:":
         return {
             "family": "help_no_match_suggestions", "confidence": "high",
@@ -593,11 +657,32 @@ def repair_advice(case: dict):
             "strategy": "Parse slot rows and carried items, translate only semantic item fields, then reconstruct.",
             "invariants": ["slot_order_preserved", "duplicate_slots_preserved", "empty_slots_preserved"],
         }
-    if rows and re.match(r"^(?:Usage|Syntax|Keywords are):", rows[0], re.I):
+    if shape == "command_description_table":
         return {
             "family": "help_command_layout", "confidence": "medium",
             "strategy": "Protect commands, placeholders and labels; translate descriptions as independent fields.",
             "invariants": ["commands_preserved", "placeholders_preserved", "source_order_preserved"],
+        }
+    if shape in {"bracketed_catalog_table", "single_keyword_catalog"}:
+        return {
+            "family": shape, "confidence": "medium",
+            "strategy": "Preserve every catalog row and keyword independently; translate only semantic fields before reconstruction.",
+            "invariants": ["same_nonempty_line_count", "keywords_preserved", "source_order_preserved"],
+        }
+    if shape in {
+        "alias_command_list", "guildmaster_table", "nearby_service_table",
+        "numbered_book_catalog", "level_advance_report",
+    }:
+        return {
+            "family": shape, "confidence": "medium",
+            "strategy": "Preserve the recognized header and every structured row; translate only semantic fields before reconstruction.",
+            "invariants": ["same_nonempty_line_count", "structural_tokens_preserved", "source_order_preserved"],
+        }
+    if shape == "labelled_field_report":
+        return {
+            "family": shape, "confidence": "medium",
+            "strategy": "Parse repeated labels and values as fields, then reconstruct one output row per semantic field.",
+            "invariants": ["labels_preserved", "values_preserved", "source_order_preserved"],
         }
     if "translation_error_or_fallback" in case["reasons"]:
         return {
@@ -797,6 +882,7 @@ def audit(args):
     slowest = []
     engines = Counter()
     statuses = Counter()
+    structure_shapes = Counter()
     malformed = []
     recent_records = []
     scanned = 0
@@ -829,6 +915,9 @@ def audit(args):
                 statuses[status] += 1
                 source = str(record.get("source") or "").strip()
                 result = str(record.get("result") or "").strip()
+                shape = structural_shape(source)
+                if shape:
+                    structure_shapes[shape] += 1
                 if source and result and status.upper() in {"OK", "CACHE"}:
                     aggregate = source_variants[source]
                     aggregate["occurrences"] += 1
@@ -899,6 +988,7 @@ def audit(args):
         report.write("- Malformed JSON lines retained: `%d`\n" % len(malformed))
         report.write("- Engine/model counts: `%s`\n" % dict(engines))
         report.write("- Status counts: `%s`\n" % dict(statuses))
+        report.write("- Structural shape counts: `%s`\n" % dict(structure_shapes))
         report.write("- Suspicion counts: `%s`\n" % dict(reason_counts))
         report.write("\n## Interpretation\n\n")
         report.write("Flags are candidates for human review, not automatic proof of a bug. Line collapse and repetition can be legitimate for some MUD structures.\n")

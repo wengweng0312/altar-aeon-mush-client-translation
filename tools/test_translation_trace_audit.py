@@ -47,6 +47,58 @@ with tempfile.TemporaryDirectory() as temporary:
     structured = dict(newest)
     structured["source"] = "Usage:\nscan - scan all\nscan <direction> - scan one\nscan help - this page"
     assert "structured_line_collapse" in audit.suspicious_reasons(structured)
+    guild_format = dict(newest)
+    guild_format["source"] = (
+        "Format:\n"
+        "guild help - this screen\n"
+        "guild advance - try to advance\n"
+        "guild list - list guilds\n"
+        "guild show - show ranks\n"
+        "To advance, you must be at a guildmaster."
+    )
+    assert audit.structural_shape(guild_format["source"]) == "command_description_table"
+    assert "structured_shape_line_mismatch" in audit.suspicious_reasons(guild_format)
+    forge_keywords = dict(newest)
+    forge_keywords["source"] = (
+        "It would be easy to forge a bar of copper into...\n"
+        "basin\nbeaker\nbottle\nbowl\ncarafe\nshield rim\nblowgun"
+    )
+    assert audit.structural_shape(forge_keywords["source"]) == "single_keyword_catalog"
+    assert "structured_shape_line_mismatch" in audit.suspicious_reasons(forge_keywords)
+    bracketed = "Alloy Recipes\n[ bronze ] , copper, tin\n[ brass ] , copper, zinc\n[ steel ] , iron, carbon"
+    assert audit.structural_shape(bracketed) == "bracketed_catalog_table"
+    assert audit.structural_shape("'kk' is aliased to:\nfeint\nstab\ndirt\ncrip\nflour") == "alias_command_list"
+    guildmasters = (
+        "Listing Guildmasters in The Smiths Guild:\n"
+        "Rodnar - Novice - Town of Vemarken\n"
+        "Pegad - Apprentice - The Town of Indira\n"
+        "Spike - Journeyman - The Town of Dragon Tooth"
+    )
+    assert audit.structural_shape(guildmasters) == "guildmaster_table"
+    providers = (
+        "Dir  Nearby Service Providers\n"
+        "S a bronzesmith -> Naphtali Bronzeworks\n"
+        "SW Kazon -> Stone Dragon Tattoos\n"
+        "SE Madam Kezila -> Naphtali Tarot Reading"
+    )
+    assert audit.structural_shape(providers) == "nearby_service_table"
+    books = (
+        "Books matching your search 'ore'\n"
+        "5197 - Primitive Stone Tools\n5303 - a small journal\n"
+        "10223 - the Dogma of Ducttapology"
+    )
+    assert audit.structural_shape(books) == "numbered_book_catalog"
+    assert audit.structural_shape(
+        "Books with names matching 'mine'\n"
+        "48802 - Where To Find Rocks and Minerals\n"
+        "49888 - A Miner's Guide to Prospecting"
+    ) == "numbered_book_catalog"
+    level_up = (
+        "YOU GAIN A LEVEL!\nYou are now level 5 necromancer!\n"
+        "You gain: 3 hit, 2 mana.\nYou can now learn the spell 'wood woad'!\n"
+        "Your experience cap increases to 245000 exp!"
+    )
+    assert audit.structural_shape(level_up) == "level_advance_report"
     wrapped_help = dict(newest)
     wrapped_help["source"] = "Keywords are: 'example'\nThis is ordinary display-wrapped prose\nthat continues on another source line\nand should not be treated as a table."
     assert "structured_line_collapse" not in audit.suspicious_reasons(wrapped_help)

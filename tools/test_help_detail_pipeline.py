@@ -123,6 +123,21 @@ at skinning, the more intact the corpse will be.""",
         assert trailing, (root, trailing)
         assert module.should_bypass_whole_block_cache(listing)
 
+    guild_format = """Format:
+guild help                 - this screen
+guild advance              - try to advance or join at a guildmaster
+guild advance cost         - see how much advancing or joining costs
+guild show                 - show your ranks for any guilds you are in
+guild list                 - list all guilds
+guild list masters <guild> - list guildmasters
+guild list skills [guild]  - list guild skills
+To advance, you must be at a guildmaster."""
+    guild_parts = module._command_usage_parts(guild_format)
+    assert guild_parts and len(guild_parts[0]) == 7, guild_parts
+    assert len(guild_parts[1]) == 1, guild_parts
+    assert module.is_command_usage_listing(guild_format)
+    assert module.should_bypass_whole_block_cache(guild_format)
+
     craftable = """A branch can be crafted into...
  [bowl                ]
  [dish                ]
@@ -152,6 +167,20 @@ Use 'woodcraft create' to start crafting."""
         ("keyword", "beaker"), ("keyword", "bottle"), ("keyword", "bowl"),
         ("keyword", "shield rim"), ("keyword", "cross guard"), ("keyword", "arrowhead"),
     ], forge_units
+    bar_listing = """It would be very easy to forge a bar of copper into...
+basin
+beaker
+bottle
+bowl
+carafe
+shield rim
+blowgun"""
+    assert module.is_craftable_material_listing(bar_listing)
+    assert module.should_bypass_whole_block_cache(bar_listing)
+    bar_units = module.craftable_material_units(bar_listing)
+    assert len(bar_units) == len(bar_listing.splitlines()), bar_units
+    assert bar_units[0] == ("translate", "It would be very easy to forge a bar of copper into...")
+    assert bar_units[-1] == ("keyword", "blowgun")
     semantic = module.translate_semantic_units
     semantic_globals = semantic.__globals__
     prefetched = []
@@ -250,6 +279,20 @@ Use 'tailoring weave <item> <cloth>' to begin an unfamiliar crafting process."""
         "連枷 [thresher]，釘頭錘頭，握把，武器鏈，單手武器",
         "長矛 [spear]，矛頭，長柄，雙手武器",
     ], recipe_result
+
+    alloy_recipes = """Alloy Recipes
+Alloy Name -      base metal (4 lbs) - 1st metal (1 lb) - 2nd metal (1 lb)
+[ bronze            ] , copper           , tin
+[ red brass         ] , copper           , zinc            , lead
+[ azure mithril     ] , mithril          , copper          , selenium
+Type 'forge alloy <alloy name>' to alloy any refined metals in your inventory."""
+    assert module.is_alloy_recipe_listing(alloy_recipes)
+    assert module.should_bypass_whole_block_cache(alloy_recipes)
+    alloy_result = module.translate_alloy_recipe_listing(alloy_recipes, {})
+    assert len(alloy_result.splitlines()) == len(alloy_recipes.splitlines())
+    assert "青銅 [bronze]，銅，錫" in alloy_result
+    assert "紅黃銅 [red brass]，銅，鋅，鉛" in alloy_result
+    assert "4 磅" in alloy_result and "1 磅" in alloy_result
 
     translations = {
         "breath of life": "生命氣息",

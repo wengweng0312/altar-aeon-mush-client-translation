@@ -759,6 +759,7 @@ end
 
 local function is_exit_line(line)
   local text = clean(line):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  local sentence_terminated = text:find("[%.%!%?]%s*$") ~= nil
   local heading, directions_only
   text, heading, directions_only = strip_exit_heading(text)
   if text == "" then return false end
@@ -772,6 +773,13 @@ local function is_exit_line(line)
     if not exit_words[word] then return false end
     count = count + 1
   end
+  -- A room description can wrap immediately before its last direction word:
+  --     ... looks the same to the
+  --     east.
+  -- Do not steal that final sentence fragment as an exit.  Real unlabelled
+  -- Mush-Z exit lists are bare direction tokens without sentence punctuation;
+  -- labelled Exits:/Doors: lines remain accepted above.
+  if not heading and count == 1 and sentence_terminated then return false end
   return count > 0
 end
 
@@ -1366,10 +1374,20 @@ local function item_detail_semantic_source_lines(lines)
   for _, source in ipairs(lines or {}) do
     local value = tostring(source or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if value ~= "" then
-      if (value:find(", Level:", 1, true) or value:find(", Total levels:", 1, true))
-          and value:find(", Type:", 1, true) then
+      local equipment_detail = (value:find(", Level:", 1, true) or value:find(", Total levels:", 1, true))
+          and value:find(", Type:", 1, true)
+      local ore_detail = value:find(", Comp:", 1, true)
+          and value:find(", Yield:", 1, true)
+          and value:find(", Type: ORE", 1, true)
+          and value:find(", Weight:", 1, true)
+      if equipment_detail or ore_detail then
         found = true
-        for _, label in ipairs({"Level", "Comp", "Type", "Weight", "AC", "Damage", "Speed", "Damage Type", "Quality"}) do
+        -- Keep this list aligned with the worker's identify parser.  Equipment
+        -- using the aggregate "Total levels" label otherwise produces one
+        -- fewer English semantic row than translated rows, making the safe
+        -- bilingual history fallback collapse the entire identify report.
+        value = value:gsub(",%s*(%a+%s+pure%s+ore)%s*$", ", Purity: %1")
+        for _, label in ipairs({"Total levels", "Level", "Comp", "Yield", "Type", "Weight", "Purity", "AC", "Damage", "Speed", "Damage Type", "Quality"}) do
           value = value:gsub(",%s*(" .. label .. ":)", "\n%1")
         end
         value = value:gsub(",%s*(%d+%s+wield strength)", "\n%1")

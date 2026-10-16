@@ -110,6 +110,24 @@ def main() -> None:
         )
         assert "蜘蛛守衛" in restored and "吉姆森" in restored, restored
 
+        # A source article belongs to the generic mob phrase, not to the
+        # translated output. This covers room corpses, combat and sacrifice.
+        corpse_protected, corpse_occurrences = module.protect_known_entity_names(
+            "The corpse of A spider guard is lying here."
+        )
+        assert "of ZXQNPC" in corpse_protected and "of A ZXQNPC" not in corpse_protected
+        corpse_restored = module.restore_known_entity_names(
+            "這裡躺著 " + corpse_protected.split("of ", 1)[1].split(" is", 1)[0] + " 的屍體。",
+            corpse_occurrences,
+        )
+        assert "A " not in corpse_restored and "蜘蛛守衛" in corpse_restored, corpse_restored
+
+        old_cached_article = module.normalize_npc_names(
+            "The corpse of A spider guard is lying here.",
+            "A 蜘蛛守衛的屍體躺在這裡。",
+        )
+        assert old_cached_article == "蜘蛛守衛的屍體躺在這裡。", old_cached_article
+
         # Accuracy is deliberately not a promotion requirement: the player's
         # first accepted wording remains stable until recent-cache reset.
         wrong_but_stable = module.normalize_npc_names(
@@ -186,6 +204,32 @@ def main() -> None:
         )
         assert protected == "It forms a series of two-inch tall waterfalls."
         assert occurrences == []
+
+        # Observation/posture sentences have an ambiguous Chinese verb
+        # boundary and must not teach an adverb as part of the creature name.
+        watched = module.normalize_npc_names(
+            "A sewer rat watches you intently.",
+            "一條下水道老鼠正專注地看著你。",
+        )
+        assert watched == "一條下水道老鼠正專注地看著你。"
+        assert db.execute(
+            "SELECT 1 FROM mob_types WHERE source_name='sewer rat'"
+        ).fetchone() is None
+
+        # Repair the exact old contamination and invalidate only translations
+        # that contain this English creature identity.
+        db.execute(
+            "INSERT OR REPLACE INTO mob_types(source_name,translated_name,updated_at) VALUES(?,?,?)",
+            ("sewer rat", "下水道老鼠正專注地", 1),
+        )
+        module.cache_put(
+            "A sewer rat leaves west.", "下水道老鼠正專注地往西方離開。", config,
+        )
+        module.ensure_npc_name_tables(db)
+        assert db.execute(
+            "SELECT 1 FROM mob_types WHERE source_name='sewer rat'"
+        ).fetchone() is None
+        assert module.cache_get("A sewer rat leaves west.", config) is None
 
         module.CACHE_CONNECTION.close()
         module.CACHE_CONNECTION = None
