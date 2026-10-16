@@ -149,7 +149,10 @@ def main() -> None:
     assert rendered.count("\n") == block.count("\n")
     assert "230k" in rendered
     worker_source = WORKER.read_text(encoding="utf-8-sig")
-    assert "STRUCTURED_FIELD_CACHE_VERSION = 2" in worker_source
+    # This must track intentional structured-field cache invalidations. Version
+    # 4 discards older malformed entity/mineral results introduced before the
+    # current deterministic normalizers.
+    assert "STRUCTURED_FIELD_CACHE_VERSION = 4" in worker_source
     assert 'missing[start:start + 32]' in worker_source
     assert 'prefetch_semantic_event_fields(lines, c)' in worker_source
     assert 'any(deterministic_translate(line.strip()) is not None' in worker_source
