@@ -931,6 +931,18 @@ local function translated_sentence_parts(text)
     end
     if not nearest_start then break end
     local finish = nearest_end
+    -- Treat an ellipsis or emphatic repeated punctuation as one sentence
+    -- boundary. Splitting ``following... and then`` three times can make the
+    -- semantic row count accidentally equal the physical display-line count,
+    -- pairing correct Chinese sentences with truncated English fragments.
+    while finish < #value do
+      local punctuation = value:sub(finish + 1, finish + 1)
+      if punctuation == "." or punctuation == "!" or punctuation == "?" then
+        finish = finish + 1
+      else
+        break
+      end
+    end
     while finish < #value do
       local next_byte = value:sub(finish + 1, finish + 1)
       if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end
@@ -1132,6 +1144,14 @@ local function room_semantic_source_lines(value)
       end
       if not nearest_start then break end
       local finish = nearest_end
+      while finish < #text do
+        local punctuation = text:sub(finish + 1, finish + 1)
+        if punctuation == "." or punctuation == "!" or punctuation == "?" then
+          finish = finish + 1
+        else
+          break
+        end
+      end
       while finish < #text do
         local next_byte = text:sub(finish + 1, finish + 1)
         if next_byte == '"' or next_byte == "'" then finish = finish + 1 else break end

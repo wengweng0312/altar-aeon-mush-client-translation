@@ -1568,6 +1568,30 @@ def valid_mob_translation(value):
     return valid_npc_translation(value) and not contaminated_mob_translation(value)
 
 
+def normalize_entity_aliases(result, canonical, aliases):
+    """Normalize learned aliases without expanding text already canonicalized."""
+    aliases = sorted(
+        {str(alias) for alias in aliases if alias and str(alias) != canonical},
+        key=len,
+        reverse=True,
+    )
+    # Repair output produced by the old global replacement.  For example,
+    # canonical ``幻影之火`` plus alias ``幻影`` used to become
+    # ``幻影之火之火`` because the alias is part of the canonical spelling.
+    for alias in aliases:
+        expanded_canonical = canonical.replace(alias, canonical)
+        if expanded_canonical != canonical:
+            while expanded_canonical in result:
+                result = result.replace(expanded_canonical, canonical)
+    marker = "ZXQCANONICALENTITYQXZ"
+    while marker in result:
+        marker += "X"
+    result = result.replace(canonical, marker)
+    for alias in aliases:
+        result = result.replace(alias, canonical)
+    return result.replace(marker, canonical)
+
+
 def normalize_npc_names(source, translated):
     """Keep each locally encountered NPC spelling stable across all engines."""
     db = cache_connection()
@@ -1635,15 +1659,17 @@ def normalize_npc_names(source, translated):
         for key, canonical in db.execute("SELECT source_name,translated_name FROM npc_names"):
             if not english_name_in_text(key, source):
                 continue
-            for (alias,) in db.execute("SELECT alias_name FROM npc_name_aliases WHERE source_name=?", (key,)):
-                if alias and alias != canonical:
-                    result = result.replace(alias, canonical)
+            aliases = [alias for (alias,) in db.execute(
+                "SELECT alias_name FROM npc_name_aliases WHERE source_name=?", (key,)
+            )]
+            result = normalize_entity_aliases(result, canonical, aliases)
         for key, canonical in db.execute("SELECT source_name,translated_name FROM mob_types"):
             if not english_name_in_text(key, source):
                 continue
-            for (alias,) in db.execute("SELECT alias_name FROM mob_type_aliases WHERE source_name=?", (key,)):
-                if alias and alias != canonical:
-                    result = result.replace(alias, canonical)
+            aliases = [alias for (alias,) in db.execute(
+                "SELECT alias_name FROM mob_type_aliases WHERE source_name=?", (key,)
+            )]
+            result = normalize_entity_aliases(result, canonical, aliases)
             # Lazily repair old cached translations made before mob markers
             # consumed the source article.  This is deliberately scoped to a
             # confirmed canonical mob name present in the English source.
@@ -2088,7 +2114,7 @@ def translation_sanity_ok(source, translated):
     if (
         is_nearby_direction_listing(source) or is_dense_item_table(source)
         or is_alias_listing(source) or is_guildmaster_listing(source)
-        or is_library_catalog(source)
+        or is_library_catalog(source) or is_area_overview_report(source)
     ) and len(source_lines) != len(translated_lines):
         return False, "tabular_line_count_mismatch"
     block_kind = structured_block_kind(source)
@@ -4938,7 +4964,8 @@ def should_bypass_whole_block_cache(text):
             is_mobs_in_room_listing(text) or has_historical_fallback_shape(text) or
             is_character_creation_welcome(text) or is_login_menu(text) or is_help_search_listing(text) or
             is_friends_listing(text) or is_skill_help_detail(text) or
-            is_command_usage_listing(text) or is_alloy_recipe_listing(text) or is_forge_recipe_listing(text) or
+            is_command_usage_listing(text) or is_area_overview_report(text) or
+            is_alloy_recipe_listing(text) or is_forge_recipe_listing(text) or
             is_forge_catalog_listing(text) or
             is_craftable_material_listing(text) or
             is_equipment_advice(text) or is_room_with_doors(text) or has_embedded_tip_block(text) or
@@ -6641,6 +6668,77 @@ def is_nearby_direction_listing(text):
     )
 
 
+AREA_OVERVIEW_REALM = re.compile(r"^Realm\s+-\s+(.+?)\s*$", re.I)
+AREA_OVERVIEW_LEVEL = re.compile(r"^This is a level\s+(\d+)\s+area\.\s*$", re.I)
+AREA_OVERVIEW_EXPLORER = re.compile(
+    r"^You have\s+(\d+)\s+out of\s+(\d+)\s+possible explorer points for this area\.\s*$",
+    re.I,
+)
+AREA_OVERVIEW_PLAYER = re.compile(r"^\s*(\S.*?)\s+->\s+(.+?)\s*$")
+
+
+def _area_overview_parts(text):
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(lines) < 7:
+        return None
+    realm = AREA_OVERVIEW_REALM.fullmatch(lines[0].strip())
+    level = AREA_OVERVIEW_LEVEL.fullmatch(lines[2].strip())
+    explorer = AREA_OVERVIEW_EXPLORER.fullmatch(lines[3].strip())
+    if not realm or not lines[1].strip() or not level or not explorer:
+        return None
+    if lines[5].strip().lower() != "players that are nearby":
+        return None
+    fame = lines[4].strip()
+    if not re.fullmatch(r"You have acquired .+? fame in this area\.", fame, re.I):
+        return None
+    players = []
+    for line in lines[6:]:
+        if not line.strip():
+            continue
+        row = AREA_OVERVIEW_PLAYER.fullmatch(line)
+        if not row:
+            return None
+        players.append((row.group(1).strip(), row.group(2).strip()))
+    if not players:
+        return None
+    return {
+        "realm": realm.group(1).strip(), "area": lines[1].strip(),
+        "level": level.group(1), "explorer_current": explorer.group(1),
+        "explorer_total": explorer.group(2), "fame": fame, "players": players,
+    }
+
+
+def is_area_overview_report(text):
+    return _area_overview_parts(text) is not None
+
+
+def translate_area_overview_report(text, c):
+    """Render area metadata and each nearby player as stable semantic rows."""
+    parts = _area_overview_parts(text)
+    if not parts:
+        raise RuntimeError("AREA_OVERVIEW_PARSE_FAILED")
+    output = [
+        "領域 - " + translate_place_name(parts["realm"], c, "area_overview_realm"),
+        translate_place_name(parts["area"], c, "area_overview_name"),
+        "這是等級 %s 的區域。" % parts["level"],
+        "此區域探索點：%s／%s。" % (
+            parts["explorer_current"], parts["explorer_total"]
+        ),
+        translate_cached_phrase(parts["fame"], c),
+        "附近玩家：",
+    ]
+    output.extend(
+        "%s -> %s" % (
+            player, translate_place_name(place, c, "area_overview_player_location")
+        )
+        for player, place in parts["players"]
+    )
+    source_rows = [line for line in str(text).splitlines() if line.strip()]
+    if len(output) != len(source_rows):
+        raise RuntimeError("AREA_OVERVIEW_LINE_COUNT_MISMATCH")
+    return "\n".join(output)
+
+
 def is_alias_listing(text):
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
     commands = [line for line in lines[1:] if line.strip()]
@@ -7325,6 +7423,8 @@ def translate(text,c):
         return translate_equipment_listing(text, c)
     if is_command_usage_listing(text):
         return translate_command_usage_listing(text, c)
+    if is_area_overview_report(text):
+        return translate_area_overview_report(text, c)
     if is_alias_listing(text):
         return translate_alias_listing(text, c)
     if is_guildmaster_listing(text):

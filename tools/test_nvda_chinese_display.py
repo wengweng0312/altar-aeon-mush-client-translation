@@ -622,6 +622,8 @@ scan -dclient [args] - 掃描前查看"""
     assert "已到最新一筆翻譯紀錄。" in line_navigation
 
     plugin_source = (ROOT / "src/mush-z/worlds/plugins/Translation_Mode.xml").read_text(encoding="utf-8-sig")
+    assert 'if punctuation == "." or punctuation == "!" or punctuation == "?" then' in plugin_source
+    assert "following... and then" in plugin_source
     assert "TMREVIEW2:id=%d;pos=%d;count=%d;rev=%d;edge=%s;kind=%s" in plugin_source
     assert 'unicode_history_pos <= 1 and "oldest"' in plugin_source
     assert 'unicode_history_pos >= #unicode_history and "latest"' in plugin_source

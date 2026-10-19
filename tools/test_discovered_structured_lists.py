@@ -72,10 +72,29 @@ assert short_book_result.splitlines()[0] == "符合搜尋「mine」的書籍"
 assert short_book_result.splitlines()[1].startswith("48802 - 書：")
 assert short_book_result.splitlines()[2].startswith("49888 - 書：")
 
+area_source = """Realm - The Mainland of Atmir
+The birch and aspen forest
+This is a level 30 area.
+You have 0 out of 8 possible explorer points for this area.
+You have acquired none of the fame in this area.
+Players that are nearby
+          Wengweng      -> In the deep, dark forest
+          Areidon       -> A small campfire in the woods."""
+assert worker.is_area_overview_report(area_source)
+area_result = worker.translate(area_source, {})
+area_rows = area_result.splitlines()
+assert len(area_rows) == len(area_source.splitlines()), area_rows
+assert area_rows[0] == "領域 - 地：The Mainland of Atmir"
+assert area_rows[2] == "這是等級 30 的區域。"
+assert area_rows[3] == "此區域探索點：0／8。"
+assert area_rows[5] == "附近玩家："
+assert area_rows[6] == "Wengweng -> 地：In the deep, dark forest"
+assert area_rows[7] == "Areidon -> 地：A small campfire in the woods."
+
 # Old one-line cache values must be rejected so the structured renderer can
 # rebuild them after an update.
-for source in (alias_source, guild_source, service_source, book_source, short_book_source):
+for source in (alias_source, guild_source, service_source, book_source, short_book_source, area_source):
     ok, reason = worker.translation_sanity_ok(source, "錯誤地全部黏成一行")
     assert not ok, (reason, source)
 
-print("DISCOVERED_STRUCTURED_LISTS_OK alias=yes guildmasters=yes services=yes books=yes")
+print("DISCOVERED_STRUCTURED_LISTS_OK alias=yes guildmasters=yes services=yes books=yes area=yes")

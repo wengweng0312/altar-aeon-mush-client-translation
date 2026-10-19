@@ -139,6 +139,21 @@ def main() -> None:
         )
         assert "精靈小偷" in stable_again and "皮克西盜賊" not in stable_again
 
+        # A learned short alias may be contained inside the canonical name.
+        # Never expand the already-correct canonical spelling a second time.
+        wisp_source = "A will-o-the-wisp misses someone."
+        wisp_first = module.normalize_npc_names(wisp_source, "幻影之火沒有擊中某人。")
+        assert wisp_first == "幻影之火沒有擊中某人。", wisp_first
+        wisp_alias = module.normalize_npc_names(
+            "A will-o-the-wisp dodges someone's attack.",
+            "幻影閃避了某人的攻擊。",
+        )
+        assert wisp_alias == "幻影之火閃避了某人的攻擊。", wisp_alias
+        wisp_death = module.normalize_npc_names(
+            "A will-o-the-wisp is DEAD!", "幻影之火之火死了！"
+        )
+        assert wisp_death == "幻影之火死了！", wisp_death
+
         # Movement sentences are unsafe training examples: the translated
         # direction must never become part of the persistent creature name.
         movement = module.normalize_npc_names(
