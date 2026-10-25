@@ -189,8 +189,8 @@ blowgun"""
     semantic_globals["cache_get"] = lambda _value, _config: "鍛造標題"
     forge_result = semantic(forge_units, {}, "craftable_material")
     assert forge_result.splitlines() == [
-        "鍛造標題", "燒杯 [beaker]", "瓶子 [bottle]", "碗 [bowl]",
-        "盾牌邊框 [shield rim]", "十字護手 [cross guard]", "箭頭 [arrowhead]",
+        "鍛造標題", "燒杯", "瓶子", "碗",
+        "盾牌邊框", "十字護手", "箭頭",
     ], forge_result
     assert prefetched == [], prefetched
     assert module.CRAFT_KEYWORD_ZH["cup"] == "杯子"
@@ -200,6 +200,13 @@ blowgun"""
     assert module.CRAFT_KEYWORD_ZH["highball"] == "高球杯"
     assert module.CRAFT_KEYWORD_ZH["jug"] == "壺"
     assert module.CRAFT_KEYWORD_ZH["lowball"] == "矮杯"
+    rendered = module.translate_semantic_units(
+        [("keyword", "cup"), ("keyword", "cruet"), ("keyword", "crock")],
+        {},
+        "craftable_material",
+    )
+    assert rendered.splitlines() == ["杯子", "調味瓶", "陶罐"]
+    assert "[cup]" not in rendered
     assert craft_units[-1][0] == "translate", craft_units
     assert module.should_bypass_whole_block_cache(craftable)
 

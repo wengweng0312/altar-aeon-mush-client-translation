@@ -773,6 +773,10 @@ def deterministic_translate(text):
             GAME_GLOSSARY = {}
     if source.strip() in GAME_GLOSSARY:
         return GAME_GLOSSARY[source.strip()]
+    mining_translator = globals().get("translate_mining_event_line")
+    mining_event = mining_translator(source) if mining_translator else None
+    if mining_event is not None:
+        return mining_event
     practice_cost = re.fullmatch(
         r"You still need (\d[\d,]*) experience to train a practice\. It costs (\d[\d,]*)\.",
         source.strip(),
@@ -3124,11 +3128,208 @@ MINERAL_TERM_ZH = {
     "carnelian": "紅玉髓", "jasper": "碧玉", "agate": "瑪瑙",
     "tiger-eye": "虎眼石", "hawk-eye": "鷹眼石", "zircon": "鋯石",
     "chrysoprase": "綠玉髓", "turquoise": "綠松石", "sodalite": "方鈉石",
-    "jade": "翡翠", "labradorite": "拉長石", "rose quartz": "玫瑰石英",
+    "jade": "翡翠", "labradorite": "拉長石", "diopside": "透輝石", "rose quartz": "玫瑰石英",
     "citrine": "黃水晶", "amethyst": "紫水晶", "diatomite": "矽藻土",
+    "diorite": "閃長岩", "greenstone": "綠石", "howlite": "白松石", "staurolite": "十字石",
+    "hyalite": "玻璃蛋白石", "hornblende": "角閃石", "mtorolite": "鉻玉髓",
     "graphite": "石墨", "sulfur": "硫磺", "halite": "岩鹽",
     "sylvite": "鉀石鹽", "borax": "硼砂", "saltpeter": "硝石",
 }
+
+
+def mineral_name_zh(value):
+    """Return one stable mineral label for mining events and ore objects."""
+    source = str(value).strip()
+    key = re.sub(r"\s+ore$", "", source, flags=re.I).strip().lower()
+    return MINERAL_TERM_ZH.get(key) or source
+
+
+def mineral_item_zh(value):
+    """Translate a mineral-bearing item phrase without guessing unknown names."""
+    source = str(value).strip()
+    articleless = re.sub(r"^(?:a|an|the)\s+", "", source, flags=re.I)
+    shapes = (
+        (r"a chunk of (.+)", lambda mineral: "一塊%s" % mineral),
+        (r"a slab of (.+)", lambda mineral: "一塊%s" % mineral),
+        (r"rough (.+)", lambda mineral: "粗糙的%s" % mineral),
+        (r"(?:an? )?(.+?) cluster", lambda mineral: "一簇%s" % mineral),
+        (r"(?:an? )?(.+?) crystal", lambda mineral: "一顆%s晶體" % mineral),
+        (r"(?:an? )?(.+?) ore", lambda mineral: mineral),
+    )
+    for pattern, render in shapes:
+        match = re.fullmatch(pattern, source, re.I)
+        if not match:
+            continue
+        key = re.sub(r"\s+ore$", "", match.group(1), flags=re.I).strip().lower()
+        translated = MINERAL_TERM_ZH.get(key)
+        return render(translated) if translated else None
+    translated = MINERAL_TERM_ZH.get(articleless.lower())
+    return translated
+
+
+def craft_material_zh(value):
+    """Render an explicit craft material while preserving unknown identifiers."""
+    rendered = mineral_item_zh(value)
+    if rendered:
+        return rendered
+    source = str(value).strip()
+    shapes = (
+        (r"a chunk of (.+)", "一塊%s"),
+        (r"a slab of (.+)", "一塊%s"),
+        (r"(?:an? )?(.+?) crystal", "一顆%s晶體"),
+        (r"(?:an? )?(.+?) cluster", "一簇%s"),
+    )
+    for pattern, template in shapes:
+        match = re.fullmatch(pattern, source, re.I)
+        if match:
+            return template % mineral_name_zh(match.group(1))
+    return None
+
+
+def mineral_craft_item_zh(value):
+    """Compose a stable crafted item name from mineral and craft keyword tables."""
+    source = re.sub(r"^(?:a|an|the)\s+", "", str(value).strip(), flags=re.I)
+    keywords = globals().get("CRAFT_KEYWORD_ZH") or {}
+    for keyword in sorted(keywords, key=len, reverse=True):
+        suffix = " " + keyword
+        if not source.lower().endswith(suffix):
+            continue
+        material = source[:-len(suffix)].strip()
+        material_zh = mineral_name_zh(material)
+        # Fail closed for unknown materials.  The normal translator remains
+        # available instead of freezing an unreviewed guessed name.
+        if material_zh == material:
+            return None
+        return "%s%s" % (material_zh, keywords[keyword])
+    return None
+
+
+def craft_keyword_zh(value):
+    """Return a reviewed craft product label independently of its material."""
+    return (globals().get("CRAFT_KEYWORD_ZH") or {}).get(str(value).strip().lower())
+
+
+def translate_mining_event_line(line):
+    """Render common mining lifecycle messages from the shared mineral table."""
+    source = str(line).strip()
+    match = re.fullmatch(
+        r"You uncover a deposit of (.+?)(, a less common mineral,)? and stake it out\.",
+        source,
+        re.I,
+    )
+    if match:
+        mineral = mineral_name_zh(match.group(1))
+        rarity = "，這是一種較少見的礦物" if match.group(2) else ""
+        return "你發現了一處%s礦床%s，並加以標記。" % (mineral, rarity)
+    match = re.fullmatch(r"You begin excavating a deposit of (.+?)\.", source, re.I)
+    if match:
+        return "你開始開採%s礦床。" % mineral_name_zh(match.group(1))
+    match = re.fullmatch(r"You carefully chip away at a deposit of (.+?)\.\.\.", source, re.I)
+    if match:
+        return "你小心翼翼地鑿開%s礦床……" % mineral_name_zh(match.group(1))
+    match = re.fullmatch(r"You excavate (.+?) from a deposit of (.+?)\.", source, re.I)
+    if match:
+        return "你從%s礦床中開採出%s。" % (
+            mineral_name_zh(match.group(2)), mineral_name_zh(match.group(1)),
+        )
+    match = re.fullmatch(r"A deposit of (.+?) is depleted\.", source, re.I)
+    if match:
+        return "%s礦床已經枯竭。" % mineral_name_zh(match.group(1))
+    match = re.fullmatch(r"A deposit of (.+?) has been uncovered and marked here\.", source, re.I)
+    if match:
+        return "這裡有一處已發現並標記的%s礦床。" % mineral_name_zh(match.group(1))
+    match = re.fullmatch(
+        r"You examine (.+?) and determine it is not suitable for lapidary work\.",
+        source,
+        re.I,
+    )
+    if match:
+        item = mineral_item_zh(match.group(1))
+        if item:
+            return "你檢查了%s，確認它不適合用於寶石加工。" % item
+    match = re.fullmatch(r"You drop (.+?)\.", source, re.I)
+    if match:
+        item = mineral_item_zh(match.group(1)) or mineral_craft_item_zh(match.group(1))
+        if item:
+            return "你丟下%s。" % item
+    match = re.fullmatch(r"You are carrying (.+?)\.", source, re.I)
+    if match:
+        item = mineral_item_zh(match.group(1)) or mineral_craft_item_zh(match.group(1))
+        if item:
+            return "你正攜帶著%s。" % item
+    match = re.fullmatch(r"(.+?) appreciates your sacrifice of (.+?)\.", source, re.I)
+    if match:
+        item = mineral_item_zh(match.group(2)) or mineral_craft_item_zh(match.group(2))
+        if item:
+            return "你將%s奉獻給%s。" % (item, match.group(1))
+    match = re.fullmatch(r"You start crafting an? (.+?) from (.+?)\.", source, re.I)
+    if match:
+        keyword = craft_keyword_zh(match.group(1))
+        material = craft_material_zh(match.group(2))
+        if keyword and material:
+            return "你開始用%s製作%s。" % (material, keyword)
+    match = re.fullmatch(r"You deeply score (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你在%s上刻出深痕……" % material
+    match = re.fullmatch(
+        r"You hammer at (.+?), knocking off the scored pieces to get a basic shape\.\.\.",
+        source,
+        re.I,
+    )
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你敲打%s，敲掉刻痕處的碎片，塑出基本形狀……" % material
+    match = re.fullmatch(r"You knock smaller pieces off from (.+?), refining its shape\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你從%s上敲下較小的碎片，進一步修整形狀……" % material
+    match = re.fullmatch(r"You carefully score shallow grooves into the sides of (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你小心地在%s側面刻出淺槽……" % material
+    match = re.fullmatch(r"You grind away at (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你持續打磨%s……" % material
+    match = re.fullmatch(r"You carefully grind down the surface of (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你小心地磨平%s的表面……" % material
+    match = re.fullmatch(r"You carefully chisel a few notches into (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你小心地在%s上鑿出幾道凹槽……" % material
+    match = re.fullmatch(r"You carefully smooth the edges of (.+?)\.\.\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你小心地磨平%s的邊緣……" % material
+    match = re.fullmatch(r"You examine (.+?), but can't figure out where to start\.", source, re.I)
+    if match and (material := mineral_item_zh(match.group(1))):
+        return "你檢查了%s，但不知道該從哪裡開始。" % material
+    match = re.fullmatch(r"Sorry, (.+?) is not large enough to make (.+?)\.", source, re.I)
+    if match:
+        material = craft_material_zh(match.group(1))
+        keyword = craft_keyword_zh(match.group(2))
+        if material and keyword:
+            return "抱歉，%s不夠大，無法製作%s。" % (material, keyword)
+    match = re.fullmatch(r"After a final buff and polish, (.+?) is complete!", source, re.I)
+    if match and (item := mineral_craft_item_zh(match.group(1))):
+        return "經過最後的打磨和拋光，%s就完成了！" % item
+    # Inventory and structured item blocks often contain the raw mineral as a
+    # row by itself.  Use the same identity without teaching this rule to
+    # arbitrary prose.
+    item = mineral_item_zh(source) or mineral_craft_item_zh(source)
+    if item:
+        return item
+    return None
+
+
+def normalize_mining_events(source, translated):
+    """Lazily replace old model/cache drift only on recognized mining rows."""
+    source_lines = str(source).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    result_lines = str(translated).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if len(source_lines) != len(result_lines):
+        return translated
+    changed = False
+    for index, source_line in enumerate(source_lines):
+        rendered = translate_mining_event_line(source_line)
+        if rendered is not None and result_lines[index] != rendered:
+            result_lines[index] = rendered
+            changed = True
+    return "\n".join(result_lines) if changed else translated
 ITEM_DAMAGE_WORDS_ZH = {
     "nonorm": "非標準", "toxic": "毒性", "ice": "寒冰", "acidic": "酸性",
     "fire": "火焰", "zapping": "電擊", "slash": "斬擊", "slice": "切割",
@@ -4383,7 +4584,9 @@ def translate_semantic_units(units, c, context="semantic"):
             continue
         if kind == "keyword":
             translated = CRAFT_KEYWORD_ZH.get(source.lower()) or translate_cached_phrase(source, c)
-            output.append("%s [%s]" % (translated, source))
+            # Review history already appends the matching English source after
+            # ``|``.  Repeating it here produced ``杯子 [cup] | [cup]``.
+            output.append(translated)
             continue
         if kind == "place":
             output.append(translate_place_name(source, c, context))
@@ -7632,6 +7835,7 @@ def run():
                 if result is None:
                     t=time.perf_counter()
                     result=to_traditional_characters(translate(raw,c))
+                    result=normalize_mining_events(raw,result)
                     result=normalize_npc_names(raw,result)
                     elapsed=time.perf_counter()-t
                     log("translated id=%s chars=%d in %.3fs"%(rid,len(raw),elapsed))
@@ -7641,6 +7845,7 @@ def run():
                     mark_translation_engine("cache")
                     seed_structured_line_cache(raw, result, c)
                     cached_result=result
+                    result=normalize_mining_events(raw,result)
                     result=normalize_npc_names(raw,result)
                     if result != cached_result:
                         cache_put(raw,result,c)
