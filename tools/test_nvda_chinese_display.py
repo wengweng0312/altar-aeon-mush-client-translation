@@ -32,6 +32,8 @@ FUNCTIONS = {
     "_translationPairedHelpLines",
     "_translationCommandUsageLines",
     "_translationPairedCommandUsageLines",
+    "_translationCurrentEventSemanticLines",
+    "_translationPairedCurrentEventLines",
     "_translationNewsSemanticLines",
     "_translationPairedNewsLines",
     "_translationChangesSemanticLines",
@@ -568,6 +570,19 @@ Aug 26 2026，Lvl 27，座標 -3929、56，泰倫蟲族洞穴，創作者：alf 
     assert len(live_news_lines) == 13, live_news_lines
     assert live_news_lines[7].endswith("Juggernaut - score 475 - Tue Oct 13 04:35:26 2026"), live_news_lines
     assert live_news_lines[-1].endswith("Tyranid caves  alf duncan"), live_news_lines
+
+    event_english = (ROOT / "tools" / "fixtures" / "current_event_information.txt").read_text(
+        encoding="utf-8"
+    ).rstrip()
+    event_semantic = module["_translationCurrentEventSemanticLines"](event_english)
+    assert len(event_semantic) > 20, event_semantic
+    event_chinese = "\n".join("活動段落 %d。" % index for index in range(1, len(event_semantic) + 1))
+    event_lines = present(event_chinese + " | " + event_english).splitlines()
+    assert len(event_lines) == len(event_semantic), event_lines
+    assert event_lines[0].endswith("Current Event Information"), event_lines
+    assert any(line.endswith("Our Halloween Havoc has begun And will end sometime on Monday, November 2.") for line in event_lines), event_lines
+    assert any(line.endswith("Please note:") for line in event_lines), event_lines
+    assert event_lines[-2].endswith("(see 'show schedule' for a schedule of events)"), event_lines
 
     changes_english = """[3413] ---- Sep 20, 26
 From Draak:

@@ -822,6 +822,42 @@ def _translationPairedCommandUsageLines(chinese, english):
 	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
 
 
+def _translationCurrentEventSemanticLines(english):
+	"""Mirror the worker's semantic rows for dynamic event bulletins."""
+	rows = [line.strip() for line in english.splitlines() if line.strip()]
+	if len(rows) < 5 or rows[0] != "Current Event Information":
+		return []
+	output = [rows[0]]
+	prose = []
+
+	def flushProse():
+		if prose:
+			output.append(" ".join(prose))
+			prose[:] = []
+
+	for row in rows[1:]:
+		if ((row.endswith(":") and len(row) <= 100) or
+				(row.startswith("(") and row.endswith(")"))):
+			flushProse()
+			output.append(row)
+			continue
+		prose.append(row)
+		if re.search(r"[.!?][\"')\]]*\s*$", row):
+			flushProse()
+	flushProse()
+	return output
+
+
+def _translationPairedCurrentEventLines(chinese, english):
+	englishRows = _translationCurrentEventSemanticLines(english)
+	if not englishRows:
+		return []
+	chineseRows = [line.strip() for line in chinese.splitlines() if line.strip()]
+	if len(chineseRows) != len(englishRows):
+		return []
+	return [chineseRow + " | " + englishRow for chineseRow, englishRow in zip(chineseRows, englishRows)]
+
+
 def _translationNewsSemanticLines(english):
 	"""Restore stable rows for Alter Aeon's news report.
 
@@ -1061,6 +1097,9 @@ def _translationReviewPresentation(text):
 		pairedCommandUsage = _translationPairedCommandUsageLines(chinese, english)
 		if pairedCommandUsage:
 			return "\n".join(pairedCommandUsage)
+		pairedCurrentEvent = _translationPairedCurrentEventLines(chinese, english)
+		if pairedCurrentEvent:
+			return "\n".join(pairedCurrentEvent)
 		pairedNews = _translationPairedNewsLines(chinese, english)
 		if pairedNews:
 			return "\n".join(pairedNews)

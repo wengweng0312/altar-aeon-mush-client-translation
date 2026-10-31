@@ -3204,6 +3204,18 @@ def mineral_craft_item_zh(value):
     return None
 
 
+def craft_product_zh(value):
+    """Compose a reviewed craft keyword while preserving an unknown material."""
+    source = re.sub(r"^(?:a|an|the)\s+", "", str(value).strip(), flags=re.I)
+    keywords = globals().get("CRAFT_KEYWORD_ZH") or {}
+    for keyword in sorted(keywords, key=len, reverse=True):
+        suffix = " " + keyword
+        if source.lower().endswith(suffix):
+            material = source[:-len(suffix)].strip()
+            return "%s%s" % (mineral_name_zh(material), keywords[keyword])
+    return None
+
+
 def craft_keyword_zh(value):
     """Return a reviewed craft product label independently of its material."""
     return (globals().get("CRAFT_KEYWORD_ZH") or {}).get(str(value).strip().lower())
@@ -3249,17 +3261,17 @@ def translate_mining_event_line(line):
             return "你檢查了%s，確認它不適合用於寶石加工。" % item
     match = re.fullmatch(r"You drop (.+?)\.", source, re.I)
     if match:
-        item = mineral_item_zh(match.group(1)) or mineral_craft_item_zh(match.group(1))
+        item = mineral_item_zh(match.group(1)) or craft_product_zh(match.group(1))
         if item:
             return "你丟下%s。" % item
     match = re.fullmatch(r"You are carrying (.+?)\.", source, re.I)
     if match:
-        item = mineral_item_zh(match.group(1)) or mineral_craft_item_zh(match.group(1))
+        item = mineral_item_zh(match.group(1)) or craft_product_zh(match.group(1))
         if item:
             return "你正攜帶著%s。" % item
     match = re.fullmatch(r"(.+?) appreciates your sacrifice of (.+?)\.", source, re.I)
     if match:
-        item = mineral_item_zh(match.group(2)) or mineral_craft_item_zh(match.group(2))
+        item = mineral_item_zh(match.group(2)) or craft_product_zh(match.group(2))
         if item:
             return "你將%s奉獻給%s。" % (item, match.group(1))
     match = re.fullmatch(r"You start crafting an? (.+?) from (.+?)\.", source, re.I)
@@ -3269,35 +3281,35 @@ def translate_mining_event_line(line):
         if keyword and material:
             return "你開始用%s製作%s。" % (material, keyword)
     match = re.fullmatch(r"You deeply score (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你在%s上刻出深痕……" % material
     match = re.fullmatch(
         r"You hammer at (.+?), knocking off the scored pieces to get a basic shape\.\.\.",
         source,
         re.I,
     )
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你敲打%s，敲掉刻痕處的碎片，塑出基本形狀……" % material
     match = re.fullmatch(r"You knock smaller pieces off from (.+?), refining its shape\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你從%s上敲下較小的碎片，進一步修整形狀……" % material
     match = re.fullmatch(r"You carefully score shallow grooves into the sides of (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你小心地在%s側面刻出淺槽……" % material
     match = re.fullmatch(r"You grind away at (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你持續打磨%s……" % material
     match = re.fullmatch(r"You carefully grind down the surface of (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你小心地磨平%s的表面……" % material
     match = re.fullmatch(r"You carefully chisel a few notches into (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你小心地在%s上鑿出幾道凹槽……" % material
     match = re.fullmatch(r"You carefully smooth the edges of (.+?)\.\.\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你小心地磨平%s的邊緣……" % material
     match = re.fullmatch(r"You examine (.+?), but can't figure out where to start\.", source, re.I)
-    if match and (material := mineral_item_zh(match.group(1))):
+    if match and (material := craft_material_zh(match.group(1))):
         return "你檢查了%s，但不知道該從哪裡開始。" % material
     match = re.fullmatch(r"Sorry, (.+?) is not large enough to make (.+?)\.", source, re.I)
     if match:
@@ -3306,7 +3318,7 @@ def translate_mining_event_line(line):
         if material and keyword:
             return "抱歉，%s不夠大，無法製作%s。" % (material, keyword)
     match = re.fullmatch(r"After a final buff and polish, (.+?) is complete!", source, re.I)
-    if match and (item := mineral_craft_item_zh(match.group(1))):
+    if match and (item := craft_product_zh(match.group(1))):
         return "經過最後的打磨和拋光，%s就完成了！" % item
     # Inventory and structured item blocks often contain the raw mineral as a
     # row by itself.  Use the same identity without teaching this rule to
@@ -5156,7 +5168,7 @@ def translate_level_advance_block(text):
 def should_bypass_whole_block_cache(text):
     """Structured sources must not be trapped behind legacy whole-block rows."""
     lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    return (is_news_report(text) or is_changes_report(text) or is_peer_room_title_preview(text) or is_level_advance_block(text) or
+    return (is_current_event_report(text) or is_news_report(text) or is_changes_report(text) or is_peer_room_title_preview(text) or is_level_advance_block(text) or
             is_where_location_row(text) or is_quest_structured_block(text) or
             is_consider_report(text) or
             is_room_prose_candidate(text) or
@@ -7301,6 +7313,47 @@ NEWS_AREA_ROW = re.compile(
 )
 
 
+def current_event_semantic_units(text):
+    """Rebuild a dynamic event bulletin into bounded, reviewable prose rows."""
+    rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
+    if len(rows) < 5 or rows[0] != "Current Event Information":
+        return []
+    units = [("fixed", "目前活動資訊")]
+    prose = []
+
+    def flush_prose():
+        if prose:
+            units.extend(("translate", chunk) for chunk in semantic_display_chunks("\n".join(prose)))
+            prose[:] = []
+
+    for row in rows[1:]:
+        if ((row.endswith(":") and len(row) <= 100) or
+                (row.startswith("(") and row.endswith(")"))):
+            flush_prose()
+            units.append(("translate", row))
+            continue
+        prose.append(row)
+        if re.search(r"[.!?][\"')\]]*\s*$", row):
+            flush_prose()
+    flush_prose()
+    return units
+
+
+def is_current_event_report(text):
+    return bool(current_event_semantic_units(text))
+
+
+def translate_current_event_report(text, c):
+    """Translate event prose per semantic row so history stays aligned."""
+    units = current_event_semantic_units(text)
+    if not units:
+        raise RuntimeError("CURRENT_EVENT_REPORT_PARSE_FAILED")
+    result = translate_semantic_units(units, c, "current_event")
+    if len(result.splitlines()) != len(units):
+        raise RuntimeError("CURRENT_EVENT_LINE_COUNT_MISMATCH")
+    return result
+
+
 def is_news_report(text):
     rows = [line.strip() for line in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip()]
     # The live news page does not always include TODAY'S HEADLINE.  The title
@@ -7577,6 +7630,8 @@ def translate_character_status_block(text, c):
 
 
 def translate(text,c):
+    if is_current_event_report(text):
+        return translate_current_event_report(text, c)
     if is_news_report(text):
         return translate_news_report(text, c)
     if is_changes_report(text):

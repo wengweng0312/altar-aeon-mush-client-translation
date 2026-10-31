@@ -1,0 +1,38 @@
+Current Event Information
+Welcome to our Halloween Havoc!
+Our Halloween Havoc has begun
+And will end sometime on Monday, November 2.
+If you venture outside of towns and buildings, there a chance a kornbocke
+or one of its minions may find you. If you find yourself being hunted, you
+can evade your pursuers by returning to the shelter of any city.
+These encounters with the kornbocke and most of their minions are not zombies
+And will only give experience and a force random girdle drop.
+All over the world the dead are rising!
+When any of those of one of the common races die,
+they have a chance to rise into  a plague zombie!
+Dwarves, humans, elfs, etc are all common races.
+Some of the kornbocke minions are zombies and will have a chance to count as well.
+The game will track how many zombies you kill.
+You can see how many with 'show zombie'.
+The plague doctor class has been enabled.
+Type event sch to see information on the bonus class.
+The monster pk mobs have been enabled with a new quest.
+For setting this up, type board set 1388, board read 2.
+The pumpkin cannons have been set up in various locations.
+For their locations type "board set 1388" then "board read 1".
+There is no place to start or accept the above quests.
+Please note:
+There is no reason for players to be on lower level islands during events.
+Anything you want to do there can wait till after the event.
+Someone needs a resurrection? Cure poison? Remove curse? use way 99.
+Level 15 and higher should avoid Sloe.
+Level 23 and above should avoid Kordan.
+Level 31 and up should avoid all of the islands.
+Level 28 and below should avoid Ralnoth and the mainland.
+Finally, we suggest reading through the various rules in rule 13.
+Type "rule 13" and then each section to read through them.
+The Ralnoth portal to the islands has been disabled till the event is over.
+Thanks and we hope you have fun,
+The AA team.
+(see 'show schedule' for a schedule of events)
+Daily events have been suspended.

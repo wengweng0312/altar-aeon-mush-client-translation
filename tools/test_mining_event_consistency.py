@@ -70,6 +70,14 @@ def main():
             "抱歉，一顆frobnite晶體不夠大，無法製作握把。",
         "You start crafting a grip from a chunk of frobnite.":
             "你開始用一塊frobnite製作握把。",
+        "After a final buff and polish, a friedelite cup is complete!":
+            "經過最後的打磨和拋光，friedelite杯子就完成了！",
+        "You deeply score a friedelite cluster...":
+            "你在一簇friedelite上刻出深痕……",
+        "You knock smaller pieces off from a friedelite cluster, refining its shape...":
+            "你從一簇friedelite上敲下較小的碎片，進一步修整形狀……",
+        "You drop a friedelite cup.":
+            "你丟下friedelite杯子。",
     }
     for source, translated in expected.items():
         assert worker.translate_mining_event_line(source) == translated
